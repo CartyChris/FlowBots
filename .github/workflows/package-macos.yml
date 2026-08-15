@@ -3,7 +3,7 @@ name: macOS package
 on:
   push:
     branches:
-      - copilot/enhance-open-source-grok-bots
+      - main
   pull_request:
     branches:
       - main
@@ -16,7 +16,6 @@ jobs:
   verify:
     name: Verify recovered agent work
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -36,7 +35,6 @@ jobs:
     name: Build universal macOS DMG
     needs: verify
     runs-on: macos-14
-    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
