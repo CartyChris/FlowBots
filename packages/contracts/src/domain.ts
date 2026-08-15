@@ -2,6 +2,35 @@ import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 
+export const PersonaSlidersSchema = z.object({
+  humor: z.number().int().min(0).max(100),
+  spice: z.number().int().min(0).max(100),
+  energy: z.number().int().min(0).max(100),
+  verbosity: z.number().int().min(0).max(100),
+});
+export type PersonaSlidersInput = z.infer<typeof PersonaSlidersSchema>;
+
+export const PersonaConfigSchema = z.object({
+  id: z.string().max(40),
+  sliders: PersonaSlidersSchema,
+  swearing: z.boolean(),
+  customVoice: z.string().max(2000),
+});
+export type PersonaConfigInput = z.infer<typeof PersonaConfigSchema>;
+
+export const PersonaPresetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  emoji: z.string(),
+  color: z.string(),
+  tagline: z.string(),
+  sliders: PersonaSlidersSchema,
+  swearing: z.boolean(),
+  presenceTag: z.string(),
+  catchphrases: z.array(z.string()),
+});
+export type PersonaPreset = z.infer<typeof PersonaPresetSchema>;
+
 export const BotSchema = z.object({
   id: Id,
   workspaceId: Id,
@@ -9,6 +38,7 @@ export const BotSchema = z.object({
   title: z.string(),
   description: z.string(),
   instructions: z.string(),
+  persona: PersonaConfigSchema,
   color: z.string(),
   notifyOnFinish: z.boolean(),
   parentBotId: Id.nullable(),
@@ -25,6 +55,7 @@ export const CreateBotInput = z.object({
   title: z.string().max(160).default(""),
   description: z.string().max(4000).default(""),
   instructions: z.string().max(20000).default(""),
+  persona: PersonaConfigSchema.optional(),
   notifyOnFinish: z.boolean().default(true),
   color: z.string().optional(),
 });
@@ -36,6 +67,7 @@ export const UpdateBotInput = z.object({
   title: z.string().max(160).optional(),
   description: z.string().max(4000).optional(),
   instructions: z.string().max(20000).optional(),
+  persona: PersonaConfigSchema.optional(),
   notifyOnFinish: z.boolean().optional(),
   color: z.string().optional(),
 });
@@ -206,3 +238,78 @@ export const ExportManifestSchema = z.object({
   history: z.array(ThreadMessageSchema),
 });
 export type ExportManifest = z.infer<typeof ExportManifestSchema>;
+
+export const REACTION_KIND_VALUES = ["fire", "skull", "joy", "eyes"] as const;
+export const ReactionKindSchema = z.enum(REACTION_KIND_VALUES);
+export type ReactionKindValue = z.infer<typeof ReactionKindSchema>;
+
+export const MessageReactionsSchema = z.object({
+  messageId: Id,
+  counts: z.record(ReactionKindSchema, z.number().int().nonnegative()),
+  mine: z.array(ReactionKindSchema),
+});
+export type MessageReactions = z.infer<typeof MessageReactionsSchema>;
+
+export const BotPresenceSchema = z.object({
+  botId: Id,
+  name: z.string(),
+  color: z.string(),
+  personaId: z.string(),
+  emoji: z.string(),
+  state: z.enum(["thinking", "online", "idle"]),
+  tag: z.string(),
+});
+export type BotPresenceDto = z.infer<typeof BotPresenceSchema>;
+
+export const BuzzItemSchema = z.object({
+  id: Id,
+  botId: Id,
+  botName: z.string(),
+  botColor: z.string(),
+  personaId: z.string(),
+  personaEmoji: z.string(),
+  kind: z.string(),
+  text: z.string(),
+  createdAt: z.string(),
+});
+export type BuzzItem = z.infer<typeof BuzzItemSchema>;
+
+export const LoungeLineSchema = z.object({
+  botId: Id,
+  name: z.string(),
+  emoji: z.string(),
+  personaId: z.string(),
+  reply: z.string(),
+});
+export type LoungeLine = z.infer<typeof LoungeLineSchema>;
+
+export const LoungeSessionSchema = z.object({
+  id: Id,
+  topicId: z.string(),
+  topicLabel: z.string(),
+  createdAt: z.string(),
+  lines: z.array(LoungeLineSchema),
+});
+export type LoungeSession = z.infer<typeof LoungeSessionSchema>;
+
+export const SyncScanSchema = z.object({
+  envKeys: z.array(
+    z.object({
+      provider: z.string(),
+      label: z.string(),
+      envVar: z.string(),
+      modelId: z.string().nullable(),
+      imported: z.boolean(),
+    }),
+  ),
+  localServers: z.array(
+    z.object({
+      provider: z.string(),
+      baseUrl: z.string(),
+      running: z.boolean(),
+      models: z.array(z.string()),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+export type SyncScan = z.infer<typeof SyncScanSchema>;

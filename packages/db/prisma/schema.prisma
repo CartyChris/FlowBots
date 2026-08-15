@@ -177,6 +177,7 @@ model Bot {
   title          String   @default("")
   description    String   @default("")
   instructions   String   @default("")
+  persona        Json?
   color          String
   notifyOnFinish Boolean  @default(true)
   parentBotId    String?

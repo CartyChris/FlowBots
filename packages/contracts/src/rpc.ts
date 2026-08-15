@@ -2,7 +2,9 @@ import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
 import {
   ArtifactSchema,
+  BotPresenceSchema,
   BotSchema,
+  BuzzItemSchema,
   CapabilityInstallSchema,
   ComputerStatusSchema,
   ConnectionCatalogItemSchema,
@@ -11,10 +13,14 @@ import {
   CreateRoutineInput,
   DeploymentSettingsSchema,
   ExportManifestSchema,
+  LoungeSessionSchema,
   MemoryDocumentSchema,
   MeSchema,
+  MessageReactionsSchema,
   ModelCredentialSchema,
+  PersonaPresetSchema,
   RoutineSchema,
+  SyncScanSchema,
   ThreadSnapshotSchema,
   UpdateBotInput,
   UsageRecordSchema,
@@ -222,6 +228,57 @@ export const appContract = {
   },
   export: {
     bot: oc.input(botId).output(ExportManifestSchema),
+  },
+  personas: {
+    list: oc.output(z.array(PersonaPresetSchema)),
+  },
+  social: {
+    presence: oc.output(z.array(BotPresenceSchema)),
+    buzz: oc
+      .input(z.object({ limit: z.number().int().min(1).max(100).default(40) }))
+      .output(z.array(BuzzItemSchema)),
+    react: oc
+      .input(
+        z.object({
+          botId: Id,
+          messageId: z.string().min(1).max(120),
+          kind: z.enum(["fire", "skull", "joy", "eyes"]),
+        }),
+      )
+      .output(z.object({ counts: z.record(z.string(), z.number().int()) })),
+    nudge: oc.input(botId).output(z.object({ ok: z.literal(true), text: z.string() })),
+  },
+  lounge: {
+    topics: oc.output(z.array(z.object({ id: z.string(), label: z.string(), prompt: z.string() }))),
+    start: oc
+      .input(
+        z.object({
+          topicId: z.string().min(1).max(80),
+          botIds: z.array(Id).min(2).max(4),
+          rounds: z.number().int().min(1).max(2).default(1),
+        }),
+      )
+      .output(LoungeSessionSchema),
+    list: oc
+      .input(z.object({ limit: z.number().int().min(1).max(50).default(10) }))
+      .output(z.array(LoungeSessionSchema)),
+  },
+  sync: {
+    scan: oc.output(SyncScanSchema),
+    importEnv: oc
+      .input(z.object({ envVars: z.array(z.string().min(1)).min(1).max(24) }))
+      .output(
+        z.object({ imported: z.array(z.object({ provider: z.string(), label: z.string() })) }),
+      ),
+    connectLocal: oc
+      .input(
+        z.object({
+          provider: z.literal("ollama"),
+          baseUrl: z.string().max(200).optional(),
+          modelId: z.string().min(1).max(200),
+        }),
+      )
+      .output(ModelCredentialSchema),
   },
   notifications: {
     registerPush: oc
