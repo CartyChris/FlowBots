@@ -11,7 +11,16 @@ import type {
   WakeupDriver,
 } from "@rakazo/adapter-kit";
 import type { Actor, MessageBlock, RunStatus } from "@rakazo/contracts";
-import { assertTransition, containsSecret, nextCronDate, redactSecrets } from "@rakazo/core";
+import {
+  assertTransition,
+  containsSecret,
+  nextCronDate,
+  normalizePersona,
+  personaSystemPrompt,
+  redactSecrets,
+  steeringHintFromPrompt,
+  stripSteeringPrefix,
+} from "@rakazo/core";
 import { appendEvent, type PrismaClient } from "@rakazo/db";
 import { builtinAgentTools } from "./builtin-tools.js";
 import { deleteSpawnedBot, spawnBot } from "./child-bots.js";
@@ -327,15 +336,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ? `Connected plugins: ${connectedPlugins.map((row) => `${row.displayName} (${row.provider})`).join(", ")}. Use those plugin tools when the user asks about those apps.`
           : "No plugins are connected yet.";
 
+      const persona = normalizePersona(bot.persona);
+      const steering = steeringHintFromPrompt(task.prompt);
+      const cleanPrompt = stripSteeringPrefix(task.prompt);
+
       try {
         for await (const event of deps.runtime.run(
           {
             botId: bot.id,
             threadId: thread.id,
             runId,
-            prompt: task.prompt,
+            prompt: cleanPrompt,
             instructions: [
               bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
+              personaSystemPrompt(persona, bot.name),
+              ...(steering
+                ? [
+                    `Steering for this reply only: the user asked for a ${steering} reply. Adjust tone for this one message, then return to your normal personality.`,
+                  ]
+                : []),
               "You have a persistent computer. Use write_file to save files into your home (they appear in Files). Use shell to run commands in that computer. Use remember for durable facts. Use request_takeover when the user must type on the screen. Use destination.write only for connected destination records.",
               "A bot and a subagent are different. Never use both for the same request.",
               "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it.",

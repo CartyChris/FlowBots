@@ -129,6 +129,7 @@ export async function createApp(
     secrets,
     oauthLogins,
     composio: stack.composio,
+    runtime,
     dataDir: env.dataDir,
     pool: created.pool,
     env: {

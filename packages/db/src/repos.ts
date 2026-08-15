@@ -1,4 +1,5 @@
-import { type Actor, BOT_COLORS, type Bot } from "@rakazo/contracts";
+import { type Actor, BOT_COLORS, type Bot, type PersonaConfigInput } from "@rakazo/contracts";
+import { normalizePersona } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
 
@@ -10,6 +11,7 @@ function mapBot(
     title: string;
     description: string;
     instructions: string;
+    persona?: unknown;
     color: string;
     notifyOnFinish: boolean;
     parentBotId: string | null;
@@ -30,6 +32,7 @@ function mapBot(
     title: bot.title,
     description: bot.description,
     instructions: bot.instructions,
+    persona: normalizePersona(bot.persona),
     color: bot.color,
     notifyOnFinish: bot.notifyOnFinish,
     parentBotId: bot.parentBotId,
@@ -90,6 +93,7 @@ export function createRepos(prisma: PrismaClient) {
         title: string;
         description: string;
         instructions: string;
+        persona?: PersonaConfigInput;
         notifyOnFinish: boolean;
         color?: string;
         parentBotId?: string | null;
@@ -122,6 +126,9 @@ export function createRepos(prisma: PrismaClient) {
             title: input.title,
             description: input.description,
             instructions: input.instructions,
+            persona: input.persona
+              ? JSON.parse(JSON.stringify(normalizePersona(input.persona)))
+              : undefined,
             notifyOnFinish: input.notifyOnFinish,
             color,
             parentBotId: input.parentBotId ?? null,

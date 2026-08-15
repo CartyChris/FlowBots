@@ -8,6 +8,7 @@
     "dev": "pnpm build && electron .",
     "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
     "pack": "pnpm build && electron-builder --mac --win --linux",
+    "pack:mac": "pnpm build && electron-builder --mac --universal",
     "pack:dir": "pnpm build && electron-builder --dir",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --passWithNoTests"
@@ -39,9 +40,26 @@
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ]
+    },
+    "dmg": {
+      "title": "Rakazo",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "win": {
       "icon": "assets/icon.ico",

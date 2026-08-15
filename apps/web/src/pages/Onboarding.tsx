@@ -38,6 +38,23 @@ type CatalogEntry = {
   signIn?: "device-code";
 };
 
+type SyncScan = {
+  envKeys: Array<{
+    provider: string;
+    label: string;
+    envVar: string;
+    modelId: string | null;
+    imported: boolean;
+  }>;
+  localServers: Array<{
+    provider: string;
+    baseUrl: string;
+    running: boolean;
+    models: string[];
+    error: string | null;
+  }>;
+};
+
 function providerHint(entry: CatalogEntry) {
   if (entry.signIn === "device-code") {
     if (entry.provider === "openai-codex") return "ChatGPT Plus/Pro";
@@ -67,6 +84,16 @@ export function OnboardingPage() {
     userCode: string;
   } | null>(null);
   const [oauthPending, setOauthPending] = useState(false);
+  const [scan, setScan] = useState<SyncScan | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<string[]>([]);
+
+  useEffect(() => {
+    void rpc.sync
+      .scan()
+      .then(setScan)
+      .catch(() => setScan(null));
+  }, []);
 
   useEffect(() => {
     void Promise.all([rpc.me(), rpc.models.list().catch(() => [])])
@@ -193,6 +220,39 @@ export function OnboardingPage() {
 
   const question = QUESTIONS[answers.length];
 
+  const pendingEnvKeys = (scan?.envKeys ?? []).filter((hint) => !hint.imported);
+  const ollama = scan?.localServers.find((server) => server.provider === "ollama");
+
+  async function importAll() {
+    if (!scan) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const envVars = pendingEnvKeys.map((hint) => hint.envVar);
+      if (envVars.length > 0) {
+        const result = await rpc.sync.importEnv({ envVars });
+        setImported(result.imported.map((row) => row.label));
+        const first = result.imported[0];
+        if (first) {
+          const hint = pendingEnvKeys.find((row) => row.provider === first.provider);
+          if (hint?.modelId)
+            await rpc.models.setDefault({ provider: hint.provider, modelId: hint.modelId });
+        }
+      }
+      if (ollama?.running && ollama.models[0]) {
+        await rpc.sync.connectLocal({ provider: "ollama", modelId: ollama.models[0] });
+      }
+      const models = await rpc.models.list().catch(() => []);
+      setCatalog(models);
+      setScan(await rpc.sync.scan().catch(() => null));
+      setStep("bot");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not import credentials");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="flex min-h-full items-center justify-center bg-[#0D0D0E] px-6">
       <div className="w-[560px]">
@@ -204,6 +264,45 @@ export function OnboardingPage() {
               Rakazo does not pay for model usage. Paste an API key, sign in with ChatGPT, Copilot,
               or SuperGrok, or skip if this deployment already has a key.
             </p>
+            {pendingEnvKeys.length > 0 || (ollama?.running && ollama.models.length > 0) ? (
+              <div className="mt-6 rounded-[16px] border border-[#2A2A2F] bg-[#141416] px-5 py-4">
+                <div className="text-[15px] font-medium text-[#F1F1F2]">
+                  ⚡ Instant setup — found on this machine
+                </div>
+                <div className="mt-2.5 flex flex-col gap-1.5">
+                  {pendingEnvKeys.map((hint) => (
+                    <div key={hint.envVar} className="flex items-center gap-2 text-[13.5px]">
+                      <span className="text-[#4ECB71]">✓</span>
+                      <span className="text-[#ECECEE]">{hint.label}</span>
+                      <span className="font-mono text-[11.5px] text-[#6C6C70]">{hint.envVar}</span>
+                    </div>
+                  ))}
+                  {ollama?.running && ollama.models.length > 0 ? (
+                    <div className="flex items-center gap-2 text-[13.5px]">
+                      <span className="text-[#4ECB71]">✓</span>
+                      <span className="text-[#ECECEE]">Ollama running locally</span>
+                      <span className="text-[11.5px] text-[#6C6C70]">
+                        {ollama.models.length} model{ollama.models.length === 1 ? "" : "s"} ·{" "}
+                        {ollama.models[0]}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  disabled={importing}
+                  onClick={() => void importAll()}
+                  className="mt-3.5 rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[14px] text-[#17171A] disabled:opacity-40"
+                >
+                  {importing ? "Importing…" : "Import everything and continue"}
+                </button>
+                {imported.length > 0 ? (
+                  <p className="mt-2 text-[12.5px] text-[#4ECB71]">
+                    Imported: {imported.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -229,9 +328,7 @@ export function OnboardingPage() {
                   <span className="text-[15px] text-[#ECECEE]">
                     {entry.providerName ?? entry.provider}
                   </span>
-                  <span className="text-[12px] text-[#85858A]">
-                    {providerHint(entry)}
-                  </span>
+                  <span className="text-[12px] text-[#85858A]">{providerHint(entry)}</span>
                 </button>
               ))}
             </div>

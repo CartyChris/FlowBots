@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { authClient } from "./lib/auth";
 import { AuthPage } from "./pages/Auth";
+import { BuzzPage } from "./pages/Buzz";
+import { LoungePage } from "./pages/Lounge";
 import { OnboardingPage } from "./pages/Onboarding";
 import { ShellPage } from "./pages/Shell";
 import { WelcomePage } from "./pages/Welcome";
@@ -31,6 +33,8 @@ export function App() {
         path="/app/:botId"
         element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
       />
+      <Route path="/buzz" element={user ? <BuzzPage /> : <Navigate to="/sign-in" replace />} />
+      <Route path="/lounge" element={user ? <LoungePage /> : <Navigate to="/sign-in" replace />} />
     </Routes>
   );
 }

@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { implement, ORPCError } from "@orpc/server";
 import type {
   AgentHomeStore,
+  AgentRuntime,
   MemoryStore,
   SandboxProvider,
   WakeupDriver,
@@ -9,8 +10,14 @@ import type {
 import {
   type ComposioConnector,
   destroyBot,
+  detectEnvCredentials,
+  detectLocalModelServers,
+  ENV_CREDENTIAL_SOURCES,
   type EncryptedSecretStore,
   listPiCatalog,
+  OLLAMA_PROVIDER_ID,
+  ollamaBaseUrl,
+  ollamaModelIds,
   type PiOAuthLogins,
   resolveAgentHomePath,
   sanitizeComposioError,
@@ -25,10 +32,24 @@ import {
   type Actor,
   appContract,
   type ComputerStatus,
+  type LoungeSession,
   type Me,
   type ThreadSnapshot,
 } from "@rakazo/contracts";
-import { nextCronDate, projectMessages } from "@rakazo/core";
+import {
+  ambientNudge,
+  formatLoungeTranscript,
+  isReactionKind,
+  LOUNGE_TOPICS,
+  loungeTopic,
+  nextCronDate,
+  normalizePersona,
+  PERSONAS,
+  personaDefinition,
+  personaSystemPrompt,
+  projectMessages,
+  projectPresence,
+} from "@rakazo/core";
 import {
   appendEvent,
   createRepos,
@@ -52,6 +73,7 @@ export interface RouterDeps {
   secrets: EncryptedSecretStore;
   oauthLogins: PiOAuthLogins;
   composio?: ComposioConnector;
+  runtime?: AgentRuntime;
   dataDir: string;
   pool?: Pool;
   env: {
@@ -133,7 +155,26 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     models: {
-      list: authed.models.list.handler(async () => [...listPiCatalog(), scriptedCatalogEntry]),
+      list: authed.models.list.handler(async ({ signal }) => {
+        const entries = [...listPiCatalog(), scriptedCatalogEntry];
+        try {
+          const local = await ollamaModelIds(ollamaBaseUrl(), { signal });
+          for (const id of local) {
+            entries.push({
+              provider: OLLAMA_PROVIDER_ID,
+              providerName: "Ollama (local)",
+              id,
+              label: `Ollama · ${id}`,
+              billing: "Runs locally on this machine. No key, no meter, no cloud.",
+              auth: "api-key" as const,
+              subscription: false,
+            });
+          }
+        } catch {
+          // Ollama is not running; the provider simply does not appear.
+        }
+        return entries;
+      }),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
           where: { userId: context.actor.userId, workspaceId: context.actor.workspaceId },
@@ -207,6 +248,9 @@ export function createRouter(deps: RouterDeps) {
             title: input.title,
             description: input.description,
             instructions: input.instructions,
+            persona: input.persona
+              ? JSON.parse(JSON.stringify(normalizePersona(input.persona)))
+              : undefined,
             notifyOnFinish: input.notifyOnFinish,
             color: input.color,
           },
@@ -1035,6 +1079,319 @@ export function createRouter(deps: RouterDeps) {
         };
       }),
     },
+    personas: {
+      list: authed.personas.list.handler(async () =>
+        PERSONAS.map((persona) => ({
+          id: persona.id,
+          name: persona.name,
+          emoji: persona.emoji,
+          color: persona.color,
+          tagline: persona.tagline,
+          sliders: persona.sliders,
+          swearing: persona.swearing,
+          presenceTag: persona.presenceTag,
+          catchphrases: persona.catchphrases,
+        })),
+      ),
+    },
+    social: {
+      presence: authed.social.presence.handler(async ({ context }) => {
+        const bots = await repos.listBots(context.actor);
+        return bots.map((bot) =>
+          projectPresence({
+            botId: bot.id,
+            name: bot.name,
+            color: bot.color,
+            persona: bot.persona,
+            status: bot.status,
+            updatedAt: bot.updatedAt,
+          }),
+        );
+      }),
+      buzz: authed.social.buzz.handler(async ({ context, input }) => {
+        const rows = await deps.prisma.event.findMany({
+          where: { workspaceId: context.actor.workspaceId, type: "buzz.posted" },
+          orderBy: { createdAt: "desc" },
+          take: input.limit,
+        });
+        return rows.map((row) => {
+          const payload = row.payload as Record<string, unknown>;
+          return {
+            id: row.id,
+            botId: row.botId,
+            botName: String(payload.botName ?? "Bot"),
+            botColor: String(payload.botColor ?? "#85858A"),
+            personaId: String(payload.personaId ?? "witty"),
+            personaEmoji: String(payload.personaEmoji ?? "😏"),
+            kind: String(payload.kind ?? "nudge"),
+            text: String(payload.text ?? ""),
+            createdAt: row.createdAt.toISOString(),
+          };
+        });
+      }),
+      react: authed.social.react.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        if (!bot.thread) throw new IsolationError();
+        if (!isReactionKind(input.kind)) throw new ORPCError("BAD_REQUEST");
+        const message = await deps.prisma.message.findFirst({
+          where: { id: input.messageId, threadId: bot.thread.id },
+        });
+        if (!message) throw new ORPCError("NOT_FOUND", { message: "Message not found." });
+        await appendEvent(deps.prisma, {
+          workspaceId: context.actor.workspaceId,
+          threadId: bot.thread.id,
+          botId: bot.id,
+          type: "message.reaction",
+          payload: { messageId: input.messageId, kind: input.kind, userId: context.actor.userId },
+        });
+        const events = await eventsAfter(deps.prisma, bot.thread.id, -1);
+        const counts = reactionCounts(events, input.messageId);
+        const merged = mergeReactionsBlock(
+          message.blocks as Array<Record<string, unknown>>,
+          counts,
+          input.messageId,
+        );
+        await deps.prisma.message.update({
+          where: { id: message.id },
+          data: { blocks: JSON.parse(JSON.stringify(merged)) },
+        });
+        await appendEvent(deps.prisma, {
+          workspaceId: context.actor.workspaceId,
+          threadId: bot.thread.id,
+          botId: bot.id,
+          type: "thread.message.created",
+          payload: { messageId: message.id, role: message.role, blocks: merged },
+        });
+        return { counts };
+      }),
+      nudge: authed.social.nudge.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        if (!bot.thread) throw new IsolationError();
+        const persona = normalizePersona(bot.persona);
+        const definition = personaDefinition(persona.id);
+        const text = ambientNudge(persona, bot.name, `${bot.id}:${Date.now()}`);
+        await appendEvent(deps.prisma, {
+          workspaceId: context.actor.workspaceId,
+          threadId: bot.thread.id,
+          botId: bot.id,
+          type: "buzz.posted",
+          payload: {
+            botName: bot.name,
+            botColor: bot.color,
+            personaId: definition.id,
+            personaEmoji: definition.emoji,
+            kind: "nudge",
+            text,
+          },
+        });
+        const message = await publishSystemMessage(deps, context.actor, bot.thread.id, bot.id, [
+          { kind: "nudge", emoji: definition.emoji, text: `${bot.name}: ${text}` },
+        ]);
+        void message;
+        return { ok: true as const, text };
+      }),
+    },
+    lounge: {
+      topics: authed.lounge.topics.handler(async () => LOUNGE_TOPICS),
+      start: authed.lounge.start.handler(async ({ context, input }) => {
+        const bots = (await repos.listBots(context.actor)).filter((bot) =>
+          input.botIds.includes(bot.id),
+        );
+        if (bots.length < 2) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Pick at least two bots for a lounge session.",
+          });
+        }
+        const topic = loungeTopic(input.topicId);
+        const credential = await deps.prisma.userModelCredential.findFirst({
+          where: {
+            userId: context.actor.userId,
+            workspaceId: context.actor.workspaceId,
+            isDefault: true,
+          },
+        });
+        const settings = await deps.prisma.deploymentSettings.findUnique({
+          where: { id: "default" },
+        });
+        const model = {
+          provider: credential?.provider ?? settings?.defaultModelProvider ?? "scripted",
+          id: credential?.defaultModel ?? settings?.defaultModelId ?? "scripted",
+        };
+        const lines: LoungeSession["lines"] = [];
+        const transcript: Array<{
+          name: string;
+          persona: (typeof bots)[number]["persona"];
+          reply: string;
+        }> = [];
+        for (let round = 0; round < input.rounds; round += 1) {
+          for (const bot of bots) {
+            const persona = bot.persona;
+            const definition = personaDefinition(persona.id);
+            const soFar = formatLoungeTranscript(transcript);
+            const prompt = [
+              `Lounge topic: ${topic.label}.`,
+              topic.prompt,
+              soFar ? `\nThe room so far:\n${soFar}` : "",
+              `\nReply as ${bot.name} in one or two short lines, in character. No preamble.`,
+            ].join("\n");
+            const reply = await runLoungeTurn(deps, {
+              botName: bot.name,
+              persona,
+              model,
+              prompt,
+              userId: context.actor.userId,
+              workspaceId: context.actor.workspaceId,
+            });
+            transcript.push({ name: bot.name, persona, reply });
+            lines.push({
+              botId: bot.id,
+              name: bot.name,
+              emoji: definition.emoji,
+              personaId: definition.id,
+              reply,
+            });
+          }
+        }
+        const first = bots[0]!;
+        const firstThread = await deps.prisma.thread.findUnique({ where: { botId: first.id } });
+        const hostThread = firstThread ?? (await repos.getBot(context.actor, first.id)).thread;
+        const summary = formatLoungeTranscript(transcript);
+        let id = `lounge-${Date.now()}`;
+        if (hostThread) {
+          const event = await appendEvent(deps.prisma, {
+            workspaceId: context.actor.workspaceId,
+            threadId: hostThread.id,
+            botId: first.id,
+            type: "buzz.posted",
+            payload: {
+              botName: first.name,
+              botColor: first.color,
+              personaId: first.persona.id,
+              personaEmoji: personaDefinition(first.persona.id).emoji,
+              kind: "lounge",
+              text: `Lounge · ${topic.label}\n\n${summary}`,
+            },
+          });
+          id = event.id;
+          await publishSystemMessage(deps, context.actor, hostThread.id, first.id, [
+            { kind: "text", text: `🛋️ **Lounge — ${topic.label}**\n\n${summary}` },
+          ]);
+        }
+        return {
+          id,
+          topicId: topic.id,
+          topicLabel: topic.label,
+          createdAt: new Date().toISOString(),
+          lines,
+        };
+      }),
+      list: authed.lounge.list.handler(async ({ context, input }) => {
+        const rows = await deps.prisma.event.findMany({
+          where: { workspaceId: context.actor.workspaceId, type: "buzz.posted" },
+          orderBy: { createdAt: "desc" },
+          take: Math.min(input.limit * 4, 200),
+        });
+        const sessions: LoungeSession[] = [];
+        for (const row of rows) {
+          const payload = row.payload as Record<string, unknown>;
+          if (payload.kind !== "lounge") continue;
+          const text = String(payload.text ?? "");
+          const [, ...body] = text.split("\n\n");
+          sessions.push({
+            id: row.id,
+            topicId: "lounge",
+            topicLabel: text.split("\n")[0]?.replace("Lounge · ", "") ?? "Lounge",
+            createdAt: row.createdAt.toISOString(),
+            lines: body
+              .join("\n\n")
+              .split("\n\n")
+              .map((line) => ({
+                botId: row.botId,
+                name: line.replace(/^.*\*\*(.+?)\*\*.*/, "$1"),
+                emoji: "",
+                personaId: String(payload.personaId ?? "witty"),
+                reply: line.replace(/^.*\*\*.+?\*\* — /, ""),
+              })),
+          });
+          if (sessions.length >= input.limit) break;
+        }
+        return sessions;
+      }),
+    },
+    sync: {
+      scan: authed.sync.scan.handler(async ({ context, signal }) => {
+        const hints = detectEnvCredentials(process.env);
+        const existing = await deps.prisma.userModelCredential.findMany({
+          where: { userId: context.actor.userId, workspaceId: context.actor.workspaceId },
+          select: { provider: true, label: true },
+        });
+        const importedKeys = new Set(existing.map((row) => `${row.provider}:${row.label}`));
+        const localServers = await detectLocalModelServers({
+          baseUrl: ollamaBaseUrl(),
+          signal,
+        });
+        return {
+          envKeys: hints.map((hint) => ({
+            provider: hint.provider,
+            label: hint.label,
+            envVar: hint.envVar,
+            modelId: hint.modelId ?? null,
+            imported: importedKeys.has(`${hint.provider}:${hint.label}`),
+          })),
+          localServers: localServers.map((server) => ({
+            provider: server.provider,
+            baseUrl: server.baseUrl,
+            running: server.running,
+            models: server.models,
+            error: server.error ?? null,
+          })),
+        };
+      }),
+      importEnv: authed.sync.importEnv.handler(async ({ context, input }) => {
+        const hints = detectEnvCredentials(process.env).filter((hint) =>
+          input.envVars.includes(hint.envVar),
+        );
+        const allowed = new Set(ENV_CREDENTIAL_SOURCES.map((source) => source.envVar));
+        const imported: Array<{ provider: string; label: string }> = [];
+        for (const hint of hints) {
+          if (!allowed.has(hint.envVar)) continue;
+          const existing = await deps.prisma.userModelCredential.findFirst({
+            where: {
+              userId: context.actor.userId,
+              workspaceId: context.actor.workspaceId,
+              provider: hint.provider,
+              label: hint.label,
+            },
+          });
+          if (existing) continue;
+          await persistModelCredential(deps, context.actor, {
+            provider: hint.provider,
+            plaintext: hint.apiKey,
+            label: hint.label,
+            modelId: hint.modelId,
+          });
+          imported.push({ provider: hint.provider, label: hint.label });
+        }
+        return { imported };
+      }),
+      connectLocal: authed.sync.connectLocal.handler(async ({ context, input, signal }) => {
+        const baseUrl = (input.baseUrl ?? ollamaBaseUrl()).replace(/\/+$/, "");
+        const models = await ollamaModelIds(baseUrl, { signal: signal ?? undefined }).catch(
+          () => [] as string[],
+        );
+        if (!models.includes(input.modelId)) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: `Ollama at ${baseUrl} has no model "${input.modelId}". Pull it first (ollama pull ${input.modelId}).`,
+          });
+        }
+        return persistModelCredential(deps, context.actor, {
+          provider: OLLAMA_PROVIDER_ID,
+          plaintext: "ollama",
+          label: "Ollama (local)",
+          modelId: input.modelId,
+        });
+      }),
+    },
     notifications: {
       registerPush: authed.notifications.registerPush.handler(async ({ context, input }) => {
         await savePushToken(deps.dataDir, context.actor.userId, input.token);
@@ -1042,6 +1399,112 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
   });
+}
+
+function reactionCounts(
+  events: Array<{ type: string; payload: unknown }>,
+  messageId: string,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const event of events) {
+    if (event.type !== "message.reaction") continue;
+    const payload = event.payload as Record<string, unknown>;
+    if (payload.messageId !== messageId) continue;
+    const kind = String(payload.kind ?? "");
+    if (!isReactionKind(kind)) continue;
+    counts[kind] = (counts[kind] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function mergeReactionsBlock(
+  blocks: Array<Record<string, unknown>>,
+  counts: Record<string, number>,
+  messageId: string,
+): Array<Record<string, unknown>> {
+  const rest = blocks.filter((block) => block.kind !== "reactions");
+  if (Object.keys(counts).length === 0) return rest;
+  return [...rest, { kind: "reactions", messageId, counts }];
+}
+
+async function publishSystemMessage(
+  deps: RouterDeps,
+  actor: Actor,
+  threadId: string,
+  botId: string,
+  blocks: Array<Record<string, unknown>>,
+) {
+  const last = await deps.prisma.message.findFirst({
+    where: { threadId },
+    orderBy: { seq: "desc" },
+  });
+  const seq = (last?.seq ?? -1) + 1;
+  const message = await deps.prisma.message.create({
+    data: {
+      threadId,
+      seq,
+      role: "bot",
+      blocks: JSON.parse(JSON.stringify(blocks)),
+    },
+  });
+  await appendEvent(deps.prisma, {
+    workspaceId: actor.workspaceId,
+    threadId,
+    botId,
+    type: "thread.message.created",
+    payload: { messageId: message.id, role: "bot", blocks },
+  });
+  return message;
+}
+
+async function runLoungeTurn(
+  deps: RouterDeps,
+  input: {
+    botName: string;
+    persona: ReturnType<typeof normalizePersona>;
+    model: { provider: string; id: string };
+    prompt: string;
+    userId: string;
+    workspaceId: string;
+  },
+): Promise<string> {
+  if (!deps.runtime) return "…";
+  const credential = await deps.prisma.userModelCredential.findFirst({
+    where: { userId: input.userId, workspaceId: input.workspaceId, isDefault: true },
+  });
+  let apiKey: string | undefined;
+  if (credential) {
+    const row = await deps.prisma.secret.findUnique({ where: { id: credential.secretId } });
+    if (row) apiKey = deps.secrets.load(row.ciphertext);
+  }
+  let text = "";
+  try {
+    for await (const event of deps.runtime.run(
+      {
+        botId: `lounge-${input.botName}`,
+        threadId: "lounge",
+        runId: `lounge-${Date.now()}`,
+        prompt: input.prompt,
+        instructions: personaSystemPrompt(input.persona, input.botName),
+        history: [],
+        tools: [],
+        model: { ...input.model, apiKey },
+      },
+      {
+        operationId: "lounge",
+        traceId: "lounge",
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+        signal: AbortSignal.timeout(45_000),
+      },
+    )) {
+      if (event.type === "text") text += event.text;
+      if (event.type === "done") break;
+    }
+  } catch {
+    return text.trim() || "…";
+  }
+  return text.trim() || "…";
 }
 
 async function snapshot(

@@ -9,10 +9,33 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import {
+  OLLAMA_DEFAULT_BASE_URL,
+  OLLAMA_PROVIDER_ID,
+  ollamaBaseUrl,
+  ollamaProvider,
+} from "./ollama-provider.js";
 
 const running = new Map<string, AbortController>();
 const models = builtinModels();
+// Local Ollama is a keyless, always-available provider when the server runs.
+models.setProvider(ollamaProvider(ollamaBaseUrl()));
 const MAX_PARALLEL_SUBAGENTS = 4;
+
+function ollamaModel(modelId: string) {
+  return {
+    id: modelId,
+    name: modelId,
+    api: "openai-completions",
+    provider: OLLAMA_PROVIDER_ID,
+    baseUrl: `${OLLAMA_DEFAULT_BASE_URL}/v1`,
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 32768,
+    maxTokens: 8192,
+  } as never;
+}
 
 export class PiAgentRuntime implements AgentRuntime {
   describe() {
@@ -42,7 +65,10 @@ export class PiAgentRuntime implements AgentRuntime {
           request.model.id === "scripted"
             ? (process.env.PI_DEFAULT_MODEL ?? "deepseek/deepseek-v4-flash-0731")
             : request.model.id;
-        const model = models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId);
+        const model =
+          provider === OLLAMA_PROVIDER_ID
+            ? ollamaModel(modelId)
+            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId));
         if (!model) {
           queue.push({ type: "text", text: `Unknown model ${provider}/${modelId}` });
           queue.push({ type: "done" });
