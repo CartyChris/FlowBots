@@ -4,6 +4,7 @@ import {
   OLLAMA_PROVIDER_ID,
   ollamaBaseUrl,
   ollamaModelIds,
+  ollamaOpenAiBaseUrl,
   ollamaProvider,
 } from "./ollama-provider.js";
 
@@ -15,6 +16,12 @@ describe("ollamaBaseUrl", () => {
   it("respects OLLAMA_BASE_URL and strips trailing slashes", () => {
     expect(ollamaBaseUrl({ OLLAMA_BASE_URL: "http://mini.local:11434/" })).toBe(
       "http://mini.local:11434",
+    );
+  });
+
+  it("uses the configured Ollama host for the OpenAI-compatible endpoint", () => {
+    expect(ollamaOpenAiBaseUrl({ OLLAMA_BASE_URL: "http://mini.local:11434/" })).toBe(
+      "http://mini.local:11434/v1",
     );
   });
 });
