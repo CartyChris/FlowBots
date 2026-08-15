@@ -14,6 +14,10 @@ export function ollamaBaseUrl(source: NodeJS.ProcessEnv = process.env): string {
   return raw.replace(/\/+$/, "");
 }
 
+export function ollamaOpenAiBaseUrl(source: NodeJS.ProcessEnv = process.env): string {
+  return `${ollamaBaseUrl(source)}/v1`;
+}
+
 /**
  * A keyless local provider. Ollama speaks the OpenAI chat-completions wire
  * format at /v1, so the built-in completions stream handles everything.
@@ -21,10 +25,11 @@ export function ollamaBaseUrl(source: NodeJS.ProcessEnv = process.env): string {
  */
 export function ollamaProvider(baseUrl: string): Provider {
   const url = baseUrl.replace(/\/+$/, "");
+  const openAiBaseUrl = `${url}/v1`;
   return {
     id: OLLAMA_PROVIDER_ID,
     name: "Ollama (local)",
-    baseUrl: `${url}/v1`,
+    baseUrl: openAiBaseUrl,
     auth: {
       apiKey: {
         name: "No key needed — runs on this machine",
@@ -38,7 +43,7 @@ export function ollamaProvider(baseUrl: string): Provider {
     models: [],
     api: {
       streamSimple: (model: Model<never>, context: Context, options?: SimpleStreamOptions) =>
-        streamSimple(model as never, context, {
+        streamSimple({ ...model, baseUrl: openAiBaseUrl } as never, context, {
           ...options,
           apiKey: options?.apiKey ?? "ollama",
         } as never),
