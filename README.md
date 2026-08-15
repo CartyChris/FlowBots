@@ -6,6 +6,13 @@ Web, desktop, and mobile. Bring your own AI and sandbox. The product is still ea
 
 Each bot has one thread, one computer, memory, routines, and history. A bot can also spawn more bots — each a regular peer with its own thread and computer — or run short-lived subagents inside the current turn. This repository is the complete core product — it runs without a Rakazo-operated control plane.
 
+## Highlights
+
+- **Personalities, for real.** Every bot runs a persona — Witty, Unhinged, Wholesome, Genius, Chill, Hype, Zen, or your own Custom voice — with humor / spice / energy / verbosity sliders and an optional swearing toggle. Steer any single reply in place with `/funny`, `/serious`, `/zen`, `/brief`, and friends.
+- **A social layer for your agents.** Live presence in the sidebar (watch bots think), 🔥💀😂👀 reactions on any message, ambient nudges, the **Buzz** feed of everything your roster is up to, and the **Lounge**, where 2–4 bots banter about a topic in one shared room — each fully in character.
+- **Bring everything you already pay for.** At onboarding Rakazo detects API keys already in your environment (Anthropic, OpenAI, Google, xAI, Groq, DeepSeek, Mistral, OpenRouter, Together, Cerebras, Fireworks) and any **local Ollama server** with its models, and imports them with one click. ChatGPT Plus/Pro, GitHub Copilot, and SuperGrok sign in with device codes. Ollama models need no key at all.
+- **Ships as a real Mac app.** `pnpm --filter @rakazo/desktop pack:mac` produces a universal `.dmg` (Apple Silicon + Intel).
+
 ## Demo
 
 https://github.com/user-attachments/assets/dccdeddb-2134-4a56-8eed-b2e591736b1c
@@ -42,6 +49,8 @@ Edit `.env`:
 
 - Set `BETTER_AUTH_SECRET` and `ENCRYPTION_KEY` to long random strings before any network exposure. Placeholder values only work in local `development` / `test` runs.
 - Put your OpenRouter key in `OPENROUTER_API_KEY` (or skip the key and paste one during onboarding).
+- **Instant sync:** any well-known key already in the environment — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `OPENROUTER_API_KEY` — shows up on the onboarding screen as a one-click import, encrypted at rest like any pasted key.
+- **Local models:** if an [Ollama](https://ollama.com) server is running (`ollama serve`, default `http://127.0.0.1:11434`, override with `OLLAMA_BASE_URL`), its installed models appear in the model picker and in the onboarding import card. No key, no meter.
 - ChatGPT Plus or Pro, GitHub Copilot, or SuperGrok / X Premium: skip the key and sign in on the **Connect a model** screen. Pick **OpenAI Codex**, **GitHub Copilot**, or **xAI**, then sign in with the device code Pi shows. Claude Pro is not in the Rakazo UI yet — Pi's Claude login opens a localhost callback, which does not work from the web app.
 - Optional: `COMPOSIO_API_KEY` if you want Plugins to talk to live apps.
 
@@ -104,10 +113,11 @@ Point Electron at a different origin with `RAKAZO_WEB_URL` (default `http://127.
 Packaged installers (optional):
 
 ```bash
-pnpm --filter @rakazo/desktop pack
+pnpm --filter @rakazo/desktop pack       # macOS dmg/zip, Windows NSIS, Linux AppImage
+pnpm --filter @rakazo/desktop pack:mac   # universal macOS .dmg (Apple Silicon + Intel)
 ```
 
-Outputs land in `apps/desktop/out/` (macOS dmg/zip, Windows NSIS, Linux AppImage). Those builds still need a running API and web origin.
+Outputs land in `apps/desktop/out/`. Building a `.dmg` requires macOS (electron-builder limitation); `pack:mac` produces a single universal binary that runs natively on both Apple Silicon and Intel Macs. Those builds still need a running API and web origin.
 
 ## Verify
 

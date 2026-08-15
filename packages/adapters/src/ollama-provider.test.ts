@@ -52,17 +52,15 @@ describe("ollamaModelIds", () => {
 
   it("throws when the server answers with an error", async () => {
     const fetchFn = (async () => new Response("nope", { status: 503 })) as typeof fetch;
-    await expect(
-      ollamaModelIds("http://127.0.0.1:11434", { fetchFn }),
-    ).rejects.toThrow("503");
+    await expect(ollamaModelIds("http://127.0.0.1:11434", { fetchFn })).rejects.toThrow("503");
   });
 
   it("throws when the server is unreachable", async () => {
     const fetchFn = (async () => {
       throw new Error("fetch failed");
     }) as typeof fetch;
-    await expect(
-      ollamaModelIds("http://127.0.0.1:11434", { fetchFn }),
-    ).rejects.toThrow("fetch failed");
+    await expect(ollamaModelIds("http://127.0.0.1:11434", { fetchFn })).rejects.toThrow(
+      "fetch failed",
+    );
   });
 });

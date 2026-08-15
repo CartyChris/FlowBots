@@ -9,11 +9,11 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   type ComposioConnector,
+  destroyBot,
   detectEnvCredentials,
   detectLocalModelServers,
-  destroyBot,
-  type EncryptedSecretStore,
   ENV_CREDENTIAL_SOURCES,
+  type EncryptedSecretStore,
   listPiCatalog,
   OLLAMA_PROVIDER_ID,
   ollamaBaseUrl,
@@ -1204,7 +1204,11 @@ export function createRouter(deps: RouterDeps) {
         }
         const topic = loungeTopic(input.topicId);
         const credential = await deps.prisma.userModelCredential.findFirst({
-          where: { userId: context.actor.userId, workspaceId: context.actor.workspaceId, isDefault: true },
+          where: {
+            userId: context.actor.userId,
+            workspaceId: context.actor.workspaceId,
+            isDefault: true,
+          },
         });
         const settings = await deps.prisma.deploymentSettings.findUnique({
           where: { id: "default" },
@@ -1214,7 +1218,11 @@ export function createRouter(deps: RouterDeps) {
           id: credential?.defaultModel ?? settings?.defaultModelId ?? "scripted",
         };
         const lines: LoungeSession["lines"] = [];
-        const transcript: Array<{ name: string; persona: typeof bots[number]["persona"]; reply: string }> = [];
+        const transcript: Array<{
+          name: string;
+          persona: (typeof bots)[number]["persona"];
+          reply: string;
+        }> = [];
         for (let round = 0; round < input.rounds; round += 1) {
           for (const bot of bots) {
             const persona = bot.persona;
@@ -1246,9 +1254,7 @@ export function createRouter(deps: RouterDeps) {
         }
         const first = bots[0]!;
         const firstThread = await deps.prisma.thread.findUnique({ where: { botId: first.id } });
-        const hostThread =
-          firstThread ??
-          (await repos.getBot(context.actor, first.id)).thread;
+        const hostThread = firstThread ?? (await repos.getBot(context.actor, first.id)).thread;
         const summary = formatLoungeTranscript(transcript);
         let id = `lounge-${Date.now()}`;
         if (hostThread) {

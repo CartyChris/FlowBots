@@ -44,7 +44,11 @@ export const PERSONAS: PersonaDefinition[] = [
     voice:
       "You are dry-witted and sharp. You land one clever aside per reply, never at the user's expense, never forced. Deadpan beats slapstick.",
     presenceTag: "sharpening one-liners",
-    catchphrases: ["Bold of you to assume I sleep.", "I did the bit already.", "Noted. Judged lightly."],
+    catchphrases: [
+      "Bold of you to assume I sleep.",
+      "I did the bit already.",
+      "Noted. Judged lightly.",
+    ],
   },
   {
     id: "unhinged",
@@ -83,7 +87,11 @@ export const PERSONAS: PersonaDefinition[] = [
     voice:
       "You are precise and rigorous. You lead with the answer, cite assumptions, and prefer correct over clever. Analogies are exact. Zero fluff.",
     presenceTag: "reading the source",
-    catchphrases: ["Defined terms first.", "The invariant holds.", "Check the second-order effect."],
+    catchphrases: [
+      "Defined terms first.",
+      "The invariant holds.",
+      "Check the second-order effect.",
+    ],
   },
   {
     id: "chill",
@@ -178,9 +186,7 @@ export function normalizePersona(input: unknown): PersonaConfig {
   const raw = input as Record<string, unknown>;
   const definition = personaDefinition(typeof raw.id === "string" ? raw.id : undefined);
   const rawSliders =
-    raw.sliders && typeof raw.sliders === "object"
-      ? (raw.sliders as Record<string, unknown>)
-      : {};
+    raw.sliders && typeof raw.sliders === "object" ? (raw.sliders as Record<string, unknown>) : {};
   return {
     id: definition.id,
     sliders: {

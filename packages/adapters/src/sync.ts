@@ -1,5 +1,5 @@
-import { listPiCatalog } from "./pi-models.js";
 import { ollamaModelIds } from "./ollama-provider.js";
+import { listPiCatalog } from "./pi-models.js";
 
 export type EnvCredentialHint = {
   provider: string;
@@ -45,9 +45,7 @@ export function defaultModelForProvider(
 
 /** Reads configured env keys. Only the provider/label is exposed to callers;
  * the key itself is returned solely so the caller can encrypt+persist it. */
-export function detectEnvCredentials(
-  source: NodeJS.ProcessEnv = process.env,
-): EnvCredentialHint[] {
+export function detectEnvCredentials(source: NodeJS.ProcessEnv = process.env): EnvCredentialHint[] {
   const seen = new Set<string>();
   const hints: EnvCredentialHint[] = [];
   for (const entry of ENV_CREDENTIAL_SOURCES) {

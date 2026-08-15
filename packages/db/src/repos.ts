@@ -126,7 +126,9 @@ export function createRepos(prisma: PrismaClient) {
             title: input.title,
             description: input.description,
             instructions: input.instructions,
-            persona: input.persona ? JSON.parse(JSON.stringify(normalizePersona(input.persona))) : undefined,
+            persona: input.persona
+              ? JSON.parse(JSON.stringify(normalizePersona(input.persona)))
+              : undefined,
             notifyOnFinish: input.notifyOnFinish,
             color,
             parentBotId: input.parentBotId ?? null,

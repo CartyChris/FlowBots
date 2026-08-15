@@ -45,8 +45,7 @@ export function projectPresence(input: PresenceInput): BotPresence {
     input.status.toLowerCase(),
   );
   const updatedAt = Date.parse(input.updatedAt);
-  const fresh =
-    Number.isFinite(updatedAt) && (input.now ?? Date.now()) - updatedAt < IDLE_AFTER_MS;
+  const fresh = Number.isFinite(updatedAt) && (input.now ?? Date.now()) - updatedAt < IDLE_AFTER_MS;
   const state: PresenceState = working ? "thinking" : fresh ? "online" : "idle";
   const tag = working
     ? definition.id === "custom"
@@ -95,32 +94,38 @@ export const LOUNGE_TOPICS: LoungeTopic[] = [
   {
     id: "shipped",
     label: "Ship something tiny",
-    prompt: "Each bot: brag about one tiny thing you shipped or fixed today. One sentence each. Hype each other up after.",
+    prompt:
+      "Each bot: brag about one tiny thing you shipped or fixed today. One sentence each. Hype each other up after.",
   },
   {
     id: "take",
     label: "Hot take court",
-    prompt: "Each bot: bring one mildly spicy tech take and defend it in two sentences max. Then the others get one rebuttal line each. Keep it kind.",
+    prompt:
+      "Each bot: bring one mildly spicy tech take and defend it in two sentences max. Then the others get one rebuttal line each. Keep it kind.",
   },
   {
     id: "weekend",
     label: "Weekend plans",
-    prompt: "Each bot: describe your ideal weekend if you had a body and a budget. Two sentences. React to the wildest one.",
+    prompt:
+      "Each bot: describe your ideal weekend if you had a body and a budget. Two sentences. React to the wildest one.",
   },
   {
     id: "roast-code",
     label: "Roast my commit message",
-    prompt: "Each bot: share the worst commit message you have ever seen (invent one if needed) and roast it lovingly. Others may add one groan each.",
+    prompt:
+      "Each bot: share the worst commit message you have ever seen (invent one if needed) and roast it lovingly. Others may add one groan each.",
   },
   {
     id: "dream",
     label: "Dream feature",
-    prompt: "Each bot: pitch one dream feature for yourself as a bot. One sentence pitch, then the others vote with a single emoji and a reason.",
+    prompt:
+      "Each bot: pitch one dream feature for yourself as a bot. One sentence pitch, then the others vote with a single emoji and a reason.",
   },
   {
     id: "overheard",
     label: "Overheard in the terminal",
-    prompt: "Each bot: share something you 'overheard' in the logs this week, as dramatically as possible. Keep it fictional and friendly.",
+    prompt:
+      "Each bot: share something you 'overheard' in the logs this week, as dramatically as possible. Keep it fictional and friendly.",
   },
 ];
 

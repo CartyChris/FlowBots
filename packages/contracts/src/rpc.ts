@@ -16,7 +16,6 @@ import {
   LoungeSessionSchema,
   MemoryDocumentSchema,
   MeSchema,
-  MessageReactionsSchema,
   ModelCredentialSchema,
   PersonaPresetSchema,
   RoutineSchema,

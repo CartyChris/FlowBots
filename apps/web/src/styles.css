@@ -55,3 +55,27 @@ body,
     opacity: 0.3;
   }
 }
+
+.rk-range {
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: #26262a;
+  outline: none;
+}
+.rk-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f1f1ef;
+  cursor: pointer;
+}
+.rk-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f1ef;
+  cursor: pointer;
+}

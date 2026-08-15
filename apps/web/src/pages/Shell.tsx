@@ -1,7 +1,9 @@
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type {
   Bot,
+  BotPresenceDto,
   ComputerStatus,
+  PersonaConfigInput,
   ProductEvent,
   Routine,
   ThreadMessage,
@@ -11,7 +13,9 @@ import {
   cronFromPreset,
   defaultCronPreset,
   formatCron,
+  personaDefinition,
   presetFromCron,
+  STEERING_HINTS,
   subagentBlockFromPayload,
 } from "@rakazo/core";
 import { BotAvatar, Button } from "@rakazo/ui-web";
@@ -20,9 +24,17 @@ import { useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { rpc } from "../lib/rpc";
 import { HostComputerPrompt } from "./HostComputerPrompt";
+import { PersonaPicker } from "./PersonaPicker";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { RoutineSchedule } from "./RoutineSchedule";
 import { WindowChrome } from "./WindowChrome";
+
+const REACTION_BUTTONS: Array<{ kind: string; emoji: string }> = [
+  { kind: "fire", emoji: "🔥" },
+  { kind: "skull", emoji: "💀" },
+  { kind: "joy", emoji: "😂" },
+  { kind: "eyes", emoji: "👀" },
+];
 
 type Panel = "computer" | "settings" | "routine" | "create" | null;
 
@@ -52,7 +64,23 @@ export function ShellPage() {
     outputTokens: number;
     runs: number;
   } | null>(null);
+  const [presence, setPresence] = useState<Map<string, BotPresenceDto>>(new Map());
   const autoBooted = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPresence() {
+      const list = await rpc.social.presence().catch(() => []);
+      if (cancelled) return;
+      setPresence(new Map(list.map((entry) => [entry.botId, entry])));
+    }
+    void loadPresence();
+    const timer = window.setInterval(() => void loadPresence(), 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const active = bots.find((b) => b.id === botId) ?? bots[0];
 
@@ -275,31 +303,74 @@ export function ShellPage() {
             className="w-full bg-transparent outline-none"
           />
         </div>
+        <div className="mx-3 mb-2 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate("/buzz")}
+            className="flex items-center justify-center gap-1.5 rounded-[11px] border border-[#202023] bg-[#141416] py-2 text-[13px] text-[#C9C9CE] hover:bg-[#18181B]"
+          >
+            ⚡ Buzz
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/lounge")}
+            className="flex items-center justify-center gap-1.5 rounded-[11px] border border-[#202023] bg-[#141416] py-2 text-[13px] text-[#C9C9CE] hover:bg-[#18181B]"
+          >
+            🛋️ Lounge
+          </button>
+        </div>
         <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-          {filtered.map((bot) => (
-            <button
-              key={bot.id}
-              type="button"
-              onClick={() => navigate(`/app/${bot.id}`)}
-              className="flex gap-3 rounded-xl px-2.5 py-[11px] text-left"
-              style={{
-                background: active?.id === bot.id ? "#161618" : "transparent",
-              }}
-            >
-              <BotAvatar color={bot.color} size={38} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[15px] font-medium text-[#ECECEE]">{bot.name}</span>
-                  <span className="shrink-0 text-[12.5px] text-[#6C6C70]">
-                    {bot.status === "idle" ? "" : bot.status}
-                  </span>
+          {filtered.map((bot) => {
+            const live = presence.get(bot.id);
+            return (
+              <button
+                key={bot.id}
+                type="button"
+                onClick={() => navigate(`/app/${bot.id}`)}
+                className="flex gap-3 rounded-xl px-2.5 py-[11px] text-left"
+                style={{
+                  background: active?.id === bot.id ? "#161618" : "transparent",
+                }}
+              >
+                <span className="relative shrink-0">
+                  <BotAvatar color={bot.color} size={38} />
+                  <span
+                    className="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-[#0B0B0C]"
+                    style={{
+                      background:
+                        live?.state === "thinking"
+                          ? "#F5A03C"
+                          : live?.state === "online"
+                            ? "#4ECB71"
+                            : "#3A3A40",
+                      animation:
+                        live?.state === "thinking"
+                          ? "rkPulse 1.2s ease-in-out infinite"
+                          : undefined,
+                    }}
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[15px] font-medium text-[#ECECEE]">
+                      {live?.emoji ? `${live.emoji} ` : ""}
+                      {bot.name}
+                    </span>
+                    <span className="shrink-0 text-[12.5px] text-[#6C6C70]">
+                      {live && live.state === "thinking"
+                        ? live.tag
+                        : bot.status === "idle"
+                          ? ""
+                          : bot.status}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 truncate text-[13.5px] text-[#85858A]">
+                    {bot.preview || bot.title}
+                  </div>
                 </div>
-                <div className="mt-0.5 truncate text-[13.5px] text-[#85858A]">
-                  {bot.preview || bot.title}
-                </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
         <button
           type="button"
@@ -404,6 +475,12 @@ export function ShellPage() {
               key={message.id}
               message={message}
               onOpenBot={(id) => navigate(`/app/${id}`)}
+              onReact={(kind) =>
+                active &&
+                void rpc.social
+                  .react({ botId: active.id, messageId: message.id, kind: kind as never })
+                  .then(() => refreshThread(active.id))
+              }
               onAnswer={(text) =>
                 active &&
                 rpc.threads.answer({ botId: active.id, runId: message.runId ?? "", answer: text })
@@ -422,6 +499,36 @@ export function ShellPage() {
           ) : null}
         </div>
         <div className="px-6 pb-6 pt-3">
+          {active ? (
+            <div className="mb-2 flex items-center gap-1.5 overflow-x-auto">
+              <button
+                type="button"
+                title={`${active.name} posts a vibe check to Buzz`}
+                onClick={() =>
+                  void rpc.social.nudge({ botId: active.id }).then(() => refreshThread(active.id))
+                }
+                className="shrink-0 rounded-full border border-[#202023] px-2.5 py-1 text-[12px] text-[#9A9AA0] hover:bg-[#161618]"
+              >
+                {personaDefinition(active.persona.id).emoji} nudge
+              </button>
+              <span className="mx-1 h-3.5 w-px shrink-0 bg-[#202023]" />
+              {STEERING_HINTS.map((hint) => (
+                <button
+                  key={hint}
+                  type="button"
+                  title={`Steer this reply: /${hint}`}
+                  onClick={() => setDraft((d) => (d.startsWith(`/${hint} `) ? d : `/${hint} ${d}`))}
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] ${
+                    draft.startsWith(`/${hint} `)
+                      ? "border-[#4A4A52] bg-[#1B1B1E] text-[#ECECEE]"
+                      : "border-[#202023] text-[#6C6C70] hover:bg-[#161618]"
+                  }`}
+                >
+                  /{hint}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="flex items-center gap-3.5 rounded-full border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3">
             <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0]">
               +
@@ -435,7 +542,7 @@ export function ShellPage() {
                   void send();
                 }
               }}
-              placeholder={active ? `Message ${active.name}` : "Message…"}
+              placeholder={active ? `Message ${active.name} · try /funny or /serious` : "Message…"}
               className="flex-1 bg-transparent text-[15.5px] text-[#E9E9EA] outline-none"
             />
             {snapshot?.run && ["running", "queued", "leased"].includes(snapshot.run.status) ? (
@@ -877,14 +984,32 @@ function MessageView({
   message,
   onAnswer,
   onOpenBot,
+  onReact,
 }: {
   message: ThreadMessage;
   onAnswer: (text: string) => void;
   onOpenBot: (botId: string) => void;
+  onReact: (kind: string) => void;
 }) {
+  const reactionsBlock = message.blocks.find((block) => block.kind === "reactions");
+  const reactionCounts =
+    reactionsBlock?.kind === "reactions" ? (reactionsBlock.counts as Record<string, number>) : {};
+  const isUser = message.role === "user";
   return (
     <>
       {message.blocks.map((block, i) => {
+        if (block.kind === "reactions") return null;
+        if (block.kind === "nudge") {
+          return (
+            <div
+              key={i}
+              className="flex items-center justify-center gap-2 py-1 text-[13.5px] italic text-[#85858A]"
+            >
+              <span>{block.emoji}</span>
+              <span>{block.text}</span>
+            </div>
+          );
+        }
         if (block.kind === "meta") {
           return (
             <div
@@ -1057,6 +1182,30 @@ function MessageView({
         }
         return null;
       })}
+      {message.id.startsWith("progress:") || message.id.startsWith("subagent:") ? null : (
+        <div
+          className={`-mt-1.5 flex items-center gap-1 ${isUser ? "justify-end" : "justify-start"}`}
+        >
+          {REACTION_BUTTONS.map(({ kind, emoji }) => {
+            const count = reactionCounts[kind] ?? 0;
+            return (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => onReact(kind)}
+                className={`rounded-full border px-2 py-0.5 text-[12px] transition ${
+                  count > 0
+                    ? "border-[#3A3A40] bg-[#1B1B1E] text-[#ECECEE]"
+                    : "border-transparent text-[#4A4A50] opacity-70 hover:border-[#26262A] hover:text-[#C9C9CE] hover:opacity-100"
+                }`}
+              >
+                {emoji}
+                {count > 0 ? <span className="ml-1">{count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
@@ -1132,6 +1281,7 @@ function BotSettings({
     title?: string;
     description?: string;
     instructions?: string;
+    persona?: PersonaConfigInput;
   }) => Promise<void>;
   onExport: () => Promise<void>;
   onDelete: () => Promise<void>;
@@ -1139,6 +1289,7 @@ function BotSettings({
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
+  const [persona, setPersona] = useState<PersonaConfigInput>(bot.persona);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1147,6 +1298,9 @@ function BotSettings({
     <div>
       <div className="flex justify-center">
         <BotAvatar color={bot.color} size={64} />
+      </div>
+      <div className="mt-4">
+        <PersonaPicker value={persona} onChange={setPersona} />
       </div>
       <label className="mt-6 block text-[14px] text-[#85858A]">
         Name
@@ -1176,7 +1330,9 @@ function BotSettings({
       <div className="mt-5 flex flex-col items-start gap-3">
         <button
           type="button"
-          onClick={() => void onSave({ name, title, description, instructions: description })}
+          onClick={() =>
+            void onSave({ name, title, description, instructions: description, persona })
+          }
           className="rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A]"
         >
           Save

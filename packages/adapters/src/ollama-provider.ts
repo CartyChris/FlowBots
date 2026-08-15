@@ -38,11 +38,10 @@ export function ollamaProvider(baseUrl: string): Provider {
     models: [],
     api: {
       streamSimple: (model: Model<never>, context: Context, options?: SimpleStreamOptions) =>
-        streamSimple(
-          model as never,
-          context,
-          ({ ...options, apiKey: options?.apiKey ?? "ollama" }) as never,
-        ),
+        streamSimple(model as never, context, {
+          ...options,
+          apiKey: options?.apiKey ?? "ollama",
+        } as never),
       stream: () => {
         throw new Error("Ollama provider streams via streamSimple only.");
       },
