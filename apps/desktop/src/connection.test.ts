@@ -11,9 +11,6 @@ describe("desktop connection profiles", () => {
   it("normalizes supported web URLs", () => {
     expect(normalizeWebUrl(" https://example.com/ ")).toBe("https://example.com");
     expect(normalizeWebUrl("http://127.0.0.1:5173/room/")).toBe("http://127.0.0.1:5173/room");
-    expect(normalizeWebUrl("https://example.com/path/?view=1#chat")).toBe(
-      "https://example.com/path?view=1#chat",
-    );
   });
 
   it("rejects unsafe or non-web URL schemes", () => {
@@ -21,8 +18,12 @@ describe("desktop connection profiles", () => {
     expect(() => normalizeWebUrl("javascript:alert(1)")).toThrow(/http/i);
   });
 
-  it("rejects credential-bearing URLs so settings never store secrets", () => {
+  it("rejects URL components that could persist credentials or tokens", () => {
     expect(() => normalizeWebUrl("https://alice:secret@example.com")).toThrow(/credential/i);
+    expect(() => normalizeWebUrl("https://example.com/?token=secret")).toThrow(/query|fragment/i);
+    expect(() => normalizeWebUrl("https://example.com/#access_token=secret")).toThrow(
+      /query|fragment/i,
+    );
   });
 
   it("uses the environment web URL and falls back to local development", () => {
