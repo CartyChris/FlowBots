@@ -5,6 +5,8 @@ export * from "./events.js";
 export * from "./message-pages.js";
 export * from "./personality.js";
 export * from "./run-state.js";
+export * from "./runtime-fabric.js";
 export * from "./secrets-guard.js";
+export * from "./service-schedule.js";
 export * from "./signup-policy.js";
 export * from "./social.js";
