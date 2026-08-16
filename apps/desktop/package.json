@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "pnpm build && electron .",
-    "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
+    "build": "tsc -p tsconfig.json && node scripts/build-local-runtime.mjs && cp src/preload.cjs dist/preload.cjs",
     "pack": "pnpm build && electron-builder --mac --win --linux",
     "pack:mac": "pnpm --filter @rakazo/web build && pnpm build && electron-builder --mac --universal",
     "pack:dir": "pnpm build && electron-builder --dir",
@@ -23,6 +23,7 @@
     "@playwright/test": "^1.55.0",
     "electron": "^37.3.1",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10"
   },
