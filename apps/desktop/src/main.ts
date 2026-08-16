@@ -2,10 +2,13 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { startLocalRuntime } from "@rakazo/local-runtime";
 import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import * as nodePty from "node-pty";
+import { createNodePtyFactory } from "./node-pty-factory.js";
 import {
   launcherDocumentUrl,
   resolveRuntimeResourcePaths,
   trustedRuntimeSender,
+  trustedTerminalSender,
 } from "./runtime-bootstrap.js";
 import { probeRuntimeOrigin } from "./runtime-health.js";
 import {
@@ -18,10 +21,15 @@ import {
   readRuntimeProfile as readRuntimeSettings,
   writeRuntimeProfile as writeRuntimeSettings,
 } from "./runtime-settings.js";
+import { TerminalSessionManager } from "./terminal-session.js";
 import { browserWindowOptions } from "./window-options.js";
+
+const MAX_TERMINAL_WRITE_BYTES = 1024 * 1024;
 
 let mainWindow: BrowserWindow | undefined;
 let session: DesktopRuntimeSession | undefined;
+let terminalManager: TerminalSessionManager | undefined;
+const terminalOwners = new Map<string, number>();
 let trustedLauncherUrl = "";
 let stoppingForQuit = false;
 
@@ -56,6 +64,55 @@ function assertTrustedRuntimeSender(event: Electron.IpcMainInvokeEvent) {
   if (!trustedRuntimeSender(senderUrl(event), trustedLauncherUrl)) {
     throw new Error("Runtime controls are available only from Rakazo's local runtime launcher.");
   }
+}
+
+function assertTrustedTerminalSender(event: Electron.IpcMainInvokeEvent) {
+  if (!trustedTerminalSender(senderUrl(event))) {
+    throw new Error("Host terminal access is available only to a loopback Rakazo runtime.");
+  }
+}
+
+function requireTerminalManager(): TerminalSessionManager {
+  if (!terminalManager) throw new Error("Rakazo terminal service is unavailable.");
+  return terminalManager;
+}
+
+function assertTerminalOwner(event: Electron.IpcMainInvokeEvent, sessionId: string): void {
+  if (terminalOwners.get(sessionId) !== event.sender.id) {
+    throw new Error("Terminal session is not owned by this Rakazo window.");
+  }
+}
+
+function defaultShell(): string {
+  const configured = process.env.SHELL;
+  if (configured && path.isAbsolute(configured)) return configured;
+  if (process.platform === "win32") {
+    const comspec = process.env.COMSPEC;
+    if (comspec && path.isAbsolute(comspec)) return comspec;
+    return "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  }
+  return process.platform === "darwin" ? "/bin/zsh" : "/bin/bash";
+}
+
+function terminalEnvironment(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+function installTerminalService(): void {
+  terminalManager = new TerminalSessionManager({
+    factory: createNodePtyFactory(nodePty),
+    allowedRoots: [app.getPath("home")],
+    defaultShell: defaultShell(),
+    homeDir: app.getPath("home"),
+    env: terminalEnvironment(),
+    onActivity: (activity) => {
+      if (activity.type !== "terminal.started") terminalOwners.delete(activity.sessionId);
+      const win = mainWindow;
+      if (win && !win.isDestroyed()) win.webContents.send("desktop.terminal.activity", activity);
+    },
+  });
 }
 
 async function createWindow() {
@@ -100,6 +157,8 @@ async function createWindow() {
 
   win.on("closed", () => {
     if (mainWindow !== win) return;
+    terminalManager?.closeAll();
+    terminalOwners.clear();
     mainWindow = undefined;
     if (session === nextSession) session = undefined;
     void nextSession.stop();
@@ -157,6 +216,8 @@ app.whenReady().then(async () => {
   const icon = developmentIcon();
   if (process.platform === "darwin" && icon) app.dock?.setIcon(icon);
 
+  installTerminalService();
+
   ipcMain.handle("desktop.platform", () => process.platform);
   ipcMain.handle("desktop.window.close", (event) => {
     windowFrom(event)?.close();
@@ -192,6 +253,55 @@ app.whenReady().then(async () => {
     assertTrustedRuntimeSender(event);
     return session?.showLauncher();
   });
+  ipcMain.handle("desktop.terminal.create", (event, raw: unknown) => {
+    assertTrustedTerminalSender(event);
+    const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const cwd = typeof input.cwd === "string" ? input.cwd : undefined;
+    const terminal = requireTerminalManager();
+    const info = terminal.create({
+      ...(cwd ? { cwd } : {}),
+      cols: Number(input.cols),
+      rows: Number(input.rows),
+    });
+    terminalOwners.set(info.id, event.sender.id);
+    terminal.subscribe(info.id, (data) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("desktop.terminal.data", { sessionId: info.id, data });
+      }
+    });
+    return info;
+  });
+  ipcMain.handle("desktop.terminal.write", (event, sessionId: unknown, data: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string" || typeof data !== "string") {
+      throw new Error("Invalid terminal write request.");
+    }
+    if (Buffer.byteLength(data, "utf8") > MAX_TERMINAL_WRITE_BYTES) {
+      throw new Error("Terminal write exceeds the maximum payload size.");
+    }
+    assertTerminalOwner(event, sessionId);
+    requireTerminalManager().write(sessionId, data);
+  });
+  ipcMain.handle("desktop.terminal.resize", (event, sessionId: unknown, cols: unknown, rows: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string") throw new Error("Invalid terminal resize request.");
+    assertTerminalOwner(event, sessionId);
+    requireTerminalManager().resize(sessionId, Number(cols), Number(rows));
+  });
+  ipcMain.handle("desktop.terminal.interrupt", (event, sessionId: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string") throw new Error("Invalid terminal interrupt request.");
+    assertTerminalOwner(event, sessionId);
+    requireTerminalManager().interrupt(sessionId);
+  });
+  ipcMain.handle("desktop.terminal.close", (event, sessionId: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string") throw new Error("Invalid terminal close request.");
+    assertTerminalOwner(event, sessionId);
+    const closed = requireTerminalManager().close(sessionId);
+    if (closed) terminalOwners.delete(sessionId);
+    return closed;
+  });
 
   installApplicationMenu();
   await createWindow();
@@ -201,6 +311,8 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", (event) => {
+  terminalManager?.closeAll();
+  terminalOwners.clear();
   if (stoppingForQuit || !session) return;
   event.preventDefault();
   stoppingForQuit = true;
@@ -208,5 +320,7 @@ app.on("before-quit", (event) => {
 });
 
 app.on("window-all-closed", () => {
+  terminalManager?.closeAll();
+  terminalOwners.clear();
   if (process.platform !== "darwin") app.quit();
 });
