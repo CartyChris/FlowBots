@@ -275,7 +275,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
           data: { modelProvider: selectedModelProvider, modelId: selectedModelId },
         });
-        const resolved = await resolveModelKey(deps, run.userId, run.workspaceId, credential);
+        const resolved = await resolveModelKey(
+          deps,
+          run.userId,
+          run.workspaceId,
+          credential ?? null,
+        );
         const runSecrets = [...deps.secrets, ...resolved.redact];
         const computer = await ensureComputer(deps, bot.id, context);
         const graphical =
