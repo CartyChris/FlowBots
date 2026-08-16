@@ -72,12 +72,25 @@ jobs:
           trap cleanup EXIT
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" >/dev/null
           app="$mount_point/FlowBots.app"
+          resources="$app/Contents/Resources"
+          pty_root="$resources/app.asar.unpacked/node_modules/node-pty/prebuilds"
           test -d "$app"
-          test -d "$app/Contents/Resources/web"
-          test -d "$app/Contents/Resources/migrations"
-          test -d "$app/Contents/Resources/app.asar.unpacked/node_modules/node-pty"
+          test -d "$resources/web"
+          test -d "$resources/migrations"
+          test -d "$resources/app.asar.unpacked/node_modules/node-pty"
           bundle_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app/Contents/Info.plist")"
           test "$bundle_name" = "FlowBots"
+          app_archs="$(lipo -archs "$app/Contents/MacOS/FlowBots")"
+          [[ "$app_archs" == *x86_64* ]]
+          [[ "$app_archs" == *arm64* ]]
+          arm64_pty="$(file "$pty_root/darwin-arm64/pty.node")"
+          x64_pty="$(file "$pty_root/darwin-x64/pty.node")"
+          echo "$arm64_pty"
+          echo "$x64_pty"
+          [[ "$arm64_pty" == *arm64* ]]
+          [[ "$arm64_pty" != *x86_64* ]]
+          [[ "$x64_pty" == *x86_64* ]]
+          [[ "$x64_pty" != *arm64* ]]
           test -s "$dmg"
           shasum -a 256 "$dmg"
       - name: Upload FlowBots DMG
@@ -86,4 +99,5 @@ jobs:
           name: FlowBots-macOS-universal-${{ github.sha }}
           path: apps/desktop/out/FlowBots-*-universal.dmg
           if-no-files-found: error
+          compression-level: 0
           retention-days: 30
