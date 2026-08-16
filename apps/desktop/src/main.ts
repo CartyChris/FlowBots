@@ -1,20 +1,20 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { app, BrowserWindow, clipboard, ipcMain, Menu } from "electron";
-import { probeConnectionHealth, type ConnectionHealth } from "./connection-health.js";
-import { readConnectionSettings, writeConnectionSettings } from "./connection-settings.js";
 import {
   type ConnectionSettings,
   defaultWebUrl,
   normalizeWebUrl,
   rememberWebUrl,
 } from "./connection.js";
+import { type ConnectionHealth, probeConnectionHealth } from "./connection-health.js";
+import { readConnectionSettings, writeConnectionSettings } from "./connection-settings.js";
 import { attemptNavigation, shouldAutoRetry } from "./navigation.js";
 import {
   type ConnectionCenterMode,
   diagnosticsText,
-  recoveryPageHtml,
   type RecoveryPageModel,
+  recoveryPageHtml,
 } from "./recovery-page.js";
 import { browserWindowOptions } from "./window-options.js";
 
@@ -112,9 +112,10 @@ async function connectToTarget() {
   stopAutoRetry();
   health = {
     webStatus: "checking",
-    apiStatus: target.startsWith("http://127.0.0.1") || target.startsWith("http://localhost")
-      ? "checking"
-      : "not-applicable",
+    apiStatus:
+      target.startsWith("http://127.0.0.1") || target.startsWith("http://localhost")
+        ? "checking"
+        : "not-applicable",
   };
 
   const result = await attemptNavigation((url) => win.loadURL(url), target);
@@ -138,11 +139,7 @@ async function connectToTarget() {
 async function autoRetryTick() {
   const win = mainWindow;
   const windowDestroyed = !win || win.isDestroyed();
-  if (
-    centerMode !== "recovery" ||
-    connecting ||
-    !shouldAutoRetry({ connected, windowDestroyed })
-  ) {
+  if (centerMode !== "recovery" || connecting || !shouldAutoRetry({ connected, windowDestroyed })) {
     if (windowDestroyed || connected || centerMode !== "recovery") stopAutoRetry();
     return;
   }
