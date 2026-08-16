@@ -66,6 +66,21 @@ jobs:
           git add -A
       - name: Install merged dependency graph
         run: pnpm install --frozen-lockfile
+      - name: Correct final guarded lint contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const file = "packages/adapters/src/prime-agent.ts";
+          const before = `function noValue(): void {\n  return undefined;\n}`;
+          const after = `function noValue(): void {}`;
+          const source = readFileSync(file, "utf8");
+          const occurrences = source.split(before).length - 1;
+          if (occurrences !== 1) throw new Error(`Expected one noValue helper, found ${occurrences}`);
+          writeFileSync(file, source.replace(before, after));
+          NODE
+          git add packages/adapters/src/prime-agent.ts
       - name: Apply Biome safe formatting and fixes
         shell: bash
         run: |
