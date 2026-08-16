@@ -6,8 +6,9 @@ import type { RakazoDesktop } from "@rakazo/contracts";
 
 test("launches the runtime chooser with a narrow privileged bridge and isolated renderer", async () => {
   const configHome = mkdtempSync(path.join(os.tmpdir(), "flowbots-electron-smoke-"));
+  const args = process.platform === "linux" && process.env.CI ? ["--no-sandbox", "."] : ["."];
   const app = await electron.launch({
-    args: ["."],
+    args,
     cwd: path.resolve(import.meta.dirname, ".."),
     env: {
       ...process.env,
