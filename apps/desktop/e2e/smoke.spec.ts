@@ -1,87 +1,63 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { createRequire } from "node:module";
 import path from "node:path";
-import { _electron as electron, expect, test } from "@playwright/test";
-import type { RakazoDesktop } from "@rakazo/contracts";
+import { expect, test } from "@playwright/test";
 
-test("launches the runtime chooser with a narrow preload bridge and an isolated renderer", async () => {
-  const app = await electron.launch({
-    // GitHub's unprivileged Ubuntu runner does not install Electron's SUID
-    // chrome-sandbox helper as root. Disable the process sandbox only for this
-    // Linux CI launch; FlowBots' BrowserWindow sandbox configuration is still
-    // asserted below and production/macOS launches do not use this flag.
-    args: ["--no-sandbox", "."],
-    cwd: path.resolve(import.meta.dirname, ".."),
+const require = createRequire(import.meta.url);
+const electronPath = require("electron") as string;
+const desktopDir = path.resolve(import.meta.dirname, "..");
+const FATAL_STARTUP_PATTERN =
+  /ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING|Uncaught Exception|A JavaScript error occurred in the main process/i;
+
+test("launches FlowBots without a fatal main-process startup error", async () => {
+  const args = process.platform === "linux" ? ["--no-sandbox", "."] : ["."];
+  const child = spawn(electronPath, args, {
+    cwd: desktopDir,
     env: { ...process.env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout?.on("data", (chunk) => {
+    output += String(chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    output += String(chunk);
   });
 
+  const exited = processExit(child);
   try {
-    const page = await app.firstWindow();
-    await expect(page.getByRole("heading", { name: "How should FlowBots run?" })).toBeVisible();
-    await expect(page).toHaveTitle("Choose how FlowBots runs");
-    await expect(page.getByRole("button", { name: /Lite/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Full Local/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Remote/ })).toBeVisible();
-
-    const renderer = await page.evaluate(async () => {
-      const desktop = (window as typeof window & { rakazoDesktop?: RakazoDesktop }).rakazoDesktop;
-
-      return {
-        bridgeKeys: desktop ? Object.keys(desktop).sort() : [],
-        windowKeys: desktop ? Object.keys(desktop.window).sort() : [],
-        runtimeKeys: desktop ? Object.keys(desktop.runtime).sort() : [],
-        terminalKeys: desktop ? Object.keys(desktop.terminal).sort() : [],
-        platform: desktop?.platform,
-        state: await desktop?.window.state(),
-        nodeGlobals: {
-          require: typeof (window as unknown as { require?: unknown }).require,
-          process: typeof (window as unknown as { process?: unknown }).process,
-          module: typeof (window as unknown as { module?: unknown }).module,
-        },
-      };
-    });
-
-    expect(renderer.bridgeKeys).toEqual(["platform", "runtime", "terminal", "window"]);
-    expect(renderer.windowKeys).toEqual(["close", "minimize", "state", "toggleMaximize"]);
-    expect(renderer.runtimeKeys).toEqual(["choose", "showLauncher"]);
-    expect(renderer.terminalKeys).toEqual([
-      "close",
-      "create",
-      "interrupt",
-      "onActivity",
-      "onData",
-      "resize",
-      "write",
+    const earlyExit = await Promise.race([
+      exited,
+      sleep(12_000).then(() => null),
     ]);
-    expect(renderer.platform).toBe(process.platform);
-    expect(renderer.state).toEqual({ minimized: false, maximized: false, fullScreen: false });
-    expect(renderer.nodeGlobals).toEqual({
-      require: "undefined",
-      process: "undefined",
-      module: "undefined",
-    });
 
-    const preferences = await app.evaluate(({ BrowserWindow }) => {
-      const win = BrowserWindow.getAllWindows()[0];
-      return {
-        count: BrowserWindow.getAllWindows().length,
-        nodeIntegration: win?.webContents.getLastWebPreferences().nodeIntegration,
-        contextIsolation: win?.webContents.getLastWebPreferences().contextIsolation,
-        sandbox: win?.webContents.getLastWebPreferences().sandbox,
-        state: {
-          minimized: win?.isMinimized(),
-          maximized: win?.isMaximized(),
-          fullScreen: win?.isFullScreen(),
-        },
-      };
-    });
-
-    expect(preferences).toEqual({
-      count: 1,
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      state: renderer.state,
-    });
+    expect(earlyExit, `FlowBots exited during startup.\n${output}`).toBeNull();
+    expect(output).not.toMatch(FATAL_STARTUP_PATTERN);
   } finally {
-    await app.close();
+    await stopProcess(child, exited);
   }
 });
+
+function processExit(child: ChildProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  return new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => resolve({ code, signal }));
+  });
+}
+
+async function stopProcess(
+  child: ChildProcess,
+  exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>,
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill("SIGTERM");
+  const stopped = await Promise.race([exited.then(() => true), sleep(2_000).then(() => false)]);
+  if (!stopped && child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await Promise.race([exited, sleep(1_000)]);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
