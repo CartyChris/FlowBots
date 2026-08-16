@@ -47,12 +47,19 @@ describe("desktop runtime bootstrap boundaries", () => {
     expect(trustedRuntimeSender(`${launcher}x`, launcher)).toBe(false);
   });
 
-  test("host terminal is trusted only from loopback Rakazo origins", () => {
-    expect(trustedTerminalSender("http://127.0.0.1:43117/chat")).toBe(true);
-    expect(trustedTerminalSender("http://localhost:5173/terminal")).toBe(true);
-    expect(trustedTerminalSender("https://example.com")).toBe(false);
-    expect(trustedTerminalSender("http://127.0.0.1.evil.test")).toBe(false);
-    expect(trustedTerminalSender("data:text/html,hello")).toBe(false);
-    expect(trustedTerminalSender(undefined)).toBe(false);
+  test("host terminal trusts only the exact active loopback FlowBots origin", () => {
+    const active = "http://127.0.0.1:43117";
+    expect(trustedTerminalSender("http://127.0.0.1:43117/chat", active)).toBe(true);
+    expect(trustedTerminalSender("http://127.0.0.1:43117/terminal?tab=2", active)).toBe(true);
+    expect(trustedTerminalSender("http://127.0.0.1:43118/chat", active)).toBe(false);
+    expect(trustedTerminalSender("http://localhost:43117/chat", active)).toBe(false);
+    expect(trustedTerminalSender("https://example.com", active)).toBe(false);
+    expect(trustedTerminalSender("http://127.0.0.1.evil.test", active)).toBe(false);
+    expect(trustedTerminalSender("data:text/html,hello", active)).toBe(false);
+    expect(trustedTerminalSender(undefined, active)).toBe(false);
+    expect(trustedTerminalSender("http://127.0.0.1:43117/chat", "")).toBe(false);
+    expect(
+      trustedTerminalSender("http://127.0.0.1:43117/chat", "https://127.0.0.1:43117"),
+    ).toBe(false);
   });
 });
