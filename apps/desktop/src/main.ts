@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { startLocalRuntime } from "@rakazo/local-runtime";
 import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import * as nodePty from "node-pty";
+import { startLocalRuntime } from "./local-runtime.js";
 import { createNodePtyFactory } from "./node-pty-factory.js";
 import {
   launcherDocumentUrl,
