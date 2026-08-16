@@ -9,29 +9,26 @@ async function replaceOnce(file, before, after) {
       `Expected exactly one anchor in ${file}; first=${first}, second=${second}: ${before.slice(0, 120)}`,
     );
   }
-  await writeFile(
-    file,
-    source.slice(0, first) + after + source.slice(first + before.length),
-  );
+  await writeFile(file, source.slice(0, first) + after + source.slice(first + before.length));
 }
 
 const dollar = "$";
 const currentArtifactExpectation =
-  '    expect(pkg.build?.artifactName).toBe(String.raw`FlowBots-\\' +
+  "    expect(pkg.build?.artifactName).toBe(String.raw`FlowBots-\\" +
   dollar +
-  '{version}-\\' +
+  "{version}-\\" +
   dollar +
-  '{arch}.\\' +
+  "{arch}.\\" +
   dollar +
-  '{ext}`);';
+  "{ext}`);";
 const correctedArtifactExpectation =
   '    const dollar = "$";\n    expect(pkg.build?.artifactName).toBe(`FlowBots-' +
   dollar +
-  '{dollar}{version}-' +
+  "{dollar}{version}-" +
   dollar +
-  '{dollar}{arch}.' +
+  "{dollar}{arch}." +
   dollar +
-  '{dollar}{ext}`);';
+  "{dollar}{ext}`);";
 
 await replaceOnce(
   "apps/desktop/src/product-branding.test.ts",
