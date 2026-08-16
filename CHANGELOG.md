@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Desktop Connection Center: if the configured Rakazo web origin is unavailable, the packaged app now opens an actionable local recovery screen instead of an empty window. It includes Retry, Reset to Local, setup guidance, app/platform diagnostics, and automatic reconnect when the web origin returns.
+- Saved desktop connection profiles: switch between local and remote/self-hosted Rakazo web origins from **Connection…** (`Cmd/Ctrl+,`) without relaunching from Terminal or changing environment variables. The five most recent endpoints are retained locally; credential-bearing URLs are rejected and no API keys, cookies, or tokens are stored in connection settings.
+- Desktop health diagnostics: Connection Center reports web-origin reachability and local API health independently and can copy a small secret-free diagnostics report for troubleshooting.
 - Bot personalities (agent steering): eight Grok-style personas — Witty, Unhinged, Wholesome, Genius, Chill, Hype, Zen, and Custom — each with its own voice, emoji, presence tag and catchphrases, plus humor / spice / energy / verbosity sliders, a swearing toggle, and a free-text custom voice. Personalities are compiled into the bot's system prompt and can be edited any time from bot settings.
 - Per-message steering: type `/funny`, `/serious`, `/unhinged`, `/wholesome`, `/chill`, `/hype`, `/zen`, `/brief`, or `/verbose` at the start of a message (or tap the chips above the composer) to steer one reply without changing the bot's personality.
 - Social layer: live bot presence in the sidebar (thinking / online / away with persona status tags), message reactions (🔥 💀 😂 👀) on any message, and a "nudge" button that makes a bot post a personality-driven vibe check.
@@ -23,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Mobile: point the app at a self-hosted API origin, a native iOS inbox, and take control of the live desktop.
 - Revoke for connected Composio plugins.
 - Routines in plain language instead of raw cron.
+
+### Fixed
+
+- Packaged desktop launches no longer swallow a failed `BrowserWindow.loadURL()` and leave the user on a black screen. Navigation failures are converted into visible recovery state and retried safely while the window remains open.
 
 ### Removed
 
