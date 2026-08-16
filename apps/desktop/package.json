@@ -57,6 +57,7 @@
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
+      "x64ArchFiles": "**/node-pty/prebuilds/darwin-{arm64,x64}/pty.node",
       "target": [
         {
           "target": "dmg",
