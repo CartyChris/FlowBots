@@ -32,7 +32,7 @@ jobs:
           set -uo pipefail
           logfile="$(mktemp)"
           set +e
-          xvfb-run --auto-servernum timeout 8s pnpm --filter @rakazo/desktop exec electron . >"$logfile" 2>&1
+          xvfb-run --auto-servernum timeout 8s pnpm --filter @rakazo/desktop exec electron --no-sandbox . >"$logfile" 2>&1
           status=$?
           set -e
           cat "$logfile"
