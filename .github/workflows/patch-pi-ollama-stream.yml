@@ -1,0 +1,55 @@
+name: patch-pi-ollama-stream
+on:
+  push:
+    branches: [feature/rakazo-local-ai-os]
+    paths: [.github/workflows/patch-pi-ollama-stream.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: feature/rakazo-local-ai-os
+      - name: Patch Ollama stream boundary only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/adapters/src/pi-runtime.ts')
+          s = p.read_text()
+          replacements = [
+            (
+              'const catalogModels = builtinModels();\ncatalogModels.setProvider(ollamaProvider(ollamaBaseUrl()));\nconst MAX_PARALLEL_SUBAGENTS = 4;',
+              'const catalogModels = builtinModels();\nconst ollama = ollamaProvider(ollamaBaseUrl());\nconst MAX_PARALLEL_SUBAGENTS = 4;'
+            ),
+            (
+              '          streamFn: (m, ctx, options) => models.streamSimple(m, ctx, options),',
+              '          streamFn: (m, ctx, options) => streamModel(models, m, ctx, options),'
+            ),
+            (
+              '    streamFn: (m, ctx, options) => host.models.streamSimple(m, ctx, options),',
+              '    streamFn: (m, ctx, options) => streamModel(host.models, m, ctx, options),'
+            ),
+          ]
+          for old, new in replacements:
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:100]!r}')
+              s = s.replace(old, new, 1)
+          marker = 'function modelsForRequest(request: AgentRunRequest, provider: string): Models {'
+          if s.count(marker) != 1:
+              raise SystemExit('modelsForRequest marker mismatch')
+          helper = '''function streamModel(models: Models, model: Model<Api>, context: Parameters<Models["streamSimple"]>[1], options: Parameters<Models["streamSimple"]>[2]) {\n  return model.provider === OLLAMA_PROVIDER_ID\n    ? ollama.api.streamSimple(model as never, context, options)\n    : models.streamSimple(model, context, options);\n}\n\n'''
+          s = s.replace(marker, helper + marker, 1)
+          p.write_text(s)
+          PY
+          git diff --check
+      - name: Commit production fix only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/adapters/src/pi-runtime.ts
+          git commit -m "fix(adapters): stream Ollama without mutating Pi catalog"
+          git push origin HEAD:feature/rakazo-local-ai-os
