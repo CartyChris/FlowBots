@@ -34,7 +34,10 @@ describe("FlowBots macOS package contract", () => {
     );
 
     for (const dependency of ["@electric-sql/pglite", "pg", "@prisma/client"]) {
-      expect(pkg.dependencies?.[dependency], `${dependency} must be packaged by Electron`).toBeTruthy();
+      expect(
+        pkg.dependencies?.[dependency],
+        `${dependency} must be packaged by Electron`,
+      ).toBeTruthy();
     }
     expect(bundler).toContain('specifier === "@electric-sql/pglite"');
     expect(bundler).toContain('specifier === "pg"');
