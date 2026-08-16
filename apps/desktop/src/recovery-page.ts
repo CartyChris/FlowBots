@@ -120,6 +120,9 @@ export function recoveryPageHtml(model: RecoveryPageModel): string {
     .status-name { color: #a6a8b6; font-size: 13px; }
     .status-value { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; }
     .status-value::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: #f2a65a; box-shadow: 0 0 14px rgba(242,166,90,.55); }
+    .status-value[data-status="online"]::before { background: #42d392; box-shadow: 0 0 14px rgba(66,211,146,.55); }
+    .status-value[data-status="offline"]::before { background: #ff7474; box-shadow: 0 0 14px rgba(255,116,116,.48); }
+    .status-value[data-status="not-applicable"]::before { background: #8e91a0; box-shadow: none; }
     .panel { border-radius: 22px; padding: 22px; margin-top: 12px; }
     .panel-title { margin: 0 0 6px; font-size: 17px; letter-spacing: -.015em; }
     .panel-copy { margin: 0 0 18px; color: #858896; font-size: 13px; line-height: 1.55; }
@@ -177,8 +180,8 @@ export function recoveryPageHtml(model: RecoveryPageModel): string {
     <p class="lede">The desktop app is running, but the Rakazo web origin at <span class="target-inline">${escapeHtml(model.currentUrl)}</span> is not available yet. Connect to a running local or remote Rakazo deployment below—this screen will reconnect automatically when it comes online.</p>
 
     <section class="status-grid" aria-label="Connection health">
-      <div class="status-card"><span class="status-name">Web origin</span><span class="status-value" id="web-status">${statusLabel(model.webStatus)}</span></div>
-      <div class="status-card"><span class="status-name">Rakazo API</span><span class="status-value" id="api-status">${statusLabel(model.apiStatus)}</span></div>
+      <div class="status-card"><span class="status-name">Web origin</span><span class="status-value" id="web-status" data-status="${model.webStatus}">${statusLabel(model.webStatus)}</span></div>
+      <div class="status-card"><span class="status-name">Rakazo API</span><span class="status-value" id="api-status" data-status="${model.apiStatus}">${statusLabel(model.apiStatus)}</span></div>
     </section>
 
     <section class="panel">
@@ -223,7 +226,29 @@ pnpm dev</pre>
       const retry = document.getElementById("retry");
       const reset = document.getElementById("reset");
       const copy = document.getElementById("copy-diagnostics");
+      const webStatus = document.getElementById("web-status");
+      const apiStatus = document.getElementById("api-status");
       if (!bridge) return;
+
+      const statusLabels = {
+        checking: "Checking…",
+        online: "Online",
+        offline: "Offline",
+        "not-applicable": "Remote / managed by web origin",
+      };
+      const setStatus = (node, status) => {
+        node.textContent = statusLabels[status] || status;
+        node.dataset.status = status;
+      };
+      const refreshStatus = async () => {
+        try {
+          const state = await bridge.status();
+          setStatus(webStatus, state.webStatus);
+          setStatus(apiStatus, state.apiStatus);
+        } catch {
+          setStatus(webStatus, "offline");
+        }
+      };
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -240,6 +265,9 @@ pnpm dev</pre>
       document.querySelectorAll("[data-recent-url]").forEach((button) => {
         button.addEventListener("click", () => bridge.useRecent(button.dataset.recentUrl || ""));
       });
+
+      void refreshStatus();
+      setInterval(refreshStatus, 2500);
     })();
   </script>
 </body>
