@@ -1,8 +1,8 @@
-import { randomBytes, createHash } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import type { Server } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
-import type { Server } from "node:http";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { serve } from "@hono/node-server";
@@ -13,6 +13,7 @@ import { Pool } from "pg";
 export interface StartLocalRuntimeOptions {
   dataDir: string;
   migrationsDir: string;
+  webDir?: string;
   port?: number;
   openRouterKey?: string;
   defaultProvider?: string;
@@ -36,6 +37,7 @@ export async function startLocalRuntime(
 ): Promise<LocalRuntimeHandle> {
   const dataDir = path.resolve(options.dataDir);
   const migrationsDir = path.resolve(options.migrationsDir);
+  const webDir = options.webDir ? path.resolve(options.webDir) : undefined;
   await mkdir(dataDir, { recursive: true });
 
   const secrets = await loadOrCreateSecrets(path.join(dataDir, "local-runtime-secrets.json"));
@@ -110,8 +112,10 @@ export async function startLocalRuntime(
       port: httpPort,
     });
 
+    const apiFetch = handles.app.fetch.bind(handles.app);
+    const runtimeFetch = webDir ? createWebFallback(apiFetch, webDir) : apiFetch;
     httpServer = serve({
-      fetch: handles.app.fetch,
+      fetch: runtimeFetch,
       hostname: "127.0.0.1",
       port: httpPort,
     }) as Server;
@@ -185,6 +189,106 @@ export async function applyLiteMigrations(db: PGlite, migrationsDir: string): Pr
       await db.exec("ROLLBACK").catch(() => undefined);
       throw new Error(`Lite migration ${entry.name} failed`, { cause: error });
     }
+  }
+}
+
+function createWebFallback(
+  apiFetch: (request: Request) => Response | Promise<Response>,
+  webDir: string,
+): (request: Request) => Promise<Response> {
+  const root = path.resolve(webDir);
+  return async (request) => {
+    const apiResponse = await apiFetch(request);
+    if (apiResponse.status !== 404) return apiResponse;
+    if (request.method !== "GET" && request.method !== "HEAD") return apiResponse;
+
+    const url = new URL(request.url);
+    if (isProtectedRuntimePath(url.pathname)) return apiResponse;
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(url.pathname);
+    } catch {
+      return apiResponse;
+    }
+    if (decoded.includes("\0")) return apiResponse;
+
+    const relative = decoded.replace(/^\/+/, "");
+    const candidate = path.resolve(root, relative || "index.html");
+    if (!isInside(root, candidate)) return apiResponse;
+
+    const direct = await regularFile(candidate);
+    if (direct) return fileResponse(direct, request.method === "HEAD", decoded.startsWith("/assets/"));
+
+    // Missing asset-like paths should remain honest 404s. Only application routes fall
+    // back to index.html so client-side routing works.
+    if (decoded.startsWith("/assets/") || path.extname(decoded)) return apiResponse;
+    const index = await regularFile(path.join(root, "index.html"));
+    if (!index) return apiResponse;
+    return fileResponse(index, request.method === "HEAD", false);
+  };
+}
+
+function isProtectedRuntimePath(pathname: string): boolean {
+  return ["/api", "/rpc", "/health", "/novnc"].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+function isInside(root: string, target: string): boolean {
+  return target === root || target.startsWith(`${root}${path.sep}`);
+}
+
+async function regularFile(file: string): Promise<string | undefined> {
+  try {
+    return (await stat(file)).isFile() ? file : undefined;
+  } catch (error: any) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return undefined;
+    throw error;
+  }
+}
+
+async function fileResponse(file: string, head: boolean, immutable: boolean): Promise<Response> {
+  const body = head ? null : await readFile(file);
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": mimeType(file),
+      "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+function mimeType(file: string): string {
+  switch (path.extname(file).toLowerCase()) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+    case ".mjs":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+    case ".map":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".ico":
+      return "image/x-icon";
+    case ".woff":
+      return "font/woff";
+    case ".woff2":
+      return "font/woff2";
+    default:
+      return "application/octet-stream";
   }
 }
 
