@@ -1,5 +1,11 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+function subscribe(channel, listener) {
+  const wrapped = (_event, payload) => listener(payload);
+  ipcRenderer.on(channel, wrapped);
+  return () => ipcRenderer.removeListener(channel, wrapped);
+}
+
 contextBridge.exposeInMainWorld("rakazoDesktop", {
   platform: process.platform,
   window: {
@@ -8,12 +14,18 @@ contextBridge.exposeInMainWorld("rakazoDesktop", {
     toggleMaximize: () => ipcRenderer.invoke("desktop.window.toggleMaximize"),
     state: () => ipcRenderer.invoke("desktop.window.state"),
   },
-  connection: {
-    retry: () => ipcRenderer.invoke("desktop.connection.retry"),
-    setUrl: (url) => ipcRenderer.invoke("desktop.connection.setUrl", url),
-    reset: () => ipcRenderer.invoke("desktop.connection.reset"),
-    useRecent: (url) => ipcRenderer.invoke("desktop.connection.useRecent", url),
-    copyDiagnostics: () => ipcRenderer.invoke("desktop.connection.copyDiagnostics"),
-    status: () => ipcRenderer.invoke("desktop.connection.status"),
+  runtime: {
+    choose: (profile) => ipcRenderer.invoke("desktop.runtime.choose", profile),
+    showLauncher: () => ipcRenderer.invoke("desktop.runtime.showLauncher"),
+  },
+  terminal: {
+    create: (input) => ipcRenderer.invoke("desktop.terminal.create", input),
+    write: (sessionId, data) => ipcRenderer.invoke("desktop.terminal.write", sessionId, data),
+    resize: (sessionId, cols, rows) =>
+      ipcRenderer.invoke("desktop.terminal.resize", sessionId, cols, rows),
+    interrupt: (sessionId) => ipcRenderer.invoke("desktop.terminal.interrupt", sessionId),
+    close: (sessionId) => ipcRenderer.invoke("desktop.terminal.close", sessionId),
+    onData: (listener) => subscribe("desktop.terminal.data", listener),
+    onActivity: (listener) => subscribe("desktop.terminal.activity", listener),
   },
 });

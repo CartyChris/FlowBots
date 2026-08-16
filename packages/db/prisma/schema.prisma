@@ -177,7 +177,6 @@ model Bot {
   title          String   @default("")
   description    String   @default("")
   instructions   String   @default("")
-  persona        Json?
   color          String
   notifyOnFinish Boolean  @default(true)
   parentBotId    String?
@@ -209,6 +208,8 @@ model Thread {
   bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
   userId      String
   createdAt   DateTime @default(now())
+  nextEventSeq   Int   @default(0)
+  nextMessageSeq Int   @default(0)
   messages    Message[]
   events      Event[]
   tasks       Task[]
@@ -249,6 +250,7 @@ model Event {
   @@unique([threadId, seq])
   @@index([workspaceId, createdAt])
   @@index([threadId, seq])
+  @@index([runId, type, seq])
   @@map("events")
 }
 
@@ -302,6 +304,7 @@ model Run {
 
   @@unique([workspaceId, clientNonce])
   @@index([status, leaseExpiresAt])
+  @@index([status, updatedAt, id])
   @@index([workspaceId, botId])
   @@map("runs")
 }

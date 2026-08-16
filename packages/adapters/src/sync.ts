@@ -1,4 +1,4 @@
-import { ollamaModelIds } from "./ollama-provider.js";
+import { ollamaBaseUrl, ollamaModelIds } from "./ollama-provider.js";
 import { listPiCatalog } from "./pi-models.js";
 
 export type EnvCredentialHint = {
@@ -9,13 +9,6 @@ export type EnvCredentialHint = {
   modelId?: string;
 };
 
-/**
- * Well-known environment variables used by CLIs and SDKs (Claude Code,
- * Codex CLI, llm, aichat, LangChain, …). Importing these lets everything the
- * user already pays for work in Rakazo immediately, with zero re-typing.
- * Keys are read from the host environment only, never written to disk here —
- * they are stored through the encrypted secret store like any pasted key.
- */
 export const ENV_CREDENTIAL_SOURCES: Array<{
   envVar: string;
   provider: string;
@@ -43,15 +36,12 @@ export function defaultModelForProvider(
   return catalog.find((entry) => entry.provider === provider)?.id;
 }
 
-/** Reads configured env keys. Only the provider/label is exposed to callers;
- * the key itself is returned solely so the caller can encrypt+persist it. */
 export function detectEnvCredentials(source: NodeJS.ProcessEnv = process.env): EnvCredentialHint[] {
   const seen = new Set<string>();
   const hints: EnvCredentialHint[] = [];
   for (const entry of ENV_CREDENTIAL_SOURCES) {
     const key = source[entry.envVar]?.trim();
-    if (!key || key.length < 8) continue;
-    if (seen.has(entry.provider)) continue;
+    if (!key || key.length < 8 || seen.has(entry.provider)) continue;
     seen.add(entry.provider);
     hints.push({
       provider: entry.provider,
@@ -76,8 +66,9 @@ export async function detectLocalModelServers(opts?: {
   baseUrl?: string;
   fetchFn?: typeof fetch;
   signal?: AbortSignal;
+  env?: NodeJS.ProcessEnv;
 }): Promise<LocalModelServer[]> {
-  const baseUrl = (opts?.baseUrl ?? "http://127.0.0.1:11434").replace(/\/+$/, "");
+  const baseUrl = (opts?.baseUrl ?? ollamaBaseUrl(opts?.env)).replace(/\/+$/, "");
   try {
     const models = await ollamaModelIds(baseUrl, {
       fetchFn: opts?.fetchFn,
@@ -85,14 +76,12 @@ export async function detectLocalModelServers(opts?: {
     });
     return [{ provider: "ollama", baseUrl, running: true, models }];
   } catch (error) {
-    return [
-      {
-        provider: "ollama",
-        baseUrl,
-        running: false,
-        models: [],
-        error: error instanceof Error ? error.message : "Ollama is not reachable",
-      },
-    ];
+    return [{
+      provider: "ollama",
+      baseUrl,
+      running: false,
+      models: [],
+      error: error instanceof Error ? error.message : "Ollama is not reachable",
+    }];
   }
 }

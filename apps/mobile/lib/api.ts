@@ -1,3 +1,10 @@
+import {
+  mergeThreadHistory,
+  prependThreadHistoryPage,
+  progressMessageId,
+  progressMessageText,
+  type ThreadHistory,
+} from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
 import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoint";
 import {
@@ -11,12 +18,14 @@ const ENDPOINT_KEY = "rakazo.api_base";
 
 let cachedApiBase: string | undefined;
 
-export function currentApiBase() {
-  return cachedApiBase ?? defaultApiBase();
+function responseErrorMessage(body: unknown, fallback: string): string {
+  return typeof body === "object" && body && "message" in body
+    ? String((body as { message?: string }).message ?? fallback)
+    : fallback;
 }
 
-export function isCustomApiBase() {
-  return currentApiBase() !== defaultApiBase();
+export function currentApiBase() {
+  return cachedApiBase ?? defaultApiBase();
 }
 
 export async function loadApiBase() {
@@ -60,7 +69,7 @@ export async function resetApiBase(): Promise<EndpointResult> {
   return { ok: true, url };
 }
 
-export async function authHeaders(): Promise<Record<string, string>> {
+async function authHeaders(): Promise<Record<string, string>> {
   const token = await loadSessionToken();
   return token ? { authorization: `Bearer ${token}` } : {};
 }
@@ -73,11 +82,7 @@ export async function signIn(email: string, password: string) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message =
-      typeof body === "object" && body && "message" in body
-        ? String((body as { message?: string }).message ?? "Could not sign in")
-        : "Could not sign in";
-    throw new Error(message);
+    throw new Error(responseErrorMessage(body, "Could not sign in"));
   }
   const token = tokenFromAuthResponse(res, body);
   if (!token) throw new Error("Sign-in did not return a session");
@@ -90,6 +95,19 @@ export async function signOut() {
     method: "POST",
     headers: { "content-type": "application/json", origin: "rakazo://", ...headers },
   }).catch(() => undefined);
+  await clearSessionToken();
+}
+
+export async function deleteAccount(password: string) {
+  const res = await fetch(`${currentApiBase()}/api/auth/delete-user`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
+    body: JSON.stringify({ password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(responseErrorMessage(body, "Could not delete account"));
+  }
   await clearSessionToken();
 }
 
@@ -125,6 +143,8 @@ export type MobileMe = {
 
 export type MobileMessage = {
   id: string;
+  threadId?: string;
+  seq?: number;
   role: "user" | "bot" | "system";
   blocks: Array<{
     kind: string;
@@ -146,9 +166,27 @@ export type MobileSnapshot = {
   threadId: string;
   cursor?: number;
   messages: MobileMessage[];
+  olderCursor: number | null;
   run: { status: string } | null;
   computer: { state: string; controlHolder: string; screenAvailable: boolean };
 };
+
+export type MobileMessagePage = ThreadHistory<MobileMessage>;
+
+export function mergeMobileSnapshot(
+  prev: MobileSnapshot | null,
+  next: MobileSnapshot,
+  preserveLoadedHistory = false,
+): MobileSnapshot {
+  return mergeThreadHistory(prev, next, preserveLoadedHistory);
+}
+
+export function prependMobileMessagePage(
+  prev: MobileSnapshot | null,
+  page: MobileMessagePage,
+): MobileSnapshot | null {
+  return prependThreadHistoryPage(prev, page);
+}
 
 export function blockText(message: MobileMessage) {
   return message.blocks
@@ -223,9 +261,13 @@ export function applyMobileThreadEvent(
 ): MobileSnapshot | null {
   if (!prev) return prev;
   if (event.type === "thread.progress") {
-    const text = String(event.payload?.text ?? "");
+    const progressId = progressMessageId(event);
+    const previous = prev.messages.find((message) => message.id === progressId);
+    const previousText =
+      previous?.blocks[0]?.kind === "progress" ? String(previous.blocks[0].text ?? "") : "";
+    const text = progressMessageText(event.payload, previousText);
     const streaming: MobileMessage = {
-      id: `progress:${event.runId ?? event.id ?? "live"}`,
+      id: progressId,
       role: "bot",
       blocks: [{ kind: "progress", text }],
     };
@@ -297,5 +339,6 @@ export {
   displayApiHost,
   normalizeApiBase,
   probeApiBase,
+  usesCustomApiBase,
 } from "./endpoint";
 export { loadSessionToken };

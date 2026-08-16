@@ -6,25 +6,31 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "pnpm build && electron .",
-    "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
+    "build": "tsc -p tsconfig.json && node scripts/build-local-runtime.mjs && cp src/preload.cjs dist/preload.cjs",
     "pack": "pnpm build && electron-builder --mac --win --linux",
-    "pack:mac": "pnpm build && electron-builder --mac --universal",
+    "pack:mac": "pnpm --filter @rakazo/web build && pnpm build && electron-builder --mac --universal",
     "pack:dir": "pnpm build && electron-builder --dir",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --root ../.. apps/desktop/src",
+    "test:e2e": "pnpm build && playwright test --config e2e/playwright.config.ts"
   },
   "dependencies": {
-    "@rakazo/contracts": "workspace:*"
+    "@rakazo/contracts": "workspace:*",
+    "@rakazo/local-runtime": "workspace:*",
+    "node-pty": "1.2.0-beta.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "electron": "^37.3.1",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.2",
     "vitest": "^4.1.10"
   },
   "build": {
     "appId": "dev.rakazo.desktop",
-    "productName": "Rakazo",
+    "productName": "FlowBots",
+    "artifactName": "FlowBots-${version}-${arch}.${ext}",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -33,12 +39,26 @@
       "dist/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      },
+      {
+        "from": "../../packages/db/prisma/migrations",
+        "to": "migrations"
+      }
+    ],
     "extraMetadata": {
       "main": "dist/main.js"
     },
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
+      "x64ArchFiles": "**/node-pty/prebuilds/darwin-{arm64,x64}/**",
       "target": [
         {
           "target": "dmg",
@@ -55,7 +75,7 @@
       ]
     },
     "dmg": {
-      "title": "Rakazo",
+      "title": "FlowBots",
       "window": {
         "width": 540,
         "height": 380

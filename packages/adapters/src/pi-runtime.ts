@@ -1,40 +1,46 @@
-import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
+import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import { type Api, type Model, type Models, Type } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
   AdapterContext,
   AgentRunRequest,
   AgentRuntime,
   AgentRuntimeEvent,
+  AgentToolExecutionResult,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import {
-  OLLAMA_DEFAULT_BASE_URL,
-  OLLAMA_PROVIDER_ID,
-  ollamaBaseUrl,
-  ollamaProvider,
-} from "./ollama-provider.js";
+  externalRuntimeModel,
+  externalStreamSimple,
+  G0DM0D3_PROVIDER_ID,
+  providerEnvironmentApiKey,
+  providerHistoryLimit,
+  VENICE_PROVIDER_ID,
+} from "./external-models.js";
+import { OLLAMA_PROVIDER_ID, ollamaStreamSimple } from "./ollama-provider.js";
+import { ollamaRuntimeModel } from "./ollama-runtime.js";
+import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
 
 const running = new Map<string, AbortController>();
-const models = builtinModels();
-// Local Ollama is a keyless, always-available provider when the server runs.
-models.setProvider(ollamaProvider(ollamaBaseUrl()));
+const catalogModels = builtinModels();
 const MAX_PARALLEL_SUBAGENTS = 4;
+// Pi forwards these names to OpenAI Responses, whose function-name contract is
+// ^[a-zA-Z0-9_-]+$ with a maximum length of 64 characters.
+const AGENT_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const MAX_AGENT_TOOL_NAME_LENGTH = 64;
+const FALLBACK_AGENT_TOOL_NAME = "connector_tool";
 
-function ollamaModel(modelId: string) {
-  return {
-    id: modelId,
-    name: modelId,
-    api: "openai-completions",
-    provider: OLLAMA_PROVIDER_ID,
-    baseUrl: `${OLLAMA_DEFAULT_BASE_URL}/v1`,
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 32768,
-    maxTokens: 8192,
-  } as never;
+/**
+ * G0DM0D3's documented chat-completions surface is a text orchestration API.
+ * Keep tool/function schemas out of its requests while preserving normal agent
+ * tools for Venice and other providers.
+ */
+export function agentToolsForProvider(
+  provider: string,
+  tools: readonly ConnectorTool[],
+): readonly ConnectorTool[] {
+  return provider === G0DM0D3_PROVIDER_ID ? [] : tools;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
@@ -65,22 +71,31 @@ export class PiAgentRuntime implements AgentRuntime {
           request.model.id === "scripted"
             ? (process.env.PI_DEFAULT_MODEL ?? "deepseek/deepseek-v4-flash-0731")
             : request.model.id;
+        const models = modelsForRequest(request, provider);
         const model =
-          provider === OLLAMA_PROVIDER_ID
-            ? ollamaModel(modelId)
-            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId));
+          externalRuntimeModel(provider, modelId) ??
+          (provider === OLLAMA_PROVIDER_ID
+            ? ollamaRuntimeModel(modelId)
+            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId)));
         if (!model) {
           queue.push({ type: "text", text: `Unknown model ${provider}/${modelId}` });
           queue.push({ type: "done" });
           return;
         }
 
-        const apiKey = request.model.apiKey ?? process.env.OPENROUTER_API_KEY;
-        const toolDefs = request.tools.length ? request.tools : builtinAgentTools;
+        const apiKey =
+          provider === OLLAMA_PROVIDER_ID
+            ? "ollama"
+            : request.model.oauth
+              ? undefined
+              : (request.model.apiKey ?? providerEnvironmentApiKey(provider));
+        const requestedToolDefs = request.tools.length ? request.tools : builtinAgentTools;
+        const toolDefs = agentToolsForProvider(provider, requestedToolDefs);
         const nestedAgents = new Set<Agent>();
         const host: ToolHost = {
           queue,
           request,
+          models,
           model,
           apiKey,
           nestedAgents,
@@ -88,16 +103,22 @@ export class PiAgentRuntime implements AgentRuntime {
           signal,
           depth: 0,
         };
-        const tools = toolDefs.map((tool) => toAgentTool(tool, host));
-        const history = toHistory(request.history, request.prompt);
+        const tools = toAgentTools(toolDefs, host);
+        const fullHistory = toHistory(request.history, request.prompt);
+        const historyLimit = providerHistoryLimit(provider);
+        const history =
+          historyLimit === undefined ? fullHistory : fullHistory.slice(-historyLimit);
 
         const agent = new Agent({
-          streamFn: (m, ctx, options) => models.streamSimple(m, ctx, options),
+          streamFn: (m, ctx, options) => streamModel(models, m, ctx, options),
           getApiKey: async () => apiKey,
+          transformContext: async (messages) => pruneComputerScreenshotContext(messages),
           initialState: {
             systemPrompt:
               request.instructions ||
-              "You are a Rakazo bot with a real computer. Use write_file, shell, remember, and request_takeover when they are the right tools. Be concise.",
+              (toolDefs.some((tool) => tool.name === "computer_observe")
+                ? "You are a Rakazo bot with a real computer. Use computer_observe and computer_act to operate its visible desktop, including browsers and installed applications. Use shell and the file tools for precise terminal and filesystem work. The user may interact with the same desktop while you run, so re-observe when the screen may have changed. Be concise."
+                : "You are a Rakazo bot with a persistent sandbox filesystem and shell. Be concise."),
             model,
             thinkingLevel: "off",
             tools,
@@ -180,6 +201,99 @@ export class PiAgentRuntime implements AgentRuntime {
   }
 }
 
+function streamModel(models: Models, model: Model<Api>, context: Parameters<Models["streamSimple"]>[1], options: Parameters<Models["streamSimple"]>[2]) {
+  if (model.provider === OLLAMA_PROVIDER_ID) {
+    return ollamaStreamSimple(model as never, context, options);
+  }
+  if (model.provider === VENICE_PROVIDER_ID || model.provider === G0DM0D3_PROVIDER_ID) {
+    return externalStreamSimple(model as never, context, options);
+  }
+  return models.streamSimple(model, context, options);
+}
+
+function modelsForRequest(request: AgentRunRequest, provider: string): Models {
+  const oauth = request.model.oauth;
+  if (!oauth) return catalogModels;
+
+  const persist = oauth.persist;
+  return builtinModels({
+    credentials: new PiRuntimeCredentialStore(
+      provider,
+      toOAuthCredential(oauth.credential),
+      persist ? (next) => persist(next) : undefined,
+    ),
+  });
+}
+
+function toAgentTools(toolDefs: readonly ConnectorTool[], host: ToolHost): AgentTool[] {
+  const names = normalizeAgentToolNames(toolDefs);
+  return toolDefs.map((tool, index) => toAgentTool(tool, host, names[index]!));
+}
+
+/**
+ * Normalize connector names only at the boundary where they are exposed to Pi.
+ * Connector execution continues to use the original name captured by toAgentTool.
+ */
+export function normalizeAgentToolName(name: string): string {
+  if (isProviderSafeAgentToolName(name)) return name;
+  const normalized = name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return (normalized || FALLBACK_AGENT_TOOL_NAME).slice(0, MAX_AGENT_TOOL_NAME_LENGTH);
+}
+
+/**
+ * Return one valid, unique model-facing name per connector tool.
+ * Existing valid names are reserved first so sanitizing a connector cannot
+ * rename or shadow a builtin tool with the same valid name.
+ */
+export function normalizeAgentToolNames(tools: readonly ConnectorTool[]): string[] {
+  const reservedValidNames = new Set(
+    tools.filter((tool) => isProviderSafeAgentToolName(tool.name)).map((tool) => tool.name),
+  );
+  const usedNames = new Set<string>();
+
+  return tools.map((tool) => {
+    const base = normalizeAgentToolName(tool.name);
+    const originalIsValid = isProviderSafeAgentToolName(tool.name);
+    let candidate = base;
+
+    if (usedNames.has(candidate) || (!originalIsValid && reservedValidNames.has(candidate))) {
+      candidate = withToolNameSuffix(base, stableToolNameHash(tool.name));
+    }
+
+    let suffix = 2;
+    while (usedNames.has(candidate) || (!originalIsValid && reservedValidNames.has(candidate))) {
+      candidate = withToolNameSuffix(base, `${stableToolNameHash(tool.name)}_${suffix}`);
+      suffix += 1;
+    }
+
+    usedNames.add(candidate);
+    return candidate;
+  });
+}
+
+function isProviderSafeAgentToolName(name: string): boolean {
+  return AGENT_TOOL_NAME_PATTERN.test(name) && name.length <= MAX_AGENT_TOOL_NAME_LENGTH;
+}
+
+function withToolNameSuffix(base: string, suffix: string): string {
+  const suffixWithSeparator = `_${suffix}`;
+  const prefixLength = Math.max(1, MAX_AGENT_TOOL_NAME_LENGTH - suffixWithSeparator.length);
+  return `${base.slice(0, prefixLength)}${suffixWithSeparator}`;
+}
+
+function stableToolNameHash(name: string): string {
+  let hash = 2166136261;
+  for (const character of name) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function toHistory(history: AgentRunRequest["history"], prompt: string) {
   const last = history.at(-1);
   const prior = last?.role === "user" && last.content === prompt ? history.slice(0, -1) : history;
@@ -192,9 +306,9 @@ function toHistory(history: AgentRunRequest["history"], prompt: string) {
     );
 }
 
-function toAgentTool(tool: ConnectorTool, host: ToolHost): AgentTool {
+function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): AgentTool {
   return {
-    name: tool.name,
+    name: exposedName,
     label: tool.name,
     description: tool.description,
     parameters: parametersFor(tool),
@@ -215,6 +329,23 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost): AgentTool {
       }
       if (tool.name === "write_file") {
         return { path: String(raw.path ?? "notes/result.txt"), content: String(raw.content ?? "") };
+      }
+      if (tool.name === "computer_act") {
+        return {
+          actions: Array.isArray(raw.actions) ? raw.actions : [],
+          observe: raw.observe === undefined ? true : Boolean(raw.observe),
+          settle_ms: Number(raw.settle_ms ?? 350),
+        };
+      }
+      if (tool.name === "list_files") return { path: String(raw.path ?? "") };
+      if (tool.name === "read_file" || tool.name === "open_path") {
+        return { path: String(raw.path ?? "") };
+      }
+      if (tool.name === "launch_app") {
+        return {
+          application: String(raw.application ?? ""),
+          uri: raw.uri ? String(raw.uri) : "",
+        };
       }
       if (tool.name === "shell") {
         return {
@@ -269,6 +400,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost): AgentTool {
       }
       if (host.request.executeTool) {
         const result = await host.request.executeTool(tool.name, args, executionId);
+        if (isAgentToolExecutionResult(result)) return result;
         return {
           content: [{ type: "text", text: summarizeToolResult(result) }],
           details: result,
@@ -306,8 +438,9 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   );
   const nestedHost: ToolHost = { ...host, depth: 1 };
   const nested = new Agent({
-    streamFn: (m, ctx, options) => models.streamSimple(m, ctx, options),
+    streamFn: (m, ctx, options) => streamModel(host.models, m, ctx, options),
     getApiKey: async () => host.apiKey,
+    transformContext: async (messages) => pruneComputerScreenshotContext(messages),
     initialState: {
       systemPrompt: [
         `You are a Rakazo subagent named "${name}".`,
@@ -319,7 +452,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
         .join(" "),
       model: host.model,
       thinkingLevel: "off",
-      tools: childDefs.map((tool) => toAgentTool(tool, nestedHost)),
+      tools: toAgentTools(childDefs, nestedHost),
       messages: [],
     },
   });
@@ -436,7 +569,7 @@ function parametersFor(tool: ConnectorTool) {
   if (tool.name === "shell") {
     return Type.Object({
       command: Type.String(),
-      cwd: Type.String(),
+      cwd: Type.Optional(Type.String()),
     });
   }
   if (tool.name === "run_subagent") {
@@ -463,6 +596,66 @@ function parametersFor(tool: ConnectorTool) {
   return jsonSchemaParameters(tool.inputSchema);
 }
 
+/** Keep recent visual state without repeatedly resending every earlier full screenshot. */
+export function pruneComputerScreenshotContext(
+  messages: AgentMessage[],
+  screenshotsToKeep = 2,
+): AgentMessage[] {
+  let remaining = Math.max(0, screenshotsToKeep);
+  let transformed: AgentMessage[] | undefined;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!isComputerScreenshotMessage(message)) continue;
+    if (remaining > 0) {
+      remaining -= 1;
+      continue;
+    }
+    transformed ??= [...messages];
+    transformed[index] = {
+      ...message,
+      content: message.content.filter((part) => part.type !== "image"),
+    };
+  }
+  return transformed ?? messages;
+}
+
+function isComputerScreenshotMessage(
+  message: AgentMessage | undefined,
+): message is Extract<AgentMessage, { role: "toolResult" }> {
+  if (message?.role !== "toolResult" || !message.content.some((part) => part.type === "image")) {
+    return false;
+  }
+  const details = message.details;
+  return Boolean(
+    details &&
+      typeof details === "object" &&
+      "frameId" in details &&
+      typeof (details as { frameId?: unknown }).frameId === "string",
+  );
+}
+
+function isAgentToolExecutionResult(result: unknown): result is AgentToolExecutionResult {
+  if (
+    !result ||
+    typeof result !== "object" ||
+    (result as { kind?: unknown }).kind !== "agent_tool_result" ||
+    !("content" in result)
+  ) {
+    return false;
+  }
+  const content = (result as { content?: unknown }).content;
+  return (
+    Array.isArray(content) &&
+    content.every(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        ((item as { type?: unknown }).type === "text" ||
+          (item as { type?: unknown }).type === "image"),
+    )
+  );
+}
+
 function jsonSchemaParameters(schema: Record<string, unknown>) {
   const properties = (schema.properties ?? {}) as Record<string, unknown>;
   const required = new Set(Array.isArray(schema.required) ? schema.required.map(String) : []);
@@ -477,14 +670,15 @@ function jsonSchemaParameters(schema: Record<string, unknown>) {
 }
 
 function jsonField(spec: unknown): ReturnType<typeof Type.String> {
-  const type =
-    spec && typeof spec === "object" && "type" in spec
-      ? String((spec as { type?: unknown }).type)
-      : "string";
+  const definition = spec && typeof spec === "object" ? (spec as Record<string, unknown>) : {};
+  if (Array.isArray(definition.enum) && definition.enum.length > 0) {
+    return Type.Union(definition.enum.map((value) => Type.Literal(value))) as never;
+  }
+  const type = "type" in definition ? String(definition.type) : "string";
   if (type === "number" || type === "integer") return Type.Number() as never;
   if (type === "boolean") return Type.Boolean() as never;
-  if (type === "array") return Type.Array(Type.Unknown()) as never;
-  if (type === "object") return Type.Record(Type.String(), Type.Unknown()) as never;
+  if (type === "array") return Type.Array(jsonField(definition.items)) as never;
+  if (type === "object") return jsonSchemaParameters(definition) as never;
   return Type.String();
 }
 
@@ -530,7 +724,8 @@ interface EventQueue {
 interface ToolHost {
   queue: EventQueue;
   request: AgentRunRequest;
-  model: NonNullable<ReturnType<typeof models.getModel>>;
+  models: Models;
+  model: Model<Api>;
   apiKey: string | undefined;
   nestedAgents: Set<Agent>;
   subagentGate: { acquire(): Promise<void>; release(): void };

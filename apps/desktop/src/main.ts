@@ -1,51 +1,40 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { app, BrowserWindow, clipboard, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import * as nodePty from "node-pty";
+import { startLocalRuntime } from "./local-runtime.js";
+import { createNodePtyFactory } from "./node-pty-factory.js";
 import {
-  type ConnectionSettings,
-  defaultWebUrl,
-  isTrustedConnectionCenterDocument,
-  normalizeWebUrl,
-  rememberWebUrl,
-} from "./connection.js";
-import { type ConnectionHealth, probeConnectionHealth } from "./connection-health.js";
-import { readConnectionSettings, writeConnectionSettings } from "./connection-settings.js";
-import { attemptNavigation, shouldAutoRetry } from "./navigation.js";
+  launcherDocumentUrl,
+  resolveRuntimeResourcePaths,
+  trustedRuntimeSender,
+  trustedTerminalSender,
+} from "./runtime-bootstrap.js";
+import { probeRuntimeOrigin } from "./runtime-health.js";
 import {
-  type ConnectionCenterMode,
-  diagnosticsText,
-  type RecoveryPageModel,
-  recoveryPageHtml,
-} from "./recovery-page.js";
+  activateRuntimeProfile,
+  normalizeRuntimeProfile,
+  type RuntimeProfile,
+} from "./runtime-profile.js";
+import { DesktopRuntimeSession } from "./runtime-session.js";
+import {
+  readRuntimeProfile as readRuntimeSettings,
+  writeRuntimeProfile as writeRuntimeSettings,
+} from "./runtime-settings.js";
+import { TerminalSessionManager } from "./terminal-session.js";
 import { browserWindowOptions } from "./window-options.js";
 
-const LOCAL_WEB_URL = "http://127.0.0.1:5173";
-const SETTINGS_FILENAME = "connection-settings.json";
-const AUTO_RETRY_MS = 5000;
+const MAX_TERMINAL_WRITE_BYTES = 1024 * 1024;
 
-let mainWindow: BrowserWindow | null = null;
-let connectionSettings: ConnectionSettings = { recentUrls: [] };
-let settingsPath = "";
-let currentTarget = LOCAL_WEB_URL;
-let lastError = "";
-let health: ConnectionHealth = { webStatus: "checking", apiStatus: "checking" };
-let connected = false;
-let connecting = false;
-let centerMode: ConnectionCenterMode = "recovery";
-let retryTimer: ReturnType<typeof setInterval> | undefined;
-let navigationId = 0;
-let healthProbe: Promise<ConnectionHealth> | null = null;
-let healthProbeTarget = "";
-let trustedConnectionCenterUrl = "";
+let mainWindow: BrowserWindow | undefined;
+let session: DesktopRuntimeSession | undefined;
+let terminalManager: TerminalSessionManager | undefined;
+const terminalOwners = new Map<string, number>();
+let trustedLauncherUrl = "";
+let stoppingForQuit = false;
 
 function windowFrom(event: Electron.IpcMainInvokeEvent) {
   return BrowserWindow.fromWebContents(event.sender);
-}
-
-function requireConnectionCenterSender(event: Electron.IpcMainInvokeEvent) {
-  if (!isTrustedConnectionCenterDocument(event.sender.getURL(), trustedConnectionCenterUrl)) {
-    throw new Error("Desktop connection controls are only available from Connection Center.");
-  }
 }
 
 function developmentIcon() {
@@ -54,161 +43,181 @@ function developmentIcon() {
   return existsSync(icon) ? icon : undefined;
 }
 
-function platformLabel() {
-  return `${process.platform} ${process.arch}`;
+function runtimeSettingsPath() {
+  return path.join(app.getPath("userData"), "runtime-profile.json");
 }
 
-function stopAutoRetry() {
-  if (retryTimer) clearInterval(retryTimer);
-  retryTimer = undefined;
+function runtimePaths() {
+  return resolveRuntimeResourcePaths({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    userData: app.getPath("userData"),
+  });
 }
 
-function recoveryModel(mode: ConnectionCenterMode = centerMode): RecoveryPageModel {
-  return {
-    currentUrl: currentTarget,
-    error: lastError,
-    recentUrls: connectionSettings.recentUrls,
-    appVersion: app.getVersion(),
-    platform: platformLabel(),
-    webStatus: health.webStatus,
-    apiStatus: health.apiStatus,
-    mode,
-  };
+function senderUrl(event: Electron.IpcMainInvokeEvent) {
+  return event.senderFrame?.url || event.sender.getURL();
 }
 
-async function refreshHealth(): Promise<ConnectionHealth> {
-  const target = currentTarget;
-  if (healthProbe && healthProbeTarget === target) return healthProbe;
+function assertTrustedRuntimeSender(event: Electron.IpcMainInvokeEvent) {
+  if (!trustedRuntimeSender(senderUrl(event), trustedLauncherUrl)) {
+    throw new Error("Runtime controls are available only from the FlowBots local runtime launcher.");
+  }
+}
 
-  healthProbeTarget = target;
-  healthProbe = probeConnectionHealth(target)
-    .then((next) => {
-      if (target === currentTarget) health = next;
-      return next;
-    })
-    .finally(() => {
-      if (healthProbeTarget === target) {
-        healthProbe = null;
-        healthProbeTarget = "";
-      }
+function assertTrustedTerminalSender(event: Electron.IpcMainInvokeEvent) {
+  if (!trustedTerminalSender(senderUrl(event))) {
+    throw new Error("Host terminal access is available only to a loopback FlowBots runtime.");
+  }
+}
+
+function requireTerminalManager(): TerminalSessionManager {
+  if (!terminalManager) throw new Error("FlowBots terminal service is unavailable.");
+  return terminalManager;
+}
+
+function assertTerminalOwner(event: Electron.IpcMainInvokeEvent, sessionId: string): void {
+  if (terminalOwners.get(sessionId) !== event.sender.id) {
+    throw new Error("Terminal session is not owned by this FlowBots window.");
+  }
+}
+
+function defaultShell(): string {
+  const configured = process.env.SHELL;
+  if (configured && path.isAbsolute(configured)) return configured;
+  if (process.platform === "win32") {
+    const comspec = process.env.COMSPEC;
+    if (comspec && path.isAbsolute(comspec)) return comspec;
+    return "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  }
+  return process.platform === "darwin" ? "/bin/zsh" : "/bin/bash";
+}
+
+function terminalEnvironment(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+function installTerminalService(): void {
+  terminalManager = new TerminalSessionManager({
+    factory: createNodePtyFactory(nodePty),
+    allowedRoots: [app.getPath("home")],
+    defaultShell: defaultShell(),
+    homeDir: app.getPath("home"),
+    env: terminalEnvironment(),
+    onActivity: (activity) => {
+      if (activity.type !== "terminal.started") terminalOwners.delete(activity.sessionId);
+      const win = mainWindow;
+      if (win && !win.isDestroyed()) win.webContents.send("desktop.terminal.activity", activity);
+    },
+  });
+}
+
+async function createWindow() {
+  const icon = developmentIcon();
+  const win = new BrowserWindow({
+    ...browserWindowOptions(process.platform),
+    ...(icon ? { icon } : {}),
+    webPreferences: {
+      preload: path.join(import.meta.dirname, "preload.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  mainWindow = win;
+
+  const paths = runtimePaths();
+  const settingsPath = runtimeSettingsPath();
+  const nextSession = new DesktopRuntimeSession({
+    activate: (profile) =>
+      activateRuntimeProfile(profile, {
+        startLite: () =>
+          startLocalRuntime({
+            dataDir: paths.dataDir,
+            migrationsDir: paths.migrationsDir,
+            webDir: existsSync(paths.webDir) ? paths.webDir : undefined,
+          }),
+      }),
+    probe: (target) => probeRuntimeOrigin(target),
+    navigate: async (origin) => {
+      await win.loadURL(origin);
+    },
+    persist: async (profile: RuntimeProfile) => {
+      await writeRuntimeSettings(settingsPath, profile);
+    },
+    showLauncher: async (error) => {
+      trustedLauncherUrl = launcherDocumentUrl(error);
+      await win.loadURL(trustedLauncherUrl);
+    },
+  });
+  session = nextSession;
+
+  win.on("closed", () => {
+    if (mainWindow !== win) return;
+    terminalManager?.closeAll();
+    terminalOwners.clear();
+    mainWindow = undefined;
+    if (session === nextSession) session = undefined;
+    void nextSession.stop();
+  });
+
+  await nextSession.start(await readRuntimeSettings(settingsPath));
+}
+
+function installApplicationMenu() {
+  const template: Electron.MenuItemConstructorOptions[] = [];
+  if (process.platform === "darwin") {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        {
+          label: "Runtime…",
+          accelerator: "CmdOrCtrl+,",
+          click: () => void session?.showLauncher(),
+        },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
     });
-  return healthProbe;
-}
-
-async function showConnectionCenter(mode: ConnectionCenterMode, error = lastError) {
-  const win = mainWindow;
-  if (!win || win.isDestroyed()) return;
-
-  centerMode = mode;
-  connected = false;
-  lastError = error;
-  if (mode === "settings") stopAutoRetry();
-  const html = recoveryPageHtml(recoveryModel(mode));
-  const documentUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
-  trustedConnectionCenterUrl = documentUrl;
-  await win.loadURL(documentUrl);
-  trustedConnectionCenterUrl = win.webContents.getURL();
-
-  if (mode === "recovery") startAutoRetry();
-  void refreshHealth();
-}
-
-async function connectToTarget() {
-  const win = mainWindow;
-  if (!win || win.isDestroyed()) return;
-
-  const target = currentTarget;
-  const attemptId = ++navigationId;
-  connecting = true;
-  trustedConnectionCenterUrl = "";
-  stopAutoRetry();
-  health = {
-    webStatus: "checking",
-    apiStatus:
-      target.startsWith("http://127.0.0.1") || target.startsWith("http://localhost")
-        ? "checking"
-        : "not-applicable",
-  };
-
-  const result = await attemptNavigation((url) => win.loadURL(url), target);
-  if (attemptId !== navigationId || target !== currentTarget) return;
-
-  connecting = false;
-  if (result.ok) {
-    connected = true;
-    lastError = "";
-    centerMode = "settings";
-    health = { ...health, webStatus: "online" };
-    stopAutoRetry();
-    return;
+  } else {
+    template.push({
+      label: "File",
+      submenu: [
+        {
+          label: "Runtime…",
+          accelerator: "CmdOrCtrl+,",
+          click: () => void session?.showLauncher(),
+        },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    });
   }
-
-  connected = false;
-  lastError = result.error;
-  await showConnectionCenter("recovery", result.error);
+  template.push(
+    { label: "Edit", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
+    { label: "View", submenu: [{ role: "reload" }, { role: "toggleDevTools" }, { type: "separator" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" }, { type: "separator" }, { role: "togglefullscreen" }] },
+    { label: "Window", submenu: [{ role: "minimize" }, { role: "zoom" }, ...(process.platform === "darwin" ? [{ type: "separator" as const }, { role: "front" as const }] : [{ role: "close" as const }])] },
+  );
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-async function autoRetryTick() {
-  const win = mainWindow;
-  const windowDestroyed = !win || win.isDestroyed();
-  if (centerMode !== "recovery" || connecting || !shouldAutoRetry({ connected, windowDestroyed })) {
-    if (windowDestroyed || connected || centerMode !== "recovery") stopAutoRetry();
-    return;
-  }
+app.whenReady().then(async () => {
+  const icon = developmentIcon();
+  if (process.platform === "darwin" && icon) app.dock?.setIcon(icon);
 
-  const next = await refreshHealth();
-  if (next.webStatus === "online" && centerMode === "recovery" && !connecting) {
-    await connectToTarget();
-  }
-}
+  installTerminalService();
 
-function startAutoRetry() {
-  stopAutoRetry();
-  retryTimer = setInterval(() => {
-    void autoRetryTick();
-  }, AUTO_RETRY_MS);
-}
-
-async function saveAndConnect(value: string) {
-  try {
-    const normalized = normalizeWebUrl(value);
-    const nextSettings = rememberWebUrl(connectionSettings, normalized);
-    await writeConnectionSettings(settingsPath, nextSettings);
-    connectionSettings = nextSettings;
-    currentTarget = normalized;
-    lastError = "";
-    health = { webStatus: "checking", apiStatus: "checking" };
-    void connectToTarget();
-    return { ok: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not save this connection.";
-    lastError = message;
-    await showConnectionCenter(centerMode, message);
-    return { ok: false, error: message };
-  }
-}
-
-async function resetToLocal() {
-  return saveAndConnect(LOCAL_WEB_URL);
-}
-
-async function openConnectionSettings() {
-  navigationId += 1;
-  connecting = false;
-  lastError = "";
-  centerMode = "settings";
-  stopAutoRetry();
-  health = { webStatus: "checking", apiStatus: "checking" };
-  await showConnectionCenter("settings", "");
-}
-
-async function copyConnectionDiagnostics() {
-  await refreshHealth();
-  clipboard.writeText(diagnosticsText(recoveryModel()));
-  return { ok: true };
-}
-
-function registerIpc() {
   ipcMain.handle("desktop.platform", () => process.platform);
   ipcMain.handle("desktop.window.close", (event) => {
     windowFrom(event)?.close();
@@ -234,128 +243,84 @@ function registerIpc() {
       fullScreen: win?.isFullScreen() ?? false,
     };
   });
-
-  ipcMain.handle("desktop.connection.retry", async (event) => {
-    requireConnectionCenterSender(event);
-    void connectToTarget();
-    return { ok: true };
+  ipcMain.handle("desktop.runtime.choose", async (event, raw: unknown) => {
+    assertTrustedRuntimeSender(event);
+    const profile = normalizeRuntimeProfile((raw ?? {}) as { mode: string; serverUrl?: string });
+    if (!session) throw new Error("FlowBots runtime session is unavailable.");
+    return session.choose(profile);
   });
-  ipcMain.handle("desktop.connection.setUrl", (event, value: unknown) => {
-    requireConnectionCenterSender(event);
-    return saveAndConnect(typeof value === "string" ? value : "");
+  ipcMain.handle("desktop.runtime.showLauncher", async (event) => {
+    assertTrustedRuntimeSender(event);
+    return session?.showLauncher();
   });
-  ipcMain.handle("desktop.connection.reset", (event) => {
-    requireConnectionCenterSender(event);
-    return resetToLocal();
-  });
-  ipcMain.handle("desktop.connection.useRecent", (event, value: unknown) => {
-    requireConnectionCenterSender(event);
-    return saveAndConnect(typeof value === "string" ? value : "");
-  });
-  ipcMain.handle("desktop.connection.copyDiagnostics", (event) => {
-    requireConnectionCenterSender(event);
-    return copyConnectionDiagnostics();
-  });
-  ipcMain.handle("desktop.connection.status", (event) => {
-    requireConnectionCenterSender(event);
-    return refreshHealth();
-  });
-}
-
-function installMenu() {
-  const connectionItem: Electron.MenuItemConstructorOptions = {
-    label: "Connection…",
-    accelerator: "CmdOrCtrl+,",
-    click: () => {
-      void openConnectionSettings();
-    },
-  };
-
-  const template: Electron.MenuItemConstructorOptions[] = [];
-  if (process.platform === "darwin") {
-    template.push({
-      label: app.name,
-      submenu: [
-        { role: "about" },
-        { type: "separator" },
-        connectionItem,
-        { type: "separator" },
-        { role: "services" },
-        { type: "separator" },
-        { role: "hide" },
-        { role: "hideOthers" },
-        { role: "unhide" },
-        { type: "separator" },
-        { role: "quit" },
-      ],
+  ipcMain.handle("desktop.terminal.create", (event, raw: unknown) => {
+    assertTrustedTerminalSender(event);
+    const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const cwd = typeof input.cwd === "string" ? input.cwd : undefined;
+    const terminal = requireTerminalManager();
+    const info = terminal.create({
+      ...(cwd ? { cwd } : {}),
+      cols: Number(input.cols),
+      rows: Number(input.rows),
     });
-  } else {
-    template.push({
-      label: "File",
-      submenu: [connectionItem, { type: "separator" }, { role: "quit" }],
+    terminalOwners.set(info.id, event.sender.id);
+    terminal.subscribe(info.id, (data) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("desktop.terminal.data", { sessionId: info.id, data });
+      }
     });
-  }
-  template.push({ role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" });
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
-
-function createWindow() {
-  const icon = developmentIcon();
-  const win = new BrowserWindow({
-    ...browserWindowOptions(process.platform),
-    ...(icon ? { icon } : {}),
-    webPreferences: {
-      preload: path.join(import.meta.dirname, "preload.cjs"),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-    },
+    return info;
   });
-  mainWindow = win;
-  win.on("closed", () => {
-    if (mainWindow === win) mainWindow = null;
-    connected = false;
-    connecting = false;
-    navigationId += 1;
-    trustedConnectionCenterUrl = "";
-    stopAutoRetry();
+  ipcMain.handle("desktop.terminal.write", (event, sessionId: unknown, data: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string" || typeof data !== "string") {
+      throw new Error("Invalid terminal write request.");
+    }
+    if (Buffer.byteLength(data, "utf8") > MAX_TERMINAL_WRITE_BYTES) {
+      throw new Error("Terminal write exceeds the maximum payload size.");
+    }
+    assertTerminalOwner(event, sessionId);
+    requireTerminalManager().write(sessionId, data);
   });
-  void connectToTarget();
-}
+  ipcMain.handle("desktop.terminal.resize", (event, sessionId: unknown, cols: unknown, rows: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string") throw new Error("Invalid terminal resize request.");
+    assertTerminalOwner(event, sessionId);
+    requireTerminalManager().resize(sessionId, Number(cols), Number(rows));
+  });
+  ipcMain.handle("desktop.terminal.interrupt", (event, sessionId: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string") throw new Error("Invalid terminal interrupt request.");
+    assertTerminalOwner(event, sessionId);
+    requireTerminalManager().interrupt(sessionId);
+  });
+  ipcMain.handle("desktop.terminal.close", (event, sessionId: unknown) => {
+    assertTrustedTerminalSender(event);
+    if (typeof sessionId !== "string") throw new Error("Invalid terminal close request.");
+    assertTerminalOwner(event, sessionId);
+    const closed = requireTerminalManager().close(sessionId);
+    if (closed) terminalOwners.delete(sessionId);
+    return closed;
+  });
 
-async function resolveInitialTarget() {
-  settingsPath = path.join(app.getPath("userData"), SETTINGS_FILENAME);
-  connectionSettings = await readConnectionSettings(settingsPath);
-  if (connectionSettings.activeUrl) {
-    currentTarget = connectionSettings.activeUrl;
-    return;
-  }
-
-  try {
-    currentTarget = defaultWebUrl(process.env);
-  } catch {
-    currentTarget = LOCAL_WEB_URL;
-    lastError = "RAKAZO_WEB_URL is invalid; using the local Rakazo origin instead.";
-  }
-}
-
-app.whenReady().then(async () => {
-  const icon = developmentIcon();
-  if (process.platform === "darwin" && icon) app.dock?.setIcon(icon);
-  registerIpc();
-  installMenu();
-  await resolveInitialTarget();
-  createWindow();
+  installApplicationMenu();
+  await createWindow();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow();
   });
 });
 
-app.on("before-quit", () => {
-  trustedConnectionCenterUrl = "";
-  stopAutoRetry();
+app.on("before-quit", (event) => {
+  terminalManager?.closeAll();
+  terminalOwners.clear();
+  if (stoppingForQuit || !session) return;
+  event.preventDefault();
+  stoppingForQuit = true;
+  void session.stop().finally(() => app.quit());
 });
 
 app.on("window-all-closed", () => {
+  terminalManager?.closeAll();
+  terminalOwners.clear();
   if (process.platform !== "darwin") app.quit();
 });
