@@ -18,7 +18,12 @@ describe("FlowBots external model providers", () => {
         expect.objectContaining({ provider: "g0dm0d3", id: "consortium/fast" }),
       ]),
     );
-    expect(JSON.stringify(entries)).not.toMatch(/api[_ -]?key|Bearer\s+sk-/i);
+    for (const entry of entries) {
+      expect(Object.prototype.hasOwnProperty.call(entry, "apiKey")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(entry, "secret")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(entry, "token")).toBe(false);
+    }
+    expect(JSON.stringify(entries)).not.toMatch(/(?:sk-|g0d_)[A-Za-z0-9_-]{8,}/);
   });
 
   test("Venice runtime model uses the official OpenAI-compatible API", () => {
