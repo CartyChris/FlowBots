@@ -49,7 +49,7 @@ describe("Mnemosyne semantic memory index", () => {
     expect(second).not.toBe(first);
   });
 
-  test("rebuilds only when canonical memory changes and recalls through isolated local data dir", async () => {
+  test("rebuilds only when canonical memory changes without depending on unreleased CLI metadata", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-mnemosyne-test-"));
     cleanups.push(async () => {
       const { rm } = await import("node:fs/promises");
@@ -69,7 +69,6 @@ describe("Mnemosyne semantic memory index", () => {
           dataDir: options.env.MNEMOSYNE_DATA_DIR,
           timeoutMs: options.timeoutMs,
         });
-        if (args[0] === "--version") return { stdout: "Mnemosyne 3.15.1", stderr: "" };
         if (args[0] === "recall") {
           return {
             stdout: JSON.stringify({
@@ -100,6 +99,9 @@ describe("Mnemosyne semantic memory index", () => {
     expect(first).toEqual([
       expect.objectContaining({ path: "preferences.md", score: 0.91 }),
     ]);
+    expect(calls.some((call) => call.args[0] === "--version" || call.args[0] === "version")).toBe(
+      false,
+    );
     expect(calls.filter((call) => call.args[0] === "store")).toHaveLength(2);
     expect(calls.every((call) => call.command === "mnemosyne")).toBe(true);
     expect(calls.every((call) => call.timeoutMs === 3210)).toBe(true);
@@ -129,8 +131,9 @@ describe("Mnemosyne semantic memory index", () => {
     expect(calls.filter((call) => call.args[0] === "store")).toHaveLength(4);
 
     const manifest = JSON.parse(await readFile(path.join(dataDir, ".rakazo-index.json"), "utf8"));
-    expect(manifest).toMatchObject({ schema: 1, mnemosyneVersion: "3.15.1" });
+    expect(manifest).toMatchObject({ schema: 1, fingerprint: expect.any(String) });
     expect(manifest).not.toHaveProperty("documents");
+    expect(manifest).not.toHaveProperty("mnemosyneVersion");
   });
 
   test("auto mode fails open while required mode surfaces an unavailable CLI", async () => {
