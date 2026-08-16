@@ -78,23 +78,24 @@ describe("HybridMemoryStore", () => {
     const primary = primaryStore();
     const semantic = semanticIndex();
     const memory = new HybridMemoryStore(primary.store, semantic);
+    const ctx = context();
 
     const readRequest: MemoryReadRequest = { scope: "user", path: "PREFS.md" };
-    await expect(memory.read(readRequest, context())).resolves.toEqual({
+    await expect(memory.read(readRequest, ctx)).resolves.toEqual({
       documents: [expect.objectContaining({ path: "PREFS.md", revision: 2 })],
     });
-    expect(primary.read).toHaveBeenCalledWith(readRequest, context());
+    expect(primary.read).toHaveBeenCalledWith(readRequest, ctx);
 
     const commitRequest: MemoryCommitRequest = {
       scope: "user",
       path: "PREFS.md",
       content: "updated",
     };
-    await expect(memory.commit(commitRequest, context())).resolves.toMatchObject({
+    await expect(memory.commit(commitRequest, ctx)).resolves.toMatchObject({
       path: "PREFS.md",
       content: "updated",
     });
-    expect(primary.commit).toHaveBeenCalledWith(commitRequest, context());
+    expect(primary.commit).toHaveBeenCalledWith(commitRequest, ctx);
     expect(semantic.search).not.toHaveBeenCalled();
   });
 
