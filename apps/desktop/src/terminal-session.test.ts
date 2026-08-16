@@ -21,9 +21,16 @@ function fakePty() {
   };
   return {
     process,
-    emitData: (data: string) => dataListeners.forEach((listener) => listener(data)),
-    emitExit: (event: { exitCode: number; signal?: number }) =>
-      exitListeners.forEach((listener) => listener(event)),
+    emitData: (data: string) => {
+      dataListeners.forEach((listener) => {
+        listener(data);
+      });
+    },
+    emitExit: (event: { exitCode: number; signal?: number }) => {
+      exitListeners.forEach((listener) => {
+        listener(event);
+      });
+    },
   };
 }
 
