@@ -27,3 +27,4 @@ jobs:
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
       - run: pnpm --filter @rakazo/db test
+      - run: pnpm --filter @rakazo/api test -- env.test.ts
