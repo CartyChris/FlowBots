@@ -1,0 +1,31 @@
+name: Diagnose Electron smoke stage
+
+on:
+  push:
+    branches: [diag/electron-smoke-stage]
+    paths:
+      - ".github/workflows/diagnose-electron-smoke-stage.yml"
+      - "apps/desktop/e2e/smoke.spec.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5433/rakazo
+      - run: pnpm --filter @rakazo/desktop build
+      - name: Instrumented Electron smoke
+        run: xvfb-run --auto-servernum pnpm --filter @rakazo/desktop exec playwright test --config e2e/playwright.config.ts
