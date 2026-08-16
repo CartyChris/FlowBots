@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
 
+# Temporary pre-merge acceptance probe; remove after current main is integrated.
 jobs:
   probe:
     runs-on: ubuntu-latest
