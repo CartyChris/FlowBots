@@ -10,10 +10,13 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import { OLLAMA_PROVIDER_ID, ollamaBaseUrl, ollamaProvider } from "./ollama-provider.js";
+import { ollamaRuntimeModel } from "./ollama-runtime.js";
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
 
 const running = new Map<string, AbortController>();
 const catalogModels = builtinModels();
+catalogModels.setProvider(ollamaProvider(ollamaBaseUrl()));
 const MAX_PARALLEL_SUBAGENTS = 4;
 // Pi forwards these names to OpenAI Responses, whose function-name contract is
 // ^[a-zA-Z0-9_-]+$ with a maximum length of 64 characters.
@@ -50,16 +53,22 @@ export class PiAgentRuntime implements AgentRuntime {
             ? (process.env.PI_DEFAULT_MODEL ?? "deepseek/deepseek-v4-flash-0731")
             : request.model.id;
         const models = modelsForRequest(request, provider);
-        const model = models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId);
+        const model =
+          provider === OLLAMA_PROVIDER_ID
+            ? ollamaRuntimeModel(modelId)
+            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId));
         if (!model) {
           queue.push({ type: "text", text: `Unknown model ${provider}/${modelId}` });
           queue.push({ type: "done" });
           return;
         }
 
-        const apiKey = request.model.oauth
-          ? undefined
-          : (request.model.apiKey ?? process.env.OPENROUTER_API_KEY);
+        const apiKey =
+          provider === OLLAMA_PROVIDER_ID
+            ? "ollama"
+            : request.model.oauth
+              ? undefined
+              : (request.model.apiKey ?? process.env.OPENROUTER_API_KEY);
         const toolDefs = request.tools.length ? request.tools : builtinAgentTools;
         const nestedAgents = new Set<Agent>();
         const host: ToolHost = {
