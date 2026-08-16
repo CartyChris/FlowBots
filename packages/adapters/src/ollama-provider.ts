@@ -18,6 +18,17 @@ export function ollamaOpenAiBaseUrl(source: NodeJS.ProcessEnv = process.env): st
   return `${ollamaBaseUrl(source)}/v1`;
 }
 
+export function ollamaStreamSimple(
+  model: Model<never>,
+  context: Context,
+  options?: SimpleStreamOptions,
+) {
+  return streamSimple(model, context, {
+    ...options,
+    apiKey: options?.apiKey ?? "ollama",
+  } as never);
+}
+
 export function ollamaProvider(baseUrl: string): Provider {
   const url = baseUrl.replace(/\/+$/, "");
   const openAiBaseUrl = `${url}/v1`;
@@ -36,10 +47,7 @@ export function ollamaProvider(baseUrl: string): Provider {
     models: [],
     api: {
       streamSimple: (model: Model<never>, context: Context, options?: SimpleStreamOptions) =>
-        streamSimple({ ...model, baseUrl: openAiBaseUrl } as never, context, {
-          ...options,
-          apiKey: options?.apiKey ?? "ollama",
-        } as never),
+        ollamaStreamSimple({ ...model, baseUrl: openAiBaseUrl } as never, context, options),
       stream: () => {
         throw new Error("Ollama provider streams via streamSimple only.");
       },
