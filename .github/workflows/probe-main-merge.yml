@@ -55,5 +55,5 @@ jobs:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
       - name: Typecheck merged graph
         run: pnpm check
-      - name: Fast verification on merged graph
-        run: pnpm verify:fast
+      - name: Test merged graph
+        run: pnpm test
