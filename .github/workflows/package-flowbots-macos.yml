@@ -1,5 +1,6 @@
 name: FlowBots macOS package
 
+# Final acceptance invariant: the mounted DMG must launch FlowBots and survive the startup smoke window.
 on:
   push:
     branches: [main, feature/rakazo-local-ai-os]
