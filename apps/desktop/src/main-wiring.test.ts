@@ -14,8 +14,8 @@ describe("desktop main runtime wiring", () => {
     expect(source).toContain("resolveRuntimeResourcePaths");
     expect(source).toContain("trustedRuntimeSender");
     expect(source).toMatch(/desktop\.runtime\.choose/);
-    expect(source).toMatch(/session\.start\(/);
-    expect(source).toMatch(/session\.stop\(/);
+    expect(source).toMatch(/\.start\(await readRuntimeSettings\(/);
+    expect(source).toMatch(/\.stop\(\)/);
     expect(source).not.toMatch(/loadURL\(WEB_URL\)/);
   });
 
