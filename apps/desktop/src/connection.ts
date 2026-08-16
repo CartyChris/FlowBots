@@ -21,7 +21,9 @@ export function normalizeWebUrl(value: string): string {
     throw new Error("Rakazo connections must use http:// or https://.");
   }
   if (parsed.username || parsed.password) {
-    throw new Error("Credential-bearing URLs are not allowed. Enter credentials inside Rakazo instead.");
+    throw new Error(
+      "Credential-bearing URLs are not allowed. Enter credentials inside Rakazo instead.",
+    );
   }
 
   const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
