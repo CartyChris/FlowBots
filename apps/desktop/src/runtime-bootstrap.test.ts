@@ -4,6 +4,7 @@ import {
   launcherDocumentUrl,
   resolveRuntimeResourcePaths,
   trustedRuntimeSender,
+  trustedTerminalSender,
 } from "./runtime-bootstrap.js";
 
 describe("desktop runtime bootstrap boundaries", () => {
@@ -44,5 +45,14 @@ describe("desktop runtime bootstrap boundaries", () => {
     expect(trustedRuntimeSender("https://example.com", launcher)).toBe(false);
     expect(trustedRuntimeSender("http://127.0.0.1:43117", launcher)).toBe(false);
     expect(trustedRuntimeSender(`${launcher}x`, launcher)).toBe(false);
+  });
+
+  test("host terminal is trusted only from loopback Rakazo origins", () => {
+    expect(trustedTerminalSender("http://127.0.0.1:43117/chat")).toBe(true);
+    expect(trustedTerminalSender("http://localhost:5173/terminal")).toBe(true);
+    expect(trustedTerminalSender("https://example.com")).toBe(false);
+    expect(trustedTerminalSender("http://127.0.0.1.evil.test")).toBe(false);
+    expect(trustedTerminalSender("data:text/html,hello")).toBe(false);
+    expect(trustedTerminalSender(undefined)).toBe(false);
   });
 });
