@@ -1,0 +1,51 @@
+name: Finalize LocalRuntime dependency boundary
+
+on:
+  push:
+    branches: [fix/local-runtime-external-deps]
+    paths:
+      - ".github/workflows/finalize-local-runtime-deps.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/local-runtime-external-deps
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Regenerate lockfile
+        run: pnpm install --lockfile-only --no-frozen-lockfile
+      - name: Prove frozen install
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5433/rakazo
+      - name: Desktop unit and dependency-contract tests
+        run: pnpm --filter @rakazo/desktop test
+      - name: Build desktop and enforce generated-runtime dependency contract
+        run: pnpm --filter @rakazo/desktop build
+      - name: Electron startup smoke
+        run: xvfb-run --auto-servernum pnpm --filter @rakazo/desktop exec playwright test --config e2e/playwright.config.ts
+      - name: Commit verified lockfile and remove temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/local-runtime-external-red.yml .github/workflows/finalize-local-runtime-deps.yml
+          git add pnpm-lock.yaml .github/workflows
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(desktop): lock LocalRuntime runtime dependencies"
+          git push origin HEAD:fix/local-runtime-external-deps
