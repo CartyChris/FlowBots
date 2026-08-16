@@ -2,26 +2,20 @@ import path from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 import type { RakazoDesktop } from "@rakazo/contracts";
 
-const fixture = `<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8"><title>Rakazo desktop smoke</title></head>
-  <body><main>Desktop fixture ready</main></body>
-</html>`;
-
-test("launches with a narrow preload bridge and an isolated renderer", async () => {
+test("launches the runtime chooser with a narrow preload bridge and an isolated renderer", async () => {
   const app = await electron.launch({
     args: ["."],
     cwd: path.resolve(import.meta.dirname, ".."),
-    env: {
-      ...process.env,
-      RAKAZO_WEB_URL: `data:text/html;charset=utf-8,${encodeURIComponent(fixture)}`,
-    },
+    env: { ...process.env },
   });
 
   try {
     const page = await app.firstWindow();
-    await expect(page.getByText("Desktop fixture ready")).toBeVisible();
-    await expect(page).toHaveTitle("Rakazo desktop smoke");
+    await expect(page.getByRole("heading", { name: "How should FlowBots run?" })).toBeVisible();
+    await expect(page).toHaveTitle("Choose how FlowBots runs");
+    await expect(page.getByRole("button", { name: /Lite/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Full Local/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Remote/ })).toBeVisible();
 
     const renderer = await page.evaluate(async () => {
       const desktop = (window as typeof window & { rakazoDesktop?: RakazoDesktop }).rakazoDesktop;
@@ -29,6 +23,8 @@ test("launches with a narrow preload bridge and an isolated renderer", async () 
       return {
         bridgeKeys: desktop ? Object.keys(desktop).sort() : [],
         windowKeys: desktop ? Object.keys(desktop.window).sort() : [],
+        runtimeKeys: desktop ? Object.keys(desktop.runtime).sort() : [],
+        terminalKeys: desktop ? Object.keys(desktop.terminal).sort() : [],
         platform: desktop?.platform,
         state: await desktop?.window.state(),
         nodeGlobals: {
@@ -39,8 +35,18 @@ test("launches with a narrow preload bridge and an isolated renderer", async () 
       };
     });
 
-    expect(renderer.bridgeKeys).toEqual(["platform", "window"]);
+    expect(renderer.bridgeKeys).toEqual(["platform", "runtime", "terminal", "window"]);
     expect(renderer.windowKeys).toEqual(["close", "minimize", "state", "toggleMaximize"]);
+    expect(renderer.runtimeKeys).toEqual(["choose", "showLauncher"]);
+    expect(renderer.terminalKeys).toEqual([
+      "close",
+      "create",
+      "interrupt",
+      "onActivity",
+      "onData",
+      "resize",
+      "write",
+    ]);
     expect(renderer.platform).toBe(process.platform);
     expect(renderer.state).toEqual({ minimized: false, maximized: false, fullScreen: false });
     expect(renderer.nodeGlobals).toEqual({
