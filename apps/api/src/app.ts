@@ -45,7 +45,7 @@ export interface AppHandles {
 export async function createApp(
   overrides: Partial<AppEnv> & { prisma?: PrismaClient; realtime?: RealtimeFanout } = {},
 ): Promise<AppHandles> {
-  const env = { ...loadEnv(process.env), ...overrides };
+  const env = loadEnv(process.env, overrides);
   const created = overrides.prisma
     ? { prisma: overrides.prisma, pool: undefined }
     : createDb(env.databaseUrl);
