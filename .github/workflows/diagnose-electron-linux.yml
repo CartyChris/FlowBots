@@ -1,0 +1,41 @@
+name: Diagnose Linux Electron startup
+
+on:
+  push:
+    branches: [diag/electron-linux-startup]
+    paths:
+      - ".github/workflows/diagnose-electron-linux.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @rakazo/desktop build
+      - name: Run Electron directly and capture main-process output
+        shell: bash
+        run: |
+          set -uo pipefail
+          logfile="$(mktemp)"
+          xvfb-run --auto-servernum timeout 8s pnpm --filter @rakazo/desktop exec electron . >"$logfile" 2>&1
+          status=$?
+          cat "$logfile"
+          echo "electron_status=$status"
+          rm -f "$logfile"
+          if [ "$status" -eq 124 ]; then
+            echo "Electron remained alive for the full diagnostic window."
+            exit 0
+          fi
+          echo "Electron exited before the diagnostic timeout." >&2
+          exit "$status"
