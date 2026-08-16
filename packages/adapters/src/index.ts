@@ -17,6 +17,7 @@ export * from "./execution-targets.js";
 export * from "./executor.js";
 export * from "./expo-push.js";
 export * from "./fake-sandbox.js";
+export * from "./harness-registry.js";
 export * from "./home.js";
 export * from "./host-aware-sandbox.js";
 export * from "./job-reconciler.js";
