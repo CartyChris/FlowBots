@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attemptNavigation } from "./navigation.js";
+import { attemptNavigation, shouldAutoRetry } from "./navigation.js";
 
 describe("desktop navigation", () => {
   it("returns recovery state when the web origin cannot be loaded", async () => {
@@ -17,5 +17,12 @@ describe("desktop navigation", () => {
   it("returns connected state when navigation succeeds", async () => {
     const result = await attemptNavigation(async () => undefined, "https://rakazo.example");
     expect(result).toEqual({ ok: true, url: "https://rakazo.example" });
+  });
+
+  it("auto-retries only while disconnected and the window is alive", () => {
+    expect(shouldAutoRetry({ connected: false, windowDestroyed: false })).toBe(true);
+    expect(shouldAutoRetry({ connected: true, windowDestroyed: false })).toBe(false);
+    expect(shouldAutoRetry({ connected: false, windowDestroyed: true })).toBe(false);
+    expect(shouldAutoRetry({ connected: true, windowDestroyed: true })).toBe(false);
   });
 });
