@@ -16,7 +16,11 @@ function mustStayExternal(specifier) {
   // node-postgres is CommonJS internally and uses runtime require() calls for
   // Node built-ins. Keep it as a normal Node dependency instead of translating
   // those calls into an ESM bundle where dynamic require is unavailable.
-  return specifier === "pg" || specifier.startsWith("pg/");
+  if (specifier === "pg" || specifier.startsWith("pg/")) return true;
+  // Prisma Client's runtime also performs package-native/dynamic Node requires.
+  // Bundle Rakazo's generated client, but keep Prisma's own runtime package
+  // external so Electron resolves it with its intended Node semantics.
+  return specifier === "@prisma/client" || specifier.startsWith("@prisma/client/");
 }
 
 await build({
