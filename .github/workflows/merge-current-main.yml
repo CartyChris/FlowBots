@@ -1,0 +1,85 @@
+name: Merge verified current main
+
+on:
+  push:
+    branches: [feature/rakazo-local-ai-os]
+    paths:
+      - ".github/workflows/merge-current-main.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: merge-current-main-into-local-ai-os
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/rakazo-local-ai-os
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Merge exact verified main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          expected_main="c51e6043931c8da46ecafb02514d90800804b2e4"
+          actual_main="$(git rev-parse origin/main)"
+          echo "Verified main: $expected_main"
+          echo "Current main:  $actual_main"
+          test "$actual_main" = "$expected_main"
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+          printf 'Merge exit=%s; resolving %s conflict(s) to verified AI-OS side:\n' "$merge_status" "${#conflicts[@]}"
+          if [ "${#conflicts[@]}" -gt 0 ]; then
+            printf '  %s\n' "${conflicts[@]}"
+            git checkout --ours -- "${conflicts[@]}"
+            git add -- "${conflicts[@]}"
+          fi
+          test -z "$(git diff --name-only --diff-filter=U)"
+      - name: Regenerate lockfile and remove temporary merge tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --lockfile-only --no-frozen-lockfile
+          rm -f \
+            .github/workflows/diagnose-main-merge.yml \
+            .github/workflows/probe-main-merge.yml \
+            .github/workflows/refresh-local-ai-os-lock.yml \
+            .github/workflows/merge-current-main.yml
+          git add -A
+      - name: Install merged dependency graph
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Lint merged tree
+        run: pnpm lint
+      - name: Typecheck merged tree
+        run: pnpm check
+      - name: Test merged tree
+        run: pnpm test
+      - name: Commit and push verified merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check --cached
+          git commit -m "Merge verified main into Local AI OS"
+          git push origin HEAD:feature/rakazo-local-ai-os
