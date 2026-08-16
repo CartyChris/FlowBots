@@ -1,0 +1,58 @@
+name: Probe semantic main merge
+
+on:
+  push:
+    branches: [feature/rakazo-local-ai-os]
+    paths:
+      - ".github/workflows/probe-main-merge.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Merge main and take AI-OS side only for textual conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -eq 0 ]; then
+            echo "Unexpectedly conflict-free merge"
+          fi
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+          printf 'Resolving %s conflict(s) to ours for probe only:\n' "${#conflicts[@]}"
+          printf '  %s\n' "${conflicts[@]}"
+          test "${#conflicts[@]}" -eq 19
+          git checkout --ours -- "${conflicts[@]}"
+          git add -- "${conflicts[@]}"
+          test -z "$(git diff --name-only --diff-filter=U)"
+      - name: Regenerate lockfile from merged package manifests
+        run: pnpm install --lockfile-only --no-frozen-lockfile
+      - name: Install merged dependency graph
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client from merged schema
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Typecheck merged graph
+        run: pnpm check
+      - name: Fast verification on merged graph
+        run: pnpm verify:fast
