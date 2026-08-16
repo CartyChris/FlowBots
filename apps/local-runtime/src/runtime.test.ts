@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -31,7 +32,8 @@ describe("embedded Rakazo LocalRuntime", () => {
 
     const dataDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-lite-"));
     temps.push(dataDir);
-    const migrationsDir = path.resolve(process.cwd(), "packages/db/prisma/migrations");
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+    const migrationsDir = path.join(repoRoot, "packages/db/prisma/migrations");
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAuth = process.env.BETTER_AUTH_SECRET;
     delete process.env.DATABASE_URL;
