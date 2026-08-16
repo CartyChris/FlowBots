@@ -5,21 +5,44 @@ async function replaceOnce(file, before, after) {
   const first = source.indexOf(before);
   const second = first < 0 ? -1 : source.indexOf(before, first + before.length);
   if (first < 0 || second >= 0) {
-    throw new Error(`Expected exactly one anchor in ${file}; first=${first}, second=${second}: ${before.slice(0, 120)}`);
+    throw new Error(
+      `Expected exactly one anchor in ${file}; first=${first}, second=${second}: ${before.slice(0, 120)}`,
+    );
   }
-  await writeFile(file, source.slice(0, first) + after + source.slice(first + before.length));
+  await writeFile(
+    file,
+    source.slice(0, first) + after + source.slice(first + before.length),
+  );
 }
+
+const dollar = "$";
+const currentArtifactExpectation =
+  '    expect(pkg.build?.artifactName).toBe(String.raw`FlowBots-\\' +
+  dollar +
+  '{version}-\\' +
+  dollar +
+  '{arch}.\\' +
+  dollar +
+  '{ext}`);';
+const correctedArtifactExpectation =
+  '    const dollar = "$";\n    expect(pkg.build?.artifactName).toBe(`FlowBots-' +
+  dollar +
+  '{dollar}{version}-' +
+  dollar +
+  '{dollar}{arch}.' +
+  dollar +
+  '{dollar}{ext}`);';
 
 await replaceOnce(
   "apps/desktop/src/product-branding.test.ts",
-  '    expect(pkg.build?.artifactName).toBe(String.raw`FlowBots-\\${version}-\\${arch}.\\${ext}`);',
-  '    const dollar = "$";\n    expect(pkg.build?.artifactName).toBe(`FlowBots-${dollar}{version}-${dollar}{arch}.${dollar}{ext}`);',
+  currentArtifactExpectation,
+  correctedArtifactExpectation,
 );
 
 await replaceOnce(
   "apps/local-runtime/src/index.ts",
-  '  if (!server || !server.listening) return Promise.resolve();',
-  '  if (!server?.listening) return Promise.resolve();',
+  "  if (!server || !server.listening) return Promise.resolve();",
+  "  if (!server?.listening) return Promise.resolve();",
 );
 
 await replaceOnce(
@@ -30,8 +53,8 @@ await replaceOnce(
 
 await replaceOnce(
   "packages/adapters/src/openhands.test.ts",
-  '      async (url: string, init?: RequestInit) =>',
-  '      async (_url: string, _init?: RequestInit) =>',
+  "      async (url: string, init?: RequestInit) =>",
+  "      async (_url: string, _init?: RequestInit) =>",
 );
 
 await replaceOnce(
@@ -67,7 +90,7 @@ await replaceOnce(
 await replaceOnce(
   "packages/adapters/src/prime-agent.ts",
   `function noValue(): void {\n  return undefined;\n}`,
-  `function noValue(): void {}`,
+  "function noValue(): void {}",
 );
 
 console.log("Guarded release lint cleanup applied.");
