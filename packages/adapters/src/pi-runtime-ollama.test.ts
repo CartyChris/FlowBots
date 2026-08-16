@@ -16,10 +16,10 @@ describe("Pi runtime Ollama routing", () => {
     });
   });
 
-  it("the live Pi runtime registers Ollama and selects the configured runtime model", async () => {
+  it("the live Pi runtime selects Ollama and routes it through the configured public stream helper", async () => {
     const source = await readFile(path.join(import.meta.dirname, "pi-runtime.ts"), "utf8");
-    expect(source).toContain("ollamaProvider(ollamaBaseUrl())");
     expect(source).toContain("ollamaRuntimeModel(modelId)");
+    expect(source).toContain("ollamaStreamSimple(model as never, context, options)");
     expect(source).toMatch(/provider === OLLAMA_PROVIDER_ID/);
     expect(source).toMatch(/provider === OLLAMA_PROVIDER_ID\s*\?\s*"ollama"/s);
   });
