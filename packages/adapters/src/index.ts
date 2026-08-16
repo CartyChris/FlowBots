@@ -22,6 +22,7 @@ export * from "./job-reconciler.js";
 export * from "./mcp-client.js";
 export * from "./mcp-emulator.js";
 export * from "./ollama-provider.js";
+export * from "./ollama-runtime.js";
 export * from "./pi-models.js";
 export * from "./pi-oauth.js";
 export * from "./pi-runtime.js";
