@@ -32,6 +32,15 @@ describe("desktop Connection Center", () => {
     expect(html).toContain("Offline");
   });
 
+  it("polls only the restricted connection bridge for live health state", () => {
+    const html = recoveryPageHtml(baseModel);
+    expect(html).toContain("bridge.status()");
+    expect(html).toContain("web-status");
+    expect(html).toContain("api-status");
+    expect(html).toContain("setInterval(refreshStatus");
+    expect(html).not.toContain("fetch(");
+  });
+
   it("escapes every user-controlled value before inserting it into HTML", () => {
     const payload = "<script>alert(1)</script>";
     const html = recoveryPageHtml({
