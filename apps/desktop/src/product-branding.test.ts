@@ -20,12 +20,17 @@ describe("FlowBots product branding", () => {
     expect(pkg.build?.artifactName).toBe("FlowBots-${version}-${arch}.${ext}");
   });
 
-  test("desktop runtime launcher presents FlowBots to the user", async () => {
+  test("desktop runtime launcher and host-boundary errors present FlowBots to the user", async () => {
     const runtime = await text("apps/desktop/src/runtime-profile.ts");
+    const main = await text("apps/desktop/src/main.ts");
     expect(runtime).toContain("<title>Choose how FlowBots runs</title>");
     expect(runtime).toContain('<div class="eyebrow">FlowBots Runtime</div>');
     expect(runtime).toContain("<h1>How should FlowBots run?</h1>");
     expect(runtime).toContain("trusted FlowBots server");
+    expect(main).toContain("FlowBots's local runtime launcher");
+    expect(main).toContain("loopback FlowBots runtime");
+    expect(main).toContain("FlowBots terminal service is unavailable");
+    expect(main).toContain("this FlowBots window");
   });
 
   test("web welcome, document metadata, and install manifest all present FlowBots", async () => {
