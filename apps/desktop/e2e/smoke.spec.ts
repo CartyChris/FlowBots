@@ -8,7 +8,7 @@ test("launches the runtime chooser with a narrow preload bridge and an isolated 
     // chrome-sandbox helper as root. Disable the process sandbox only for this
     // Linux CI launch; FlowBots' BrowserWindow sandbox configuration is still
     // asserted below and production/macOS launches do not use this flag.
-    args: [".", "--no-sandbox"],
+    args: ["--no-sandbox", "."],
     cwd: path.resolve(import.meta.dirname, ".."),
     env: { ...process.env },
   });
