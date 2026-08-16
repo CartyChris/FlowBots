@@ -73,6 +73,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.4
+        version: 0.5.5
       '@rakazo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
