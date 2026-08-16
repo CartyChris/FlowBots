@@ -76,6 +76,9 @@ importers:
       '@rakazo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@rakazo/local-runtime':
+        specifier: workspace:*
+        version: link:../local-runtime
     devDependencies:
       '@playwright/test':
         specifier: ^1.55.0
