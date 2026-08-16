@@ -32,6 +32,21 @@ describe("desktop Connection Center", () => {
     expect(html).toContain("Offline");
   });
 
+  it("renders neutral copy when opened manually as connection settings", () => {
+    const html = recoveryPageHtml({
+      ...baseModel,
+      mode: "settings",
+      error: "",
+      webStatus: "online",
+      apiStatus: "online",
+    });
+
+    expect(html).toContain("Choose the local or remote Rakazo deployment");
+    expect(html).toContain("Connection settings");
+    expect(html).not.toContain("is not available yet");
+    expect(html).not.toContain("Auto-reconnect active");
+  });
+
   it("polls only the restricted connection bridge for live health state", () => {
     const html = recoveryPageHtml(baseModel);
     expect(html).toContain("bridge.status()");
