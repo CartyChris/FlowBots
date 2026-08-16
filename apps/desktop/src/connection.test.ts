@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defaultWebUrl, localApiHealthUrl, normalizeWebUrl, rememberWebUrl } from "./connection.js";
+import {
+  defaultWebUrl,
+  isTrustedConnectionCenterDocument,
+  localApiHealthUrl,
+  normalizeWebUrl,
+  rememberWebUrl,
+} from "./connection.js";
 
 describe("desktop connection profiles", () => {
   it("normalizes supported web URLs", () => {
@@ -59,5 +65,19 @@ describe("desktop connection profiles", () => {
     expect(localApiHealthUrl("http://127.0.0.1:5173")).toBe("http://127.0.0.1:3100/health");
     expect(localApiHealthUrl("http://localhost:5173/foo")).toBe("http://127.0.0.1:3100/health");
     expect(localApiHealthUrl("https://rakazo.example")).toBeUndefined();
+  });
+
+  it("trusts connection controls only from the exact generated Connection Center document", () => {
+    const expected = "data:text/html;charset=utf-8,%3Chtml%3Erecovery-a%3C%2Fhtml%3E";
+
+    expect(isTrustedConnectionCenterDocument(expected, expected)).toBe(true);
+    expect(isTrustedConnectionCenterDocument("https://rakazo.example", expected)).toBe(false);
+    expect(
+      isTrustedConnectionCenterDocument(
+        "data:text/html;charset=utf-8,%3Chtml%3Eattacker%3C%2Fhtml%3E",
+        expected,
+      ),
+    ).toBe(false);
+    expect(isTrustedConnectionCenterDocument(expected, "")).toBe(false);
   });
 });
