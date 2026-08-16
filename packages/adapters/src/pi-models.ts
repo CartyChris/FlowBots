@@ -1,4 +1,5 @@
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { externalCatalogEntries } from "./external-models.js";
 import { DEVICE_CODE_PROVIDERS, DEVICE_CODE_SIGN_IN, isDeviceCodeProvider } from "./pi-oauth.js";
 
 export type PiCatalogAuth = "api-key" | "oauth" | "both";
@@ -17,7 +18,7 @@ export type PiCatalogEntry = {
 };
 
 export function listPiCatalog(): PiCatalogEntry[] {
-  cachedCatalog ??= buildPiCatalog();
+  cachedCatalog ??= [...buildPiCatalog(), ...externalCatalogEntries()];
   return cachedCatalog;
 }
 
@@ -64,12 +65,12 @@ function catalogBilling(
   const device = DEVICE_CODE_PROVIDERS[providerId];
   if (device) return device.billing;
   if (opts.oauth && !opts.apiKey) {
-    return `${name} subscription login is not in the Rakazo UI yet. Skip if this deployment already has credentials.`;
+    return `${name} subscription login is not in the FlowBots UI yet. Skip if this deployment already has credentials.`;
   }
   if (opts.apiKey) {
-    return `Uses your ${name} API key. Rakazo does not pay for model usage.`;
+    return `Uses your ${name} API key. FlowBots does not pay for model usage.`;
   }
-  return `Uses your ${name} key. Rakazo does not pay for model usage.`;
+  return `Uses your ${name} key. FlowBots does not pay for model usage.`;
 }
 
 export const scriptedCatalogEntry: PiCatalogEntry = {
