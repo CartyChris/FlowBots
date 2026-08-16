@@ -18,6 +18,9 @@ export interface StartLocalRuntimeOptions {
   openRouterKey?: string;
   defaultProvider?: string;
   defaultModel?: string;
+  mnemosyneMode?: "auto" | "off" | "required";
+  mnemosyneCommand?: string;
+  mnemosyneTimeoutMs?: number;
 }
 
 export interface LocalRuntimeHandle {
@@ -109,6 +112,9 @@ export async function startLocalRuntime(
       defaultProvider: options.defaultProvider ?? "openrouter",
       defaultModel: options.defaultModel ?? "deepseek/deepseek-v4-flash-0731",
       wakeupDriver: "memory",
+      mnemosyneMode: options.mnemosyneMode ?? "auto",
+      mnemosyneCommand: options.mnemosyneCommand ?? process.env.MNEMOSYNE_COMMAND ?? "mnemosyne",
+      mnemosyneTimeoutMs: options.mnemosyneTimeoutMs ?? 5000,
       port: httpPort,
     });
 
@@ -218,7 +224,8 @@ function createWebFallback(
     if (!isInside(root, candidate)) return apiResponse;
 
     const direct = await regularFile(candidate);
-    if (direct) return fileResponse(direct, request.method === "HEAD", decoded.startsWith("/assets/"));
+    if (direct)
+      return fileResponse(direct, request.method === "HEAD", decoded.startsWith("/assets/"));
 
     // Missing asset-like paths should remain honest 404s. Only application routes fall
     // back to index.html so client-side routing works.
