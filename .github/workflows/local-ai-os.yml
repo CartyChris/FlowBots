@@ -1,7 +1,7 @@
 name: local-ai-os
 on:
   push:
-    branches: [feature/rakazo-local-ai-os]
+    branches: [main, feature/rakazo-local-ai-os]
   workflow_dispatch:
 
 permissions:
