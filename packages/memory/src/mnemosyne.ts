@@ -31,7 +31,6 @@ export interface CanonicalMemoryDocument {
 interface MnemosyneManifest {
   schema: 1;
   fingerprint: string;
-  mnemosyneVersion: string;
 }
 
 interface MnemosyneRecallResult {
@@ -184,16 +183,9 @@ export class MnemosyneSemanticIndex {
     signal?: AbortSignal,
   ): Promise<void> {
     await mkdir(dataDir, { recursive: true });
-    const version = await this.mnemosyneVersion(dataDir, signal);
     const fingerprint = memoryFingerprint(documents);
     const manifest = await readManifest(path.join(dataDir, ".rakazo-index.json"));
-    if (
-      manifest?.schema === 1 &&
-      manifest.fingerprint === fingerprint &&
-      manifest.mnemosyneVersion === version
-    ) {
-      return;
-    }
+    if (manifest?.schema === 1 && manifest.fingerprint === fingerprint) return;
 
     await rm(dataDir, { recursive: true, force: true });
     await mkdir(dataDir, { recursive: true });
@@ -208,15 +200,7 @@ export class MnemosyneSemanticIndex {
     await writeManifest(path.join(dataDir, ".rakazo-index.json"), {
       schema: 1,
       fingerprint,
-      mnemosyneVersion: version,
     });
-  }
-
-  private async mnemosyneVersion(dataDir: string, signal?: AbortSignal): Promise<string> {
-    const response = await this.run(["--version"], dataDir, signal);
-    const match = /Mnemosyne\s+([^\s]+)/i.exec(response.stdout.trim());
-    if (!match?.[1]) throw new Error("Mnemosyne returned an unreadable version string");
-    return match[1];
   }
 
   private run(args: string[], dataDir: string, signal?: AbortSignal) {
@@ -308,13 +292,7 @@ function parseRecallPayload(raw: string): MnemosyneRecallResult[] {
 async function readManifest(file: string): Promise<MnemosyneManifest | undefined> {
   try {
     const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<MnemosyneManifest>;
-    if (
-      parsed.schema !== 1 ||
-      typeof parsed.fingerprint !== "string" ||
-      typeof parsed.mnemosyneVersion !== "string"
-    ) {
-      return undefined;
-    }
+    if (parsed.schema !== 1 || typeof parsed.fingerprint !== "string") return undefined;
     return parsed as MnemosyneManifest;
   } catch {
     return undefined;
