@@ -1,4 +1,4 @@
-export type ResearchRoute = "default" | "research";
+export type ResearchRoute = "default" | "research" | "orchestration";
 
 export type RouteCredential = {
   id: string;
@@ -6,6 +6,15 @@ export type RouteCredential = {
   defaultModel: string | null;
   isDefault: boolean;
 };
+
+const ORCHESTRATION_PATTERNS = [
+  /\bg0dm0d3\b/i,
+  /\bgodmod3\b/i,
+  /\bultraplinian\b/i,
+  /\bconsortium\b/i,
+  /\bmulti[- ]model (?:research|analysis|orchestration|synthesis)\b/i,
+  /\bhive mind\b/i,
+];
 
 const RESEARCH_PATTERNS = [
   /\bcyber\s*security\b/i,
@@ -25,9 +34,11 @@ const RESEARCH_PATTERNS = [
   /\buncensored (?:model|mode)\b/i,
 ];
 
-const RESEARCH_PROVIDER_PRIORITY = ["g0dm0d3", "venice"] as const;
+const TOOL_FIRST_RESEARCH_PRIORITY = ["venice", "g0dm0d3"] as const;
+const ORCHESTRATION_PRIORITY = ["g0dm0d3", "venice"] as const;
 
 export function classifyResearchRoute(prompt: string): ResearchRoute {
+  if (ORCHESTRATION_PATTERNS.some((pattern) => pattern.test(prompt))) return "orchestration";
   return RESEARCH_PATTERNS.some((pattern) => pattern.test(prompt)) ? "research" : "default";
 }
 
@@ -37,10 +48,13 @@ export function orderedResearchCredentials<T extends RouteCredential>(
 ): T[] {
   const fallback = credentials.find((credential) => credential.isDefault) ?? credentials[0];
   if (!fallback) return [];
-  if (classifyResearchRoute(prompt) === "default") return [fallback];
+
+  const route = classifyResearchRoute(prompt);
+  if (route === "default") return [fallback];
+  const priority = route === "orchestration" ? ORCHESTRATION_PRIORITY : TOOL_FIRST_RESEARCH_PRIORITY;
 
   const ordered: T[] = [];
-  for (const provider of RESEARCH_PROVIDER_PRIORITY) {
+  for (const provider of priority) {
     const credential = credentials.find((candidate) => candidate.provider === provider);
     if (credential) ordered.push(credential);
   }
