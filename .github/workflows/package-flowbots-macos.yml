@@ -83,14 +83,16 @@ jobs:
           app_archs="$(lipo -archs "$app/Contents/MacOS/FlowBots")"
           [[ "$app_archs" == *x86_64* ]]
           [[ "$app_archs" == *arm64* ]]
-          arm64_pty="$(file "$pty_root/darwin-arm64/pty.node")"
-          x64_pty="$(file "$pty_root/darwin-x64/pty.node")"
-          echo "$arm64_pty"
-          echo "$x64_pty"
-          [[ "$arm64_pty" == *arm64* ]]
-          [[ "$arm64_pty" != *x86_64* ]]
-          [[ "$x64_pty" == *x86_64* ]]
-          [[ "$x64_pty" != *arm64* ]]
+          for binary in pty.node spawn-helper; do
+            arm64_info="$(file "$pty_root/darwin-arm64/$binary")"
+            x64_info="$(file "$pty_root/darwin-x64/$binary")"
+            echo "$arm64_info"
+            echo "$x64_info"
+            [[ "$arm64_info" == *arm64* ]]
+            [[ "$arm64_info" != *x86_64* ]]
+            [[ "$x64_info" == *x86_64* ]]
+            [[ "$x64_info" != *arm64* ]]
+          done
           test -s "$dmg"
           shasum -a 256 "$dmg"
       - name: Upload FlowBots DMG
