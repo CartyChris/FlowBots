@@ -33,3 +33,4 @@ jobs:
       - run: pnpm --filter @rakazo/memory test -- brain-folders.test.ts
       - run: pnpm --filter @rakazo/local-runtime test
       - run: pnpm --filter @rakazo/desktop test -- runtime-profile.test.ts
+      - run: pnpm --filter @rakazo/desktop check
