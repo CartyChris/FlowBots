@@ -1,3 +1,4 @@
+export * from "./activity.js";
 export * from "./ai-os-kernel.js";
 export * from "./async.js";
 export * from "./cron.js";
