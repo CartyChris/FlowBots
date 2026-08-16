@@ -14,6 +14,7 @@ describe("FlowBots external model providers", () => {
     expect(entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ provider: "venice", id: "venice-uncensored" }),
+        expect.objectContaining({ provider: "venice", id: "venice-uncensored-1-2" }),
         expect.objectContaining({ provider: "g0dm0d3", id: "ultraplinian/fast" }),
         expect.objectContaining({ provider: "g0dm0d3", id: "consortium/fast" }),
       ]),
@@ -26,12 +27,20 @@ describe("FlowBots external model providers", () => {
     expect(JSON.stringify(entries)).not.toMatch(/(?:sk-|g0d_)[A-Za-z0-9_-]{8,}/);
   });
 
-  test("Venice runtime model uses the official OpenAI-compatible API", () => {
+  test("Venice runtime models use the official OpenAI-compatible API and current context sizes", () => {
     expect(externalRuntimeModel("venice", "venice-uncensored")).toMatchObject({
       provider: "venice",
       id: "venice-uncensored",
       api: "openai-completions",
       baseUrl: "https://api.venice.ai/api/v1",
+      contextWindow: 32_768,
+    });
+    expect(externalRuntimeModel("venice", "venice-uncensored-1-2")).toMatchObject({
+      provider: "venice",
+      id: "venice-uncensored-1-2",
+      api: "openai-completions",
+      baseUrl: "https://api.venice.ai/api/v1",
+      contextWindow: 128_000,
     });
   });
 
