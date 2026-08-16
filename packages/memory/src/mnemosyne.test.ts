@@ -107,7 +107,9 @@ describe("Mnemosyne semantic memory index", () => {
     expect(calls.every((call) => call.timeoutMs === 3210)).toBe(true);
     const dirs = new Set(calls.map((call) => call.dataDir).filter(Boolean));
     expect(dirs.size).toBe(1);
-    const [dataDir] = [...dirs] as string[];
+    const dataDir = [...dirs][0];
+    expect(dataDir).toBeDefined();
+    if (!dataDir) throw new Error("expected exactly one Mnemosyne data directory");
     expect(dataDir).toContain(rootDir);
     expect(dataDir).not.toContain(context().workspaceId);
     expect(dataDir).not.toContain(context().userId);
