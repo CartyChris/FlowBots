@@ -18,7 +18,7 @@ describe("desktop Connection Center", () => {
     for (const label of [
       "Connection Center",
       "Retry",
-      "Save & Connect",
+      "Save &amp; Connect",
       "Reset to Local",
       "Copy Diagnostics",
       "https://rakazo.example",
