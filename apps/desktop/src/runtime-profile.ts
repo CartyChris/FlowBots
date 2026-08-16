@@ -131,7 +131,7 @@ ${safeError ? `<div class="error" role="alert">${safeError}</div>` : ""}
 <form class="remote" id="remote-form"><input id="remote-url" type="url" required placeholder="https://app.example.com" aria-label="Remote Rakazo server URL"/><button type="submit">Connect</button></form>
 <div class="hint">Lite keeps your database and agent workspace local. Full Local and Remote never silently fall back to Lite.</div>
 </main><script>
-const invoke=(profile)=>window.rakazoDesktop?.chooseRuntime?.(profile);
+const invoke=(profile)=>window.rakazoDesktop?.runtime?.choose?.(profile);
 document.querySelector('[data-runtime-mode="lite"]').addEventListener('click',()=>invoke({mode:'lite'}));
 document.querySelector('[data-runtime-mode="full-local"]').addEventListener('click',()=>invoke({mode:'full-local'}));
 document.querySelector('[data-runtime-mode="remote"]').addEventListener('click',()=>{document.getElementById('remote-form').classList.add('active');document.getElementById('remote-url').focus();});
