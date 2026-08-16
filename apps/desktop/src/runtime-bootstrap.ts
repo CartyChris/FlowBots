@@ -39,3 +39,15 @@ export function launcherDocumentUrl(error = ""): string {
 export function trustedRuntimeSender(senderUrl: string | undefined, launcherUrl: string): boolean {
   return Boolean(senderUrl && senderUrl === launcherUrl);
 }
+
+export function trustedTerminalSender(senderUrl: string | undefined): boolean {
+  if (!senderUrl) return false;
+  try {
+    const parsed = new URL(senderUrl);
+    if (parsed.protocol !== "http:") return false;
+    if (parsed.username || parsed.password) return false;
+    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
