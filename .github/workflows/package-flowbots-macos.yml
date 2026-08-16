@@ -2,7 +2,7 @@ name: FlowBots macOS package
 
 on:
   push:
-    branches: [feature/rakazo-local-ai-os]
+    branches: [main, feature/rakazo-local-ai-os]
     paths:
       - ".github/workflows/package-flowbots-macos.yml"
       - "apps/desktop/**"
@@ -34,6 +34,7 @@ jobs:
       - run: pnpm db:generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5433/rakazo
+      - run: pnpm --filter @rakazo/memory test
       - run: pnpm --filter @rakazo/desktop test
       - run: pnpm --filter @rakazo/desktop check
       - run: pnpm --filter @rakazo/local-runtime test
@@ -121,9 +122,9 @@ jobs:
             echo "FlowBots exited during startup smoke test" >&2
             exit 1
           fi
-          if grep -E "ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING|Uncaught Exception|A JavaScript error occurred in the main process" "$launch_log"; then
+          if grep -E "ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING|Uncaught Exception|A JavaScript error occurred in the main process|Mnemosyne memory is required" "$launch_log"; then
             cat "$launch_log"
-            echo "FlowBots emitted a fatal main-process startup error" >&2
+            echo "FlowBots emitted a fatal main-process or required-memory startup error" >&2
             exit 1
           fi
           echo "FlowBots remained alive through the packaged startup smoke test."
