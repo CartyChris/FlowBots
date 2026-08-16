@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -112,6 +112,9 @@ describe("Mnemosyne semantic memory index", () => {
     expect(dataDir).not.toContain(context().workspaceId);
     expect(dataDir).not.toContain(context().userId);
     expect(dataDir).not.toContain(context().botId!);
+    if (process.platform !== "win32") {
+      expect((await stat(dataDir)).mode & 0o777).toBe(0o700);
+    }
 
     await index.search(
       { query: "testing preference", scope: "bot", botId: context().botId, documents: docs },
@@ -134,6 +137,26 @@ describe("Mnemosyne semantic memory index", () => {
     expect(manifest).toMatchObject({ schema: 1, fingerprint: expect.any(String) });
     expect(manifest).not.toHaveProperty("documents");
     expect(manifest).not.toHaveProperty("mnemosyneVersion");
+  });
+
+  test("bot scope requires an isolated concrete bot identity before launching Mnemosyne", async () => {
+    let calls = 0;
+    const runner: MnemosyneCommandRunner = {
+      async run() {
+        calls += 1;
+        return { stdout: JSON.stringify({ results: [] }), stderr: "" };
+      },
+    };
+    const index = new MnemosyneSemanticIndex({
+      rootDir: path.join(os.tmpdir(), "unused-mnemosyne-bot-scope"),
+      runner,
+      mode: "required",
+    });
+    const noBotContext = { ...context(), botId: undefined };
+    await expect(
+      index.search({ query: "x", scope: "bot", documents: docs }, noBotContext),
+    ).rejects.toThrow(/bot.*identity/i);
+    expect(calls).toBe(0);
   });
 
   test("auto mode fails open while required mode surfaces an unavailable CLI", async () => {
