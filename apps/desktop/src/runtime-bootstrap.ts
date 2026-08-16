@@ -40,14 +40,23 @@ export function trustedRuntimeSender(senderUrl: string | undefined, launcherUrl:
   return Boolean(senderUrl && senderUrl === launcherUrl);
 }
 
-export function trustedTerminalSender(senderUrl: string | undefined): boolean {
-  if (!senderUrl) return false;
+export function trustedTerminalSender(
+  senderUrl: string | undefined,
+  activeRuntimeOrigin: string | undefined,
+): boolean {
+  if (!senderUrl || !activeRuntimeOrigin) return false;
   try {
-    const parsed = new URL(senderUrl);
-    if (parsed.protocol !== "http:") return false;
-    if (parsed.username || parsed.password) return false;
-    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]";
+    const sender = new URL(senderUrl);
+    const active = new URL(activeRuntimeOrigin);
+    if (sender.protocol !== "http:" || active.protocol !== "http:") return false;
+    if (sender.username || sender.password || active.username || active.password) return false;
+    if (!isLoopbackHost(active.hostname)) return false;
+    return sender.origin === active.origin;
   } catch {
     return false;
   }
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]";
 }
