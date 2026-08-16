@@ -14,7 +14,6 @@ contextBridge.exposeInMainWorld("rakazoDesktop", {
     reset: () => ipcRenderer.invoke("desktop.connection.reset"),
     useRecent: (url) => ipcRenderer.invoke("desktop.connection.useRecent", url),
     copyDiagnostics: () => ipcRenderer.invoke("desktop.connection.copyDiagnostics"),
-    open: () => ipcRenderer.invoke("desktop.connection.open"),
     status: () => ipcRenderer.invoke("desktop.connection.status"),
   },
 });
