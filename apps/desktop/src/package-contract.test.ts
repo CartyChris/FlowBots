@@ -29,12 +29,12 @@ describe("FlowBots macOS package contract", () => {
     expect(pkg.build?.dmg?.title).toBe("FlowBots");
   });
 
-  test("universal merge skips lipo only for node-pty's two packaged macOS prebuilds", async () => {
+  test("universal merge skips lipo only inside node-pty's architecture-labeled macOS prebuild slices", async () => {
     const pkg = JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as {
       build?: { mac?: { x64ArchFiles?: string } };
     };
     expect(pkg.build?.mac?.x64ArchFiles).toBe(
-      "**/node-pty/prebuilds/darwin-{arm64,x64}/pty.node",
+      "**/node-pty/prebuilds/darwin-{arm64,x64}/**",
     );
   });
 });
