@@ -1,3 +1,4 @@
+export * from "./activity-bus.js";
 export * from "./artifacts.js";
 export * from "./background-job-handlers.js";
 export * from "./builtin-tools.js";
