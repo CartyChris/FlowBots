@@ -5,7 +5,9 @@ on:
     paths:
       - "apps/local-runtime/package.json"
       - "apps/api/package.json"
+      - "apps/desktop/package.json"
       - "pnpm-lock.yaml"
+      - ".github/workflows/refresh-local-ai-os-lock.yml"
   workflow_dispatch:
 
 permissions:
