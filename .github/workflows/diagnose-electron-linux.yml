@@ -31,8 +31,10 @@ jobs:
         run: |
           set -uo pipefail
           logfile="$(mktemp)"
+          set +e
           xvfb-run --auto-servernum timeout 8s pnpm --filter @rakazo/desktop exec electron . >"$logfile" 2>&1
           status=$?
+          set -e
           cat "$logfile"
           echo "electron_status=$status"
           rm -f "$logfile"
