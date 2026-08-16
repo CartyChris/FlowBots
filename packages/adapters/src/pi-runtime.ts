@@ -10,6 +10,13 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import {
+  externalRuntimeModel,
+  externalStreamSimple,
+  G0DM0D3_PROVIDER_ID,
+  providerEnvironmentApiKey,
+  VENICE_PROVIDER_ID,
+} from "./external-models.js";
 import { OLLAMA_PROVIDER_ID, ollamaStreamSimple } from "./ollama-provider.js";
 import { ollamaRuntimeModel } from "./ollama-runtime.js";
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
@@ -53,9 +60,10 @@ export class PiAgentRuntime implements AgentRuntime {
             : request.model.id;
         const models = modelsForRequest(request, provider);
         const model =
-          provider === OLLAMA_PROVIDER_ID
+          externalRuntimeModel(provider, modelId) ??
+          (provider === OLLAMA_PROVIDER_ID
             ? ollamaRuntimeModel(modelId)
-            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId));
+            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId)));
         if (!model) {
           queue.push({ type: "text", text: `Unknown model ${provider}/${modelId}` });
           queue.push({ type: "done" });
@@ -67,7 +75,7 @@ export class PiAgentRuntime implements AgentRuntime {
             ? "ollama"
             : request.model.oauth
               ? undefined
-              : (request.model.apiKey ?? process.env.OPENROUTER_API_KEY);
+              : (request.model.apiKey ?? providerEnvironmentApiKey(provider));
         const toolDefs = request.tools.length ? request.tools : builtinAgentTools;
         const nestedAgents = new Set<Agent>();
         const host: ToolHost = {
@@ -177,9 +185,13 @@ export class PiAgentRuntime implements AgentRuntime {
 }
 
 function streamModel(models: Models, model: Model<Api>, context: Parameters<Models["streamSimple"]>[1], options: Parameters<Models["streamSimple"]>[2]) {
-  return model.provider === OLLAMA_PROVIDER_ID
-    ? ollamaStreamSimple(model as never, context, options)
-    : models.streamSimple(model, context, options);
+  if (model.provider === OLLAMA_PROVIDER_ID) {
+    return ollamaStreamSimple(model as never, context, options);
+  }
+  if (model.provider === VENICE_PROVIDER_ID || model.provider === G0DM0D3_PROVIDER_ID) {
+    return externalStreamSimple(model as never, context, options);
+  }
+  return models.streamSimple(model, context, options);
 }
 
 function modelsForRequest(request: AgentRunRequest, provider: string): Models {

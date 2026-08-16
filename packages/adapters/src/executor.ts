@@ -40,6 +40,8 @@ import {
   secretValuesToRedact,
   serializeModelSecret,
 } from "./pi-oauth.js";
+import { G0DM0D3_PROVIDER_ID, isG0dm0d3Reachable } from "./external-models.js";
+import { orderedResearchCredentials, type RouteCredential } from "./research-routing.js";
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 
@@ -84,6 +86,18 @@ export async function deferFutureRoutine(
   if (scheduledAt.getTime() <= Date.now() + 1_000) return false;
   await jobs.enqueue(routineWakeupJob(routineId, scheduledAt));
   return true;
+}
+
+async function selectRunModelCredential<T extends RouteCredential>(
+  prompt: string,
+  credentials: readonly T[],
+): Promise<T | undefined> {
+  const ordered = orderedResearchCredentials(prompt, credentials);
+  for (const credential of ordered) {
+    if (credential.provider !== G0DM0D3_PROVIDER_ID) return credential;
+    if (await isG0dm0d3Reachable()) return credential;
+  }
+  return ordered.at(-1);
 }
 
 export function createRunExecutor(deps: ExecutorDeps) {
@@ -204,7 +218,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       heartbeat.unref?.();
 
       try {
-        const [bot, thread, messages, task, connectedPlugins, credential, settings] =
+        const [bot, thread, messages, task, connectedPlugins, credentials, settings] =
           await Promise.all([
             deps.prisma.bot.findUniqueOrThrow({ where: { id: run.botId } }),
             deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } }),
@@ -219,8 +233,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               where: { userId: run.userId, workspaceId: run.workspaceId, status: "connected" },
               select: { provider: true, displayName: true },
             }),
-            deps.prisma.userModelCredential.findFirst({
-              where: { userId: run.userId, workspaceId: run.workspaceId, isDefault: true },
+            deps.prisma.userModelCredential.findMany({
+              where: { userId: run.userId, workspaceId: run.workspaceId },
+              orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
             }),
             deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
           ]);
@@ -252,6 +267,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             | "system",
           content: blocksToText(m.blocks as MessageBlock[]),
         }));
+        const credential = await selectRunModelCredential(task.prompt, credentials);
+        const selectedModelProvider =
+          credential?.provider ?? settings?.defaultModelProvider ?? "scripted";
+        const selectedModelId = credential?.defaultModel ?? settings?.defaultModelId ?? "scripted";
+        await deps.prisma.run.updateMany({
+          where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
+          data: { modelProvider: selectedModelProvider, modelId: selectedModelId },
+        });
         const resolved = await resolveModelKey(deps, run.userId, run.workspaceId, credential);
         const runSecrets = [...deps.secrets, ...resolved.redact];
         const computer = await ensureComputer(deps, bot.id, context);
@@ -573,8 +596,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               history,
               tools,
               model: {
-                provider: credential?.provider ?? settings?.defaultModelProvider ?? "scripted",
-                id: credential?.defaultModel ?? settings?.defaultModelId ?? "scripted",
+                provider: selectedModelProvider,
+                id: selectedModelId,
                 apiKey: resolved.oauth ? undefined : resolved.apiKey,
                 oauth: resolved.oauth
                   ? { credential: resolved.oauth, persist: resolved.persistOAuth }
