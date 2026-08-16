@@ -13,11 +13,7 @@ describe("desktop connection health", () => {
       apiStatus: "online",
     });
     expect(fetcher).toHaveBeenNthCalledWith(1, "http://127.0.0.1:5173", expect.any(Object));
-    expect(fetcher).toHaveBeenNthCalledWith(
-      2,
-      "http://127.0.0.1:3100/health",
-      expect.any(Object),
-    );
+    expect(fetcher).toHaveBeenNthCalledWith(2, "http://127.0.0.1:3100/health", expect.any(Object));
   });
 
   it("does not guess an API port for remote deployments", async () => {
