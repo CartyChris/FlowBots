@@ -82,6 +82,12 @@ export function providerEnvironmentApiKey(
   return source.OPENROUTER_API_KEY?.trim() || undefined;
 }
 
+export function providerHistoryLimit(provider: string): number | undefined {
+  // G0DM0D3 currently rejects requests above 100 messages. Reserve four slots
+  // for the system prompt, current user turn, and provider/agent bookkeeping.
+  return provider === G0DM0D3_PROVIDER_ID ? 96 : undefined;
+}
+
 export function g0dm0d3BaseUrl(source: NodeJS.ProcessEnv = process.env): string {
   const raw = source.GODMODE_BASE_URL?.trim() || G0DM0D3_DEFAULT_BASE_URL;
   let url: URL;
