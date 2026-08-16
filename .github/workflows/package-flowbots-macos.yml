@@ -67,11 +67,23 @@ jobs:
           mount_point="$(mktemp -d)"
           launch_log="$(mktemp)"
           app_pid=""
-          cleanup() {
-            if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
-              kill "$app_pid" 2>/dev/null || true
-              wait "$app_pid" 2>/dev/null || true
+          stop_app() {
+            if [[ -z "$app_pid" ]] || ! kill -0 "$app_pid" 2>/dev/null; then
+              return
             fi
+            kill "$app_pid" 2>/dev/null || true
+            for _ in {1..10}; do
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                wait "$app_pid" 2>/dev/null || true
+                return
+              fi
+              sleep 0.5
+            done
+            kill -9 "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          cleanup() {
+            stop_app
             hdiutil detach "$mount_point" -quiet || true
             rm -f "$launch_log"
             rmdir "$mount_point" 2>/dev/null || true
@@ -115,6 +127,8 @@ jobs:
             exit 1
           fi
           echo "FlowBots remained alive through the packaged startup smoke test."
+          stop_app
+          app_pid=""
 
           test -s "$dmg"
           shasum -a 256 "$dmg"
