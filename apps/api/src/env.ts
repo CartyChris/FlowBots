@@ -32,7 +32,8 @@ export function loadEnv(
   const authSecret = overrides.authSecret ?? resolveAuthSecret(source);
   return {
     databaseUrl,
-    realtimeDatabaseUrl: overrides.realtimeDatabaseUrl ?? source.REALTIME_DATABASE_URL ?? databaseUrl,
+    realtimeDatabaseUrl:
+      overrides.realtimeDatabaseUrl ?? source.REALTIME_DATABASE_URL ?? databaseUrl,
     authSecret,
     authUrl:
       overrides.authUrl ?? source.BETTER_AUTH_URL ?? source.WEB_ORIGIN ?? "http://127.0.0.1:5173",

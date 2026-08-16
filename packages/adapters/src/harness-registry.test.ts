@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_CLI_AGENTS } from "./cli-agent.js";
 import {
-  HarnessRegistry,
   cliHarnessDefinitions,
   type HarnessDefinition,
+  HarnessRegistry,
 } from "./harness-registry.js";
 
 function definition(
@@ -61,7 +61,9 @@ describe("existing CLI bridge projection", () => {
   it("reuses every existing built-in CLI agent as a harness definition", () => {
     const probe = vi.fn(async () => ({ available: true as const }));
     const harnesses = cliHarnessDefinitions(probe);
-    expect(harnesses.map((harness) => harness.id)).toEqual(BUILTIN_CLI_AGENTS.map((agent) => agent.id));
+    expect(harnesses.map((harness) => harness.id)).toEqual(
+      BUILTIN_CLI_AGENTS.map((agent) => agent.id),
+    );
     for (const harness of harnesses) {
       expect(harness.kind).toBe("cli");
       expect(harness.outerVerificationRequired).toBe(true);

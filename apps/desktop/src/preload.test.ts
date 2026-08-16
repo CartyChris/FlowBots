@@ -22,7 +22,10 @@ describe("desktop preload bridge", () => {
       process: { platform: "linux" },
       require(moduleName: string) {
         if (moduleName !== "electron") throw new Error(`Unexpected preload import: ${moduleName}`);
-        return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke, on, removeListener } };
+        return {
+          contextBridge: { exposeInMainWorld },
+          ipcRenderer: { invoke, on, removeListener },
+        };
       },
     });
 
@@ -46,7 +49,12 @@ describe("desktop preload bridge", () => {
     ];
     expect(globalName).toBe("rakazoDesktop");
     expect(bridge.platform).toBe("linux");
-    expect(Object.keys(bridge.window).sort()).toEqual(["close", "minimize", "state", "toggleMaximize"]);
+    expect(Object.keys(bridge.window).sort()).toEqual([
+      "close",
+      "minimize",
+      "state",
+      "toggleMaximize",
+    ]);
     expect(Object.keys(bridge.runtime).sort()).toEqual(["choose", "showLauncher"]);
     expect(Object.keys(bridge.terminal).sort()).toEqual([
       "close",

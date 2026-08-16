@@ -10,27 +10,292 @@
     "Do not delete, weaken, or reinterpret criteria to make implementation easier."
   ],
   "features": [
-    {"id":"runtime-lite","priority":1,"title":"Zero-setup Lite runtime","criteria":["Packaged macOS app can start a persistent local Rakazo API without Docker, a separately installed PostgreSQL server, pnpm, or Terminal setup.","Lite /health reports the memory job driver and desktop computer provider.","A persisted record survives a full LocalRuntime stop/start cycle."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"runtime-modes","priority":1,"title":"Lite / Full Local / Remote modes","criteria":["First launch presents all three modes.","Choosing Full Local or Remote never silently starts Lite.","Mode/profile can be changed later through Connection Center."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"desktop-recovery","priority":1,"title":"No black-screen desktop failure","criteria":["Unreachable configured server shows an actionable recovery screen.","Healthy origin is loaded only after a health check.","Renderer remains context-isolated with nodeIntegration disabled."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"upstream-reconcile","priority":1,"title":"Preserve upstream reliability/security","criteria":["Feature branch contains current upstream foundation.","Fork persona/social/Ollama/desktop value is preserved without reverting upstream reliability/security fixes.","DB migration numbering is conflict-free."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"providers-any","priority":1,"title":"Any provider / any model escape hatch","criteria":["Provider catalog unions shipped, synced, and custom models.","Custom model IDs survive sync and are routable even when /models omits them.","Arbitrary OpenAI-compatible base URLs are supported without hardcoded provider allowlists."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"provider-subscriptions","priority":1,"title":"Supported subscription and OAuth routes","criteria":["Upstream Pi OAuth including openai-codex remains functional.","Claude Code/Codex/Kimi/OpenCode integrations invoke the user's authenticated CLI rather than copying private tokens.","Z.ai Coding Plan is routed only through supported coding-tool paths unless direct use is officially supported."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"cli-bridge","priority":1,"title":"Safe CLI agent bridge","criteria":["Claude Code, Codex, Kimi Code, OpenCode and custom/Prime Agent capability probes exist.","Process execution uses argv not implicit shell interpolation, has timeout/cancel/output caps, and captures stderr.","Missing binary and unsupported mode produce actionable errors."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"mcp-hub","priority":2,"title":"MCP stdio and Streamable HTTP","criteria":["stdio performs initialize -> initialized -> tools/list and calls a real test tool.","Streamable HTTP handles JSON and SSE replies and validates local security expectations.","All subprocess paths reap children; destructive tools default disabled."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"brain-folders","priority":1,"title":"Canonical Markdown Brain Folders","criteria":["User may attach multiple Markdown roots with per-root read/write policy.","Retrieval includes source path and heading.","Writes are proposed as diffs and traversal/symlink escape is rejected.","Frozen eval/safety roots cannot be configured agent-writable."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"personality","priority":1,"title":"Maximum agent personality/customization","criteria":["Agents retain name/title/color/persona and can set relationship role, traits, autonomy, skills/brain access, and role routing.","Personality affects stable agent instructions without weakening task verification or safety policy.","Existing Buzz/Lounge/social surfaces remain usable."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"hierarchy","priority":1,"title":"Hierarchical multi-agent orchestration","criteria":["Orchestrator can assign architect/manager/researcher/builder/reviewer/judge/verifier/specialist roles.","Different roles may use different enabled providers/models.","Role/model/tool selection and handoffs are visible in run events/traces."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"long-horizon","priority":1,"title":"Long-horizon completion harness","criteria":["Long task has immutable observable criteria, one current feature/stage, append-only progress and checkpoints.","Builder cannot mark its own feature passing.","Restart reconstructs current progress and avoids redoing accepted work."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"local-model-safety","priority":1,"title":"Local/small-model mutation gate","criteria":["Local worker edits are staged and cannot promote without external verification.","Failed check rolls back or rejects candidate.","Empty/invalid local response escalates or fails instead of being treated as success."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"verification","priority":1,"title":"Objective verifier owns pass state","criteria":["High judge score plus one runtime/acceptance failure results in failed feature.","Verifier evidence is stored with the transition.","Judge prose is at most a tiebreaker after objective checks."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"observability","priority":2,"title":"Hierarchical run observability","criteria":["Model and tool spans record parentage, duration, provider/model/role, usage/cost and errors.","Concurrent spans cannot corrupt parentage.","Circular/empty/context-drop/error-cascade heuristics each have positive and negative tests."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"budgets","priority":2,"title":"Token/cost/round guardrails","criteria":["Per-call/run/day budgets and call/round/subagent limits are enforceable pre-call.","Budget exhaustion yields partial/incomplete status, never false success.","CPCT includes abandoned spend."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"goldens","priority":2,"title":"Golden traces and functional evals","criteria":["Successful real run can be frozen as golden shape/totals/checks.","Comparison covers correctness/regressions before cost/tokens/calls/latency.","Best-of-N functional voting restores workspace state between candidates and does not use cached duplicate answers."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"feedback-growth","priority":2,"title":"Feedback-driven agent growth","criteria":["Thumb/note feedback is persisted and reused as compact standing guidance; corrections carry stronger weight than generic approval.","Accepted lessons/failures/remedies can be written to auditable brain Markdown.","General feedback prompts are rate-limited, optional, and user-disableable."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"self-improvement","priority":2,"title":"Safe self-improvement loop","criteria":["Proposed harness/prompt/routing improvement is evaluated on a copy/checkpoint against frozen evals.","Runtime agent cannot write frozen eval or safety gate files.","Losing experiment is not promoted and its measured result can be recorded to prevent blind retry."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"upgradeability","priority":2,"title":"Upgradeability and capability discovery","criteria":["Provider/model/CLI/MCP registries expose capability status rather than requiring central model allowlist edits.","New manual model ID can work without a Rakazo release.","One optional integration failure does not break app startup or other providers."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"ui","priority":2,"title":"Integrated Agentic Slack UI","criteria":["Runtime, Provider/Model, CLI, MCP, Brain, Agent Studio, Orchestration/Trace/Cost/Evals surfaces are reachable.","Chat/Buzz/Lounge remain first-class.","Disconnected/empty states are actionable and narrow-window/keyboard smoke passes."],"passes":false,"attempts":0,"lastNote":""},
-    {"id":"package-macos","priority":1,"title":"Verified universal macOS package","criteria":["Final reviewed commit passes required CI.","GitHub Actions produces universal macOS DMG.","DMG is tied to the reviewed final SHA and documented signing/notarization state is accurate."],"passes":false,"attempts":0,"lastNote":""}
+    {
+      "id": "runtime-lite",
+      "priority": 1,
+      "title": "Zero-setup Lite runtime",
+      "criteria": [
+        "Packaged macOS app can start a persistent local Rakazo API without Docker, a separately installed PostgreSQL server, pnpm, or Terminal setup.",
+        "Lite /health reports the memory job driver and desktop computer provider.",
+        "A persisted record survives a full LocalRuntime stop/start cycle."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "runtime-modes",
+      "priority": 1,
+      "title": "Lite / Full Local / Remote modes",
+      "criteria": [
+        "First launch presents all three modes.",
+        "Choosing Full Local or Remote never silently starts Lite.",
+        "Mode/profile can be changed later through Connection Center."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "desktop-recovery",
+      "priority": 1,
+      "title": "No black-screen desktop failure",
+      "criteria": [
+        "Unreachable configured server shows an actionable recovery screen.",
+        "Healthy origin is loaded only after a health check.",
+        "Renderer remains context-isolated with nodeIntegration disabled."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "upstream-reconcile",
+      "priority": 1,
+      "title": "Preserve upstream reliability/security",
+      "criteria": [
+        "Feature branch contains current upstream foundation.",
+        "Fork persona/social/Ollama/desktop value is preserved without reverting upstream reliability/security fixes.",
+        "DB migration numbering is conflict-free."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "providers-any",
+      "priority": 1,
+      "title": "Any provider / any model escape hatch",
+      "criteria": [
+        "Provider catalog unions shipped, synced, and custom models.",
+        "Custom model IDs survive sync and are routable even when /models omits them.",
+        "Arbitrary OpenAI-compatible base URLs are supported without hardcoded provider allowlists."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "provider-subscriptions",
+      "priority": 1,
+      "title": "Supported subscription and OAuth routes",
+      "criteria": [
+        "Upstream Pi OAuth including openai-codex remains functional.",
+        "Claude Code/Codex/Kimi/OpenCode integrations invoke the user's authenticated CLI rather than copying private tokens.",
+        "Z.ai Coding Plan is routed only through supported coding-tool paths unless direct use is officially supported."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "cli-bridge",
+      "priority": 1,
+      "title": "Safe CLI agent bridge",
+      "criteria": [
+        "Claude Code, Codex, Kimi Code, OpenCode and custom/Prime Agent capability probes exist.",
+        "Process execution uses argv not implicit shell interpolation, has timeout/cancel/output caps, and captures stderr.",
+        "Missing binary and unsupported mode produce actionable errors."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "mcp-hub",
+      "priority": 2,
+      "title": "MCP stdio and Streamable HTTP",
+      "criteria": [
+        "stdio performs initialize -> initialized -> tools/list and calls a real test tool.",
+        "Streamable HTTP handles JSON and SSE replies and validates local security expectations.",
+        "All subprocess paths reap children; destructive tools default disabled."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "brain-folders",
+      "priority": 1,
+      "title": "Canonical Markdown Brain Folders",
+      "criteria": [
+        "User may attach multiple Markdown roots with per-root read/write policy.",
+        "Retrieval includes source path and heading.",
+        "Writes are proposed as diffs and traversal/symlink escape is rejected.",
+        "Frozen eval/safety roots cannot be configured agent-writable."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "personality",
+      "priority": 1,
+      "title": "Maximum agent personality/customization",
+      "criteria": [
+        "Agents retain name/title/color/persona and can set relationship role, traits, autonomy, skills/brain access, and role routing.",
+        "Personality affects stable agent instructions without weakening task verification or safety policy.",
+        "Existing Buzz/Lounge/social surfaces remain usable."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "hierarchy",
+      "priority": 1,
+      "title": "Hierarchical multi-agent orchestration",
+      "criteria": [
+        "Orchestrator can assign architect/manager/researcher/builder/reviewer/judge/verifier/specialist roles.",
+        "Different roles may use different enabled providers/models.",
+        "Role/model/tool selection and handoffs are visible in run events/traces."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "long-horizon",
+      "priority": 1,
+      "title": "Long-horizon completion harness",
+      "criteria": [
+        "Long task has immutable observable criteria, one current feature/stage, append-only progress and checkpoints.",
+        "Builder cannot mark its own feature passing.",
+        "Restart reconstructs current progress and avoids redoing accepted work."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "local-model-safety",
+      "priority": 1,
+      "title": "Local/small-model mutation gate",
+      "criteria": [
+        "Local worker edits are staged and cannot promote without external verification.",
+        "Failed check rolls back or rejects candidate.",
+        "Empty/invalid local response escalates or fails instead of being treated as success."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "verification",
+      "priority": 1,
+      "title": "Objective verifier owns pass state",
+      "criteria": [
+        "High judge score plus one runtime/acceptance failure results in failed feature.",
+        "Verifier evidence is stored with the transition.",
+        "Judge prose is at most a tiebreaker after objective checks."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "observability",
+      "priority": 2,
+      "title": "Hierarchical run observability",
+      "criteria": [
+        "Model and tool spans record parentage, duration, provider/model/role, usage/cost and errors.",
+        "Concurrent spans cannot corrupt parentage.",
+        "Circular/empty/context-drop/error-cascade heuristics each have positive and negative tests."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "budgets",
+      "priority": 2,
+      "title": "Token/cost/round guardrails",
+      "criteria": [
+        "Per-call/run/day budgets and call/round/subagent limits are enforceable pre-call.",
+        "Budget exhaustion yields partial/incomplete status, never false success.",
+        "CPCT includes abandoned spend."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "goldens",
+      "priority": 2,
+      "title": "Golden traces and functional evals",
+      "criteria": [
+        "Successful real run can be frozen as golden shape/totals/checks.",
+        "Comparison covers correctness/regressions before cost/tokens/calls/latency.",
+        "Best-of-N functional voting restores workspace state between candidates and does not use cached duplicate answers."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "feedback-growth",
+      "priority": 2,
+      "title": "Feedback-driven agent growth",
+      "criteria": [
+        "Thumb/note feedback is persisted and reused as compact standing guidance; corrections carry stronger weight than generic approval.",
+        "Accepted lessons/failures/remedies can be written to auditable brain Markdown.",
+        "General feedback prompts are rate-limited, optional, and user-disableable."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "self-improvement",
+      "priority": 2,
+      "title": "Safe self-improvement loop",
+      "criteria": [
+        "Proposed harness/prompt/routing improvement is evaluated on a copy/checkpoint against frozen evals.",
+        "Runtime agent cannot write frozen eval or safety gate files.",
+        "Losing experiment is not promoted and its measured result can be recorded to prevent blind retry."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "upgradeability",
+      "priority": 2,
+      "title": "Upgradeability and capability discovery",
+      "criteria": [
+        "Provider/model/CLI/MCP registries expose capability status rather than requiring central model allowlist edits.",
+        "New manual model ID can work without a Rakazo release.",
+        "One optional integration failure does not break app startup or other providers."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "ui",
+      "priority": 2,
+      "title": "Integrated Agentic Slack UI",
+      "criteria": [
+        "Runtime, Provider/Model, CLI, MCP, Brain, Agent Studio, Orchestration/Trace/Cost/Evals surfaces are reachable.",
+        "Chat/Buzz/Lounge remain first-class.",
+        "Disconnected/empty states are actionable and narrow-window/keyboard smoke passes."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    },
+    {
+      "id": "package-macos",
+      "priority": 1,
+      "title": "Verified universal macOS package",
+      "criteria": [
+        "Final reviewed commit passes required CI.",
+        "GitHub Actions produces universal macOS DMG.",
+        "DMG is tied to the reviewed final SHA and documented signing/notarization state is accurate."
+      ],
+      "passes": false,
+      "attempts": 0,
+      "lastNote": ""
+    }
   ]
 }

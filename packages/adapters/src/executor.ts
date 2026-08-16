@@ -32,6 +32,7 @@ import {
   checkpointAndRecordComputerWorkspace,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
+import { G0DM0D3_PROVIDER_ID, isG0dm0d3Reachable } from "./external-models.js";
 import { resolveAgentHomePath } from "./home.js";
 import { toOAuthCredential } from "./pi-credentials.js";
 import {
@@ -40,7 +41,6 @@ import {
   secretValuesToRedact,
   serializeModelSecret,
 } from "./pi-oauth.js";
-import { G0DM0D3_PROVIDER_ID, isG0dm0d3Reachable } from "./external-models.js";
 import { orderedResearchCredentials, type RouteCredential } from "./research-routing.js";
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";

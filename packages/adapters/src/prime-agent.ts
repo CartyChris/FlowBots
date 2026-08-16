@@ -1,5 +1,5 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { runCliProcess } from "./cli-agent.js";
 import type { HarnessDefinition, HarnessProbe } from "./harness-registry.js";
 
@@ -18,7 +18,9 @@ export interface PrimeAgentRpcInvocation {
   cwd: string;
 }
 
-export function buildPrimeAgentRpcInvocation(options: PrimeAgentRpcOptions): PrimeAgentRpcInvocation {
+export function buildPrimeAgentRpcInvocation(
+  options: PrimeAgentRpcOptions,
+): PrimeAgentRpcInvocation {
   const cwd = requiredString(options.cwd, "Prime Agent workspace");
   const args = ["--mode", "rpc"];
   if (options.provider) args.push("--provider", options.provider);
@@ -351,7 +353,8 @@ export async function defaultPrimeAgentProbe(): Promise<HarnessProbe> {
   if (result.code !== 0 || result.timedOut || result.aborted) {
     return {
       available: false,
-      detail: output || (result.timedOut ? "Prime Agent probe timed out" : "Prime Agent is unavailable"),
+      detail:
+        output || (result.timedOut ? "Prime Agent probe timed out" : "Prime Agent is unavailable"),
     };
   }
   return {

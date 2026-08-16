@@ -2,14 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildPaperclipManagedInvocation,
   normalizePaperclipUrl,
-  paperclipAdapterForHarness,
   PaperclipClient,
+  paperclipAdapterForHarness,
   paperclipHarnessDefinition,
 } from "./paperclip.js";
 
 describe("Paperclip managed local lifecycle", () => {
   it("uses the official one-command onboarding/run surfaces and isolates state with PAPERCLIP_HOME", () => {
-    expect(buildPaperclipManagedInvocation("onboard", "/Users/me/Library/Application Support/Rakazo/paperclip")).toEqual({
+    expect(
+      buildPaperclipManagedInvocation(
+        "onboard",
+        "/Users/me/Library/Application Support/Rakazo/paperclip",
+      ),
+    ).toEqual({
       command: "npx",
       args: ["paperclipai", "onboard", "--yes"],
       cwd: "/Users/me/Library/Application Support/Rakazo/paperclip",
@@ -27,24 +32,31 @@ describe("Paperclip managed local lifecycle", () => {
 describe("Paperclip URL policy", () => {
   it("allows loopback HTTP and requires HTTPS for remote instances", () => {
     expect(normalizePaperclipUrl("http://localhost:3100/")).toBe("http://localhost:3100");
-    expect(normalizePaperclipUrl("https://paperclip.example.com/")).toBe("https://paperclip.example.com");
+    expect(normalizePaperclipUrl("https://paperclip.example.com/")).toBe(
+      "https://paperclip.example.com",
+    );
     expect(() => normalizePaperclipUrl("http://paperclip.example.com")).toThrow(/HTTPS/i);
   });
 
   it("rejects embedded credentials/query/fragment", () => {
     expect(() => normalizePaperclipUrl("https://u:p@paperclip.example.com")).toThrow(/credential/i);
-    expect(() => normalizePaperclipUrl("https://paperclip.example.com?key=x")).toThrow(/query|fragment/i);
-    expect(() => normalizePaperclipUrl("https://paperclip.example.com/#x")).toThrow(/query|fragment/i);
+    expect(() => normalizePaperclipUrl("https://paperclip.example.com?key=x")).toThrow(
+      /query|fragment/i,
+    );
+    expect(() => normalizePaperclipUrl("https://paperclip.example.com/#x")).toThrow(
+      /query|fragment/i,
+    );
   });
 });
 
 describe("Paperclip API projection", () => {
   it("probes only the official /api/health endpoint", async () => {
-    const fetchSpy = vi.fn(async () =>
-      new Response(JSON.stringify({ status: "ok", deploymentMode: "local_trusted" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ status: "ok", deploymentMode: "local_trusted" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
     );
     const client = new PaperclipClient({
       baseUrl: "http://localhost:3100",
@@ -58,11 +70,18 @@ describe("Paperclip API projection", () => {
   });
 
   it("keeps auth in headers and exposes company/dashboard/agent/issue/activity surfaces", async () => {
-    const fetchSpy = vi.fn(async (url: string, init?: RequestInit) =>
-      new Response(JSON.stringify({ url, authorization: (init?.headers as Record<string, string>)?.Authorization }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+    const fetchSpy = vi.fn(
+      async (url: string, init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            url,
+            authorization: (init?.headers as Record<string, string>)?.Authorization,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
     );
     const client = new PaperclipClient({
       baseUrl: "https://paperclip.example.com",
@@ -90,11 +109,12 @@ describe("Paperclip API projection", () => {
   });
 
   it("fetches heartbeat events/issues for Glass Pane external correlation", async () => {
-    const fetchSpy = vi.fn(async (url: string) =>
-      new Response(JSON.stringify({ url }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+    const fetchSpy = vi.fn(
+      async (url: string) =>
+        new Response(JSON.stringify({ url }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
     );
     const client = new PaperclipClient({
       baseUrl: "http://127.0.0.1:3100",
@@ -115,9 +135,15 @@ describe("Paperclip adapter translation", () => {
       adapterType: "claude_local",
       adapterConfig: { cwd: "/work" },
     });
-    expect(paperclipAdapterForHarness({ harnessId: "codex", cwd: "/work" }).adapterType).toBe("codex_local");
-    expect(paperclipAdapterForHarness({ harnessId: "opencode", cwd: "/work" }).adapterType).toBe("opencode_local");
-    expect(paperclipAdapterForHarness({ harnessId: "hermes", cwd: "/work" }).adapterType).toBe("hermes_local");
+    expect(paperclipAdapterForHarness({ harnessId: "codex", cwd: "/work" }).adapterType).toBe(
+      "codex_local",
+    );
+    expect(paperclipAdapterForHarness({ harnessId: "opencode", cwd: "/work" }).adapterType).toBe(
+      "opencode_local",
+    );
+    expect(paperclipAdapterForHarness({ harnessId: "hermes", cwd: "/work" }).adapterType).toBe(
+      "hermes_local",
+    );
     expect(
       paperclipAdapterForHarness({
         harnessId: "hermes-gateway",
@@ -167,7 +193,9 @@ describe("Paperclip adapter translation", () => {
   });
 
   it("refuses generic process fallback unless an exact command is supplied", () => {
-    expect(() => paperclipAdapterForHarness({ harnessId: "unknown", cwd: "/work" })).toThrow(/command/i);
+    expect(() => paperclipAdapterForHarness({ harnessId: "unknown", cwd: "/work" })).toThrow(
+      /command/i,
+    );
   });
 });
 

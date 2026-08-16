@@ -62,7 +62,9 @@ function senderUrl(event: Electron.IpcMainInvokeEvent) {
 
 function assertTrustedRuntimeSender(event: Electron.IpcMainInvokeEvent) {
   if (!trustedRuntimeSender(senderUrl(event), trustedLauncherUrl)) {
-    throw new Error("Runtime controls are available only from the FlowBots local runtime launcher.");
+    throw new Error(
+      "Runtime controls are available only from the FlowBots local runtime launcher.",
+    );
   }
 }
 
@@ -96,7 +98,9 @@ function defaultShell(): string {
 
 function terminalEnvironment(): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
   );
 }
 
@@ -205,9 +209,41 @@ function installApplicationMenu() {
     });
   }
   template.push(
-    { label: "Edit", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
-    { label: "View", submenu: [{ role: "reload" }, { role: "toggleDevTools" }, { type: "separator" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" }, { type: "separator" }, { role: "togglefullscreen" }] },
-    { label: "Window", submenu: [{ role: "minimize" }, { role: "zoom" }, ...(process.platform === "darwin" ? [{ type: "separator" as const }, { role: "front" as const }] : [{ role: "close" as const }])] },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        ...(process.platform === "darwin"
+          ? [{ type: "separator" as const }, { role: "front" as const }]
+          : [{ role: "close" as const }]),
+      ],
+    },
   );
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -282,12 +318,15 @@ app.whenReady().then(async () => {
     assertTerminalOwner(event, sessionId);
     requireTerminalManager().write(sessionId, data);
   });
-  ipcMain.handle("desktop.terminal.resize", (event, sessionId: unknown, cols: unknown, rows: unknown) => {
-    assertTrustedTerminalSender(event);
-    if (typeof sessionId !== "string") throw new Error("Invalid terminal resize request.");
-    assertTerminalOwner(event, sessionId);
-    requireTerminalManager().resize(sessionId, Number(cols), Number(rows));
-  });
+  ipcMain.handle(
+    "desktop.terminal.resize",
+    (event, sessionId: unknown, cols: unknown, rows: unknown) => {
+      assertTrustedTerminalSender(event);
+      if (typeof sessionId !== "string") throw new Error("Invalid terminal resize request.");
+      assertTerminalOwner(event, sessionId);
+      requireTerminalManager().resize(sessionId, Number(cols), Number(rows));
+    },
+  );
   ipcMain.handle("desktop.terminal.interrupt", (event, sessionId: unknown) => {
     assertTrustedTerminalSender(event);
     if (typeof sessionId !== "string") throw new Error("Invalid terminal interrupt request.");

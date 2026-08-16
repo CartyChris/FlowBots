@@ -145,7 +145,8 @@ export class ActivityLedger {
   }
 }
 
-const SENSITIVE_KEY = /(api[-_]?key|authorization|access[-_]?token|refresh[-_]?token|password|secret|cookie)/i;
+const SENSITIVE_KEY =
+  /(api[-_]?key|authorization|access[-_]?token|refresh[-_]?token|password|secret|cookie)/i;
 
 export function sanitizeActivityMetadata(
   metadata: Record<string, unknown>,
@@ -155,7 +156,10 @@ export function sanitizeActivityMetadata(
   return sanitizeObject(metadata, knownSecrets);
 }
 
-function sanitizeObject(value: Record<string, unknown>, secrets: readonly string[]): Record<string, unknown> {
+function sanitizeObject(
+  value: Record<string, unknown>,
+  secrets: readonly string[],
+): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,

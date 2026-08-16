@@ -46,7 +46,11 @@ export function trustedTerminalSender(senderUrl: string | undefined): boolean {
     const parsed = new URL(senderUrl);
     if (parsed.protocol !== "http:") return false;
     if (parsed.username || parsed.password) return false;
-    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]";
+    return (
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "[::1]"
+    );
   } catch {
     return false;
   }

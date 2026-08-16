@@ -10,11 +10,7 @@ describe("desktop runtime health", () => {
     }));
 
     await expect(
-      probeRuntimeOrigin(
-        { mode: "lite", origin: "http://127.0.0.1:43117" },
-        fetcher,
-        100,
-      ),
+      probeRuntimeOrigin({ mode: "lite", origin: "http://127.0.0.1:43117" }, fetcher, 100),
     ).resolves.toEqual({ ok: true });
     expect(fetcher).toHaveBeenCalledWith(
       "http://127.0.0.1:43117/health",

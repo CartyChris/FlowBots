@@ -65,7 +65,9 @@ export function normalizeOpenHandsAgentServerUrl(value: string): string {
     throw new Error("OpenHands Agent Server URLs cannot include query strings or fragments");
   }
   if (parsed.protocol === "http:" && !isLoopbackHost(parsed.hostname)) {
-    throw new Error("Remote OpenHands Agent Servers must use HTTPS; HTTP is allowed only for loopback");
+    throw new Error(
+      "Remote OpenHands Agent Servers must use HTTPS; HTTP is allowed only for loopback",
+    );
   }
   const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
   return `${parsed.origin}${pathname}`;
@@ -96,11 +98,17 @@ export class OpenHandsAgentServerClient {
         signal: AbortSignal.timeout(5_000),
       });
       if (!response.ok) {
-        return { available: false, detail: `OpenHands Agent Server answered HTTP ${response.status}` };
+        return {
+          available: false,
+          detail: `OpenHands Agent Server answered HTTP ${response.status}`,
+        };
       }
       const body = (await response.json()) as Record<string, unknown>;
       if (body.title !== "OpenHands Agent Server" || typeof body.version !== "string") {
-        return { available: false, detail: "Endpoint did not identify itself as OpenHands Agent Server" };
+        return {
+          available: false,
+          detail: "Endpoint did not identify itself as OpenHands Agent Server",
+        };
       }
       return {
         available: true,
@@ -229,7 +237,9 @@ export async function defaultOpenHandsCliProbe(): Promise<HarnessProbe> {
   if (result.code !== 0 || result.timedOut || result.aborted) {
     return {
       available: false,
-      detail: output || (result.timedOut ? "OpenHands version probe timed out" : "OpenHands is unavailable"),
+      detail:
+        output ||
+        (result.timedOut ? "OpenHands version probe timed out" : "OpenHands is unavailable"),
     };
   }
   return { available: true, ...(output ? { version: output.split(/\r?\n/)[0] } : {}) };

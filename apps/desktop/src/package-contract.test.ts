@@ -44,8 +44,6 @@ describe("FlowBots macOS package contract", () => {
     const pkg = JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as {
       build?: { mac?: { x64ArchFiles?: string } };
     };
-    expect(pkg.build?.mac?.x64ArchFiles).toBe(
-      "**/node-pty/prebuilds/darwin-{arm64,x64}/**",
-    );
+    expect(pkg.build?.mac?.x64ArchFiles).toBe("**/node-pty/prebuilds/darwin-{arm64,x64}/**");
   });
 });

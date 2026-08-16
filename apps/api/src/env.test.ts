@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv, type AppEnv } from "./env.js";
+import { type AppEnv, loadEnv } from "./env.js";
 
 const base = {
   DATABASE_URL: "postgres://rakazo:rakazo@127.0.0.1:5433/rakazo",

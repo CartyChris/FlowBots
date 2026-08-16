@@ -9,9 +9,10 @@ function required<T extends (...args: any[]) => any>(name: string): T | undefine
 
 describe("Local AI OS core kernel", () => {
   test("model catalogs union shipped, synced, and custom ids without deleting user choices", () => {
-    const merge = required<
-      (input: { defaults?: string[]; synced?: string[]; custom?: string[] }) => string[]
-    >("mergeModelCatalog");
+    const merge =
+      required<(input: { defaults?: string[]; synced?: string[]; custom?: string[] }) => string[]>(
+        "mergeModelCatalog",
+      );
     if (!merge) return;
     expect(
       merge({
@@ -23,15 +24,16 @@ describe("Local AI OS core kernel", () => {
   });
 
   test("objective failures override a perfect judge score", () => {
-    const judge = required<
-      (input: {
-        runtimeErrors?: number;
-        regressions?: number;
-        highSeverityFlags?: number;
-        score?: number;
-        requiredScore?: number;
-      }) => { passed: boolean; reasons: string[] }
-    >("judgeFeatureEvidence");
+    const judge =
+      required<
+        (input: {
+          runtimeErrors?: number;
+          regressions?: number;
+          highSeverityFlags?: number;
+          score?: number;
+          requiredScore?: number;
+        }) => { passed: boolean; reasons: string[] }
+      >("judgeFeatureEvidence");
     if (!judge) return;
 
     expect(judge({ score: 100, runtimeErrors: 1 }).passed).toBe(false);
@@ -42,26 +44,30 @@ describe("Local AI OS core kernel", () => {
   });
 
   test("unverified local-worker mutations cannot be promoted", () => {
-    const mayPromote = required<
-      (input: {
-        checksPassed: boolean;
-        highSeverityFlags?: number;
-        humanRequired?: boolean;
-        humanApproved?: boolean;
-      }) => boolean
-    >("canPromoteCandidate");
+    const mayPromote =
+      required<
+        (input: {
+          checksPassed: boolean;
+          highSeverityFlags?: number;
+          humanRequired?: boolean;
+          humanApproved?: boolean;
+        }) => boolean
+      >("canPromoteCandidate");
     if (!mayPromote) return;
 
     expect(mayPromote({ checksPassed: false })).toBe(false);
     expect(mayPromote({ checksPassed: true, highSeverityFlags: 1 })).toBe(false);
-    expect(mayPromote({ checksPassed: true, humanRequired: true, humanApproved: false })).toBe(false);
+    expect(mayPromote({ checksPassed: true, humanRequired: true, humanApproved: false })).toBe(
+      false,
+    );
     expect(mayPromote({ checksPassed: true, humanRequired: true, humanApproved: true })).toBe(true);
   });
 
   test("cost per completed task includes abandoned spend", () => {
-    const cpct = required<
-      (runs: Array<{ cost: number; completed: boolean }>) => number | null
-    >("costPerCompletedTask");
+    const cpct =
+      required<(runs: Array<{ cost: number; completed: boolean }>) => number | null>(
+        "costPerCompletedTask",
+      );
     if (!cpct) return;
 
     expect(
@@ -74,19 +80,20 @@ describe("Local AI OS core kernel", () => {
   });
 
   test("hard budgets stop a call before spend exceeds limits", () => {
-    const check = required<
-      (input: {
-        spent: number;
-        estimatedNextCost: number;
-        calls: number;
-        rounds: number;
-        subagents: number;
-        maxSpend?: number;
-        maxCalls?: number;
-        maxRounds?: number;
-        maxSubagents?: number;
-      }) => { allowed: boolean; reason?: string }
-    >("checkRunBudget");
+    const check =
+      required<
+        (input: {
+          spent: number;
+          estimatedNextCost: number;
+          calls: number;
+          rounds: number;
+          subagents: number;
+          maxSpend?: number;
+          maxCalls?: number;
+          maxRounds?: number;
+          maxSubagents?: number;
+        }) => { allowed: boolean; reason?: string }
+      >("checkRunBudget");
     if (!check) return;
 
     expect(
@@ -104,13 +111,18 @@ describe("Local AI OS core kernel", () => {
   });
 
   test("trace parentage is explicit and remains correct when siblings finish out of order", () => {
-    const create = required<
-      () => {
-        start(input: { name: string; kind: string; parentId?: string }): string;
-        end(id: string, input?: { error?: string; cost?: number }): void;
-        tree(): Array<{ id: string; name: string; children: Array<{ id: string; name: string }> }>;
-      }
-    >("createRunTrace");
+    const create =
+      required<
+        () => {
+          start(input: { name: string; kind: string; parentId?: string }): string;
+          end(id: string, input?: { error?: string; cost?: number }): void;
+          tree(): Array<{
+            id: string;
+            name: string;
+            children: Array<{ id: string; name: string }>;
+          }>;
+        }
+      >("createRunTrace");
     if (!create) return;
 
     const trace = create();
@@ -126,12 +138,13 @@ describe("Local AI OS core kernel", () => {
   });
 
   test("standing feedback favors recent corrections but keeps some positive signal", () => {
-    const select = required<
-      (
-        rows: Array<{ good: boolean; note: string; ts: string }>,
-        options?: { negativeLimit?: number; positiveLimit?: number },
-      ) => { negative: string[]; positive: string[] }
-    >("selectStandingFeedback");
+    const select =
+      required<
+        (
+          rows: Array<{ good: boolean; note: string; ts: string }>,
+          options?: { negativeLimit?: number; positiveLimit?: number },
+        ) => { negative: string[]; positive: string[] }
+      >("selectStandingFeedback");
     if (!select) return;
 
     const rows = [

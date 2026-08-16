@@ -28,13 +28,17 @@ export async function runStdioMcpCall(input: StdioMcpCallInput): Promise<{
   let stderr = "";
   let done = false;
   let nextId = 0;
-  const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+  const pending = new Map<
+    number,
+    { resolve: (value: any) => void; reject: (error: Error) => void }
+  >();
   const timeoutMs = Math.max(250, input.timeoutMs ?? 20_000);
 
   const cleanup = () => {
     if (done) return;
     done = true;
-    for (const waiter of pending.values()) waiter.reject(new Error("MCP process closed before replying"));
+    for (const waiter of pending.values())
+      waiter.reject(new Error("MCP process closed before replying"));
     pending.clear();
     try {
       child.kill("SIGTERM");
@@ -153,7 +157,8 @@ export async function runStdioMcpCall(input: StdioMcpCallInput): Promise<{
 export function parseMcpHttpResponse(body: string, contentType: string): unknown {
   const trimmed = body.trim();
   if (!trimmed) throw new Error("MCP server returned an empty response");
-  const isSse = contentType.toLowerCase().includes("text/event-stream") || /(^|\n)data:\s*/.test(trimmed);
+  const isSse =
+    contentType.toLowerCase().includes("text/event-stream") || /(^|\n)data:\s*/.test(trimmed);
   if (!isSse) return JSON.parse(trimmed);
 
   const payloads = trimmed
@@ -189,7 +194,12 @@ export async function runHttpMcpRequest(input: HttpMcpRequestInput): Promise<{
   const response = await fetchImpl(input.url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: input.method, params: input.params ?? {} }),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: input.method,
+      params: input.params ?? {},
+    }),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`MCP HTTP ${response.status}: ${text.slice(0, 800)}`);

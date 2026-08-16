@@ -127,12 +127,9 @@ export function buildHermesGatewayInvocation(
   return { command: "hermes", args };
 }
 
-export function buildHermesChatInvocation(options: {
-  profile?: string;
-  prompt?: string;
-  provider?: string;
-  model?: string;
-} = {}): HermesInvocation {
+export function buildHermesChatInvocation(
+  options: { profile?: string; prompt?: string; provider?: string; model?: string } = {},
+): HermesInvocation {
   const args: string[] = [];
   if (options.profile) args.push("-p", options.profile);
   args.push("chat");
@@ -194,7 +191,8 @@ export async function defaultHermesProbe(): Promise<HarnessProbe> {
   if (result.code !== 0 || result.timedOut || result.aborted) {
     return {
       available: false,
-      detail: output || (result.timedOut ? "Hermes version probe timed out" : "Hermes is unavailable"),
+      detail:
+        output || (result.timedOut ? "Hermes version probe timed out" : "Hermes is unavailable"),
     };
   }
   return {
@@ -240,6 +238,7 @@ function finiteNumber(value: unknown): number | undefined {
 }
 
 function validPort(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > 65535) throw new Error("Hermes port is invalid");
+  if (!Number.isInteger(value) || value < 1 || value > 65535)
+    throw new Error("Hermes port is invalid");
   return value;
 }

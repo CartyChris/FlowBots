@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
-import { TerminalSessionManager, type PtyFactory, type PtyProcess } from "./terminal-session.js";
+import { type PtyFactory, type PtyProcess, TerminalSessionManager } from "./terminal-session.js";
 
 function fakePty() {
   const dataListeners = new Set<(data: string) => void>();
@@ -54,7 +54,11 @@ describe("integrated terminal session manager", () => {
     expect(h.spawn).toHaveBeenCalledWith(
       "/bin/zsh",
       [],
-      expect.objectContaining({ cwd: path.resolve("/Users/chris/Projects/rakazo"), cols: 120, rows: 40 }),
+      expect.objectContaining({
+        cwd: path.resolve("/Users/chris/Projects/rakazo"),
+        cols: 120,
+        rows: 40,
+      }),
     );
     expect(session.pid).toBe(4242);
     expect(h.activity[0]).toMatchObject({ type: "terminal.started", sessionId: session.id });
@@ -62,7 +66,9 @@ describe("integrated terminal session manager", () => {
 
   test("rejects a cwd outside approved roots before spawning anything", () => {
     const h = harness();
-    expect(() => h.manager.create({ cwd: "/etc", cols: 80, rows: 24 })).toThrow(/allowed|approved/i);
+    expect(() => h.manager.create({ cwd: "/etc", cols: 80, rows: 24 })).toThrow(
+      /allowed|approved/i,
+    );
     expect(h.spawn).not.toHaveBeenCalled();
   });
 

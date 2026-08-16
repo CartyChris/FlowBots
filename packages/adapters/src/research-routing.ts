@@ -51,7 +51,8 @@ export function orderedResearchCredentials<T extends RouteCredential>(
 
   const route = classifyResearchRoute(prompt);
   if (route === "default") return [fallback];
-  const priority = route === "orchestration" ? ORCHESTRATION_PRIORITY : TOOL_FIRST_RESEARCH_PRIORITY;
+  const priority =
+    route === "orchestration" ? ORCHESTRATION_PRIORITY : TOOL_FIRST_RESEARCH_PRIORITY;
 
   const ordered: T[] = [];
   for (const provider of priority) {

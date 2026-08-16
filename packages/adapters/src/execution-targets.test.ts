@@ -59,9 +59,7 @@ describe("Docker execution target", () => {
 
   it("probes Docker independently and reports missing/unavailable Docker without throwing", async () => {
     const runner: ExecutionCommandRunner = vi.fn(async (input) =>
-      input.args[0] === "info"
-        ? { ...ok(), code: 127, stderr: "docker: command not found" }
-        : ok(),
+      input.args[0] === "info" ? { ...ok(), code: 127, stderr: "docker: command not found" } : ok(),
     );
     const target = createDockerExecutionTarget(
       { id: "docker", name: "Docker", cwd: "/work" },
@@ -90,10 +88,7 @@ describe("Docker execution target", () => {
     await target.stop();
     const calls = vi.mocked(runner).mock.calls.map(([input]) => [input.command, input.args]);
     expect(calls).toEqual([
-      [
-        "docker",
-        ["compose", "-p", "rakazo-agents", "up", "-d", "openhands", "paperclip"],
-      ],
+      ["docker", ["compose", "-p", "rakazo-agents", "up", "-d", "openhands", "paperclip"]],
       ["docker", ["compose", "-p", "rakazo-agents", "stop", "openhands", "paperclip"]],
     ]);
   });

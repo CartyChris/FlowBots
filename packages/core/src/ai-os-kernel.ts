@@ -16,7 +16,10 @@ export interface FeatureEvidence {
   requiredScore?: number;
 }
 
-export function judgeFeatureEvidence(input: FeatureEvidence): { passed: boolean; reasons: string[] } {
+export function judgeFeatureEvidence(input: FeatureEvidence): {
+  passed: boolean;
+  reasons: string[];
+} {
   const reasons: string[] = [];
   const runtimeErrors = Math.max(0, input.runtimeErrors ?? 0);
   const regressions = Math.max(0, input.regressions ?? 0);

@@ -106,8 +106,7 @@ export class PiAgentRuntime implements AgentRuntime {
         const tools = toAgentTools(toolDefs, host);
         const fullHistory = toHistory(request.history, request.prompt);
         const historyLimit = providerHistoryLimit(provider);
-        const history =
-          historyLimit === undefined ? fullHistory : fullHistory.slice(-historyLimit);
+        const history = historyLimit === undefined ? fullHistory : fullHistory.slice(-historyLimit);
 
         const agent = new Agent({
           streamFn: (m, ctx, options) => streamModel(models, m, ctx, options),
@@ -201,7 +200,12 @@ export class PiAgentRuntime implements AgentRuntime {
   }
 }
 
-function streamModel(models: Models, model: Model<Api>, context: Parameters<Models["streamSimple"]>[1], options: Parameters<Models["streamSimple"]>[2]) {
+function streamModel(
+  models: Models,
+  model: Model<Api>,
+  context: Parameters<Models["streamSimple"]>[1],
+  options: Parameters<Models["streamSimple"]>[2],
+) {
   if (model.provider === OLLAMA_PROVIDER_ID) {
     return ollamaStreamSimple(model as never, context, options);
   }

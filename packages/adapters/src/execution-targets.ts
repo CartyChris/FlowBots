@@ -1,8 +1,4 @@
-import {
-  runCliProcess,
-  type CliProcessInput,
-  type CliProcessResult,
-} from "./cli-agent.js";
+import { type CliProcessInput, type CliProcessResult, runCliProcess } from "./cli-agent.js";
 
 export interface ExecutionInvocation {
   command: string;

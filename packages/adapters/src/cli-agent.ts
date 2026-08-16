@@ -120,7 +120,8 @@ export function buildCliInvocation(input: CliInvocationInput): CliInvocation {
     // Plan is genuinely read-only. acceptEdits permits workspace editing while leaving
     // Claude Code's own permission system in place; Rakazo never uses bypassPermissions.
     args.push(input.mode === "analyze" ? "plan" : "acceptEdits");
-    if (input.maxTurns && input.maxTurns > 0) args.push("--max-turns", String(Math.floor(input.maxTurns)));
+    if (input.maxTurns && input.maxTurns > 0)
+      args.push("--max-turns", String(Math.floor(input.maxTurns)));
     if (input.model) args.push("--model", input.model);
     for (const dir of input.additionalDirs ?? []) args.push("--add-dir", dir);
     return { command: definition.executable, args, cwd, outerVerificationRequired: true };
@@ -169,7 +170,10 @@ function replaceCliPlaceholders(
   value: string,
   replacements: { prompt: string; cwd: string; mode: string; model: string },
 ): string {
-  return value.replace(/\{(prompt|cwd|mode|model)\}/g, (_, key: keyof typeof replacements) => replacements[key]);
+  return value.replace(
+    /\{(prompt|cwd|mode|model)\}/g,
+    (_, key: keyof typeof replacements) => replacements[key],
+  );
 }
 
 export interface CliProcessInput {
