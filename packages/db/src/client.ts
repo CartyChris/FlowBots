@@ -4,11 +4,13 @@ import { PrismaClient } from "./generated/prisma/client.js";
 
 export type Db = PrismaClient;
 
-export function createDb(connectionString: string): { prisma: PrismaClient; pool: Pool } {
-  const pool = new Pool({ connectionString });
+export function createDbFromPool(pool: Pool): { prisma: PrismaClient; pool: Pool } {
   const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
-  return { prisma, pool };
+  return { prisma: new PrismaClient({ adapter }), pool };
+}
+
+export function createDb(connectionString: string): { prisma: PrismaClient; pool: Pool } {
+  return createDbFromPool(new Pool({ connectionString }));
 }
 
 export type { Pool } from "pg";

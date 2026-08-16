@@ -1,17 +1,12 @@
 # Rakazo
 
+![Rakazo — AI teammates you actually own](./docs/readme-hero.png)
+
 Open-source Grok Bot alternative, built with Cursor and Grok 4.6.
 
-Web, desktop, and mobile. Bring your own AI and sandbox. The product is still early (beta). Notable product changes are in [`CHANGELOG.md`](./CHANGELOG.md).
+Web, desktop, and mobile. Bring your own AI and sandbox. The product is still early (beta).
 
 Each bot has one thread, one computer, memory, routines, and history. A bot can also spawn more bots — each a regular peer with its own thread and computer — or run short-lived subagents inside the current turn. This repository is the complete core product — it runs without a Rakazo-operated control plane.
-
-## Highlights
-
-- **Personalities, for real.** Every bot runs a persona — Witty, Unhinged, Wholesome, Genius, Chill, Hype, Zen, or your own Custom voice — with humor / spice / energy / verbosity sliders and an optional swearing toggle. Steer any single reply in place with `/funny`, `/serious`, `/zen`, `/brief`, and friends.
-- **A social layer for your agents.** Live presence in the sidebar (watch bots think), 🔥💀😂👀 reactions on any message, ambient nudges, the **Buzz** feed of everything your roster is up to, and the **Lounge**, where 2–4 bots banter about a topic in one shared room — each fully in character.
-- **Bring everything you already pay for.** At onboarding Rakazo detects API keys already in your environment (Anthropic, OpenAI, Google, xAI, Groq, DeepSeek, Mistral, OpenRouter, Together, Cerebras, Fireworks) and any **local Ollama server** with its models, and imports them with one click. ChatGPT Plus/Pro, GitHub Copilot, and SuperGrok sign in with device codes. Ollama models need no key at all.
-- **Native Mac client.** `pnpm --filter @rakazo/desktop pack:mac` produces a universal `.dmg` (Apple Silicon + Intel). The installer is the desktop client for a running Rakazo deployment; Connection Center handles local/remote endpoint setup and recovery instead of failing to a blank window.
 
 ## Demo
 
@@ -49,8 +44,6 @@ Edit `.env`:
 
 - Set `BETTER_AUTH_SECRET` and `ENCRYPTION_KEY` to long random strings before any network exposure. Placeholder values only work in local `development` / `test` runs.
 - Put your OpenRouter key in `OPENROUTER_API_KEY` (or skip the key and paste one during onboarding).
-- **Instant sync:** any well-known key already in the environment — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `OPENROUTER_API_KEY` — shows up on the onboarding screen as a one-click import, encrypted at rest like any pasted key.
-- **Local models:** if an [Ollama](https://ollama.com) server is running (`ollama serve`, default `http://127.0.0.1:11434`, override with `OLLAMA_BASE_URL`), its installed models appear in the model picker and in the onboarding import card. No key, no meter.
 - ChatGPT Plus or Pro, GitHub Copilot, or SuperGrok / X Premium: skip the key and sign in on the **Connect a model** screen. Pick **OpenAI Codex**, **GitHub Copilot**, or **xAI**, then sign in with the device code Pi shows. Claude Pro is not in the Rakazo UI yet — Pi's Claude login opens a localhost callback, which does not work from the web app.
 - Optional: `COMPOSIO_API_KEY` if you want Plugins to talk to live apps.
 
@@ -67,7 +60,7 @@ pnpm dev
 
 `pnpm dev` starts the API (`:3100`), Graphile Worker, Vite web app (`:5173`), and sandbox supervisor (`:7091`).
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Sign up, pick a model from the Pi catalog (paste an API key, sign in with ChatGPT / Copilot / SuperGrok, or Skip if the deployment key is set), create a bot, send a message. The computer pane is a live Linux desktop with a browser. Take control to sign in; the bot keeps that session after you release. Ask a bot to spawn another bot, or to run a subagent for work that should stay inside this turn.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Sign up, pick a model from the Pi catalog (paste an API key, sign in with ChatGPT / Copilot / SuperGrok, or Skip if the deployment key is set), create a bot, send a message. The computer pane is a live Linux desktop. The model can observe and control the screen, use browsers and other graphical applications, run terminal commands, and work with files. You can interact with the same desktop while it runs; taking control makes the viewer editable but does not impose an exclusive agent/user lock. Ask a bot to spawn another bot, or to run a subagent for work that should stay inside this turn.
 
 Confirm the product path:
 
@@ -75,9 +68,9 @@ Confirm the product path:
 curl -s http://127.0.0.1:3100/health
 ```
 
-You want `"runtime":"pi"`, `"sandbox":"docker"`, `"wakeup":"graphile"`. `"composio":true` only if the Composio key is set.
+You want `"runtime":"pi"`, `"sandbox":"docker"`, `"jobs":"graphile"`, and `"realtime":"postgres"`. `"composio":true` only if the Composio key is set.
 
-Product defaults are Pi + Docker + Graphile. `pnpm verify:fast` pins the emulators (`AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) so default tests never call live models or Composio.
+Product defaults are Pi + Docker + Graphile. `pnpm test` pins the emulators (`AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) so default tests never call live models or Composio.
 
 ### Computer and app modes
 
@@ -86,7 +79,7 @@ The app you open and the computer provider are separate choices. Web, Electron, 
 | `SANDBOX_PROVIDER` | Where agent commands run | Best fit | Isolation notes |
 | --- | --- | --- | --- |
 | `docker` (default) | A per-bot Docker container on your machine. The Electron app can switch this to This Mac without changing the env var. | Quick local setup and trusted single-machine self-hosting | Good local isolation and persistent bot homes. The supervisor controls the local Docker daemon, so keep its port private; Rakazo does this by default. |
-| `e2b` | A remote E2B sandbox | Public or multi-user deployments | Stronger separation from the Rakazo application host. Requires `E2B_API_KEY`. This Mac is not available. |
+| `e2b` | A remote E2B desktop through the E2B SDK | Public or multi-user deployments | Stronger separation from the Rakazo application host. Requires `E2B_API_KEY`. Bot workspace and browser-profile data are checkpointed into Rakazo-owned `DATA_DIR`, so the provider machine is not the durable source of truth. This Mac is not available. |
 | `desktop` | Directly on the API/worker host. Working directories under the process user's home folder are allowed. | A trusted single-user local process | Least isolated. Model-initiated shell commands run with the Rakazo process's OS permissions. Do not use it on a public or shared server. The Electron first-run "This Mac" choice uses this provider while leaving `SANDBOX_PROVIDER=docker`. |
 | `fake` | An in-process emulator | Tests only | Does not run a real computer. |
 
@@ -100,48 +93,39 @@ pnpm --filter @rakazo/db exec prisma migrate resolve --applied 0001_init
 
 ## Run the desktop app
 
-The Electron application is a **desktop client**, not a bundled copy of the Rakazo server stack. For a local deployment, start Rakazo first and leave it running:
-
-```bash
-docker compose -f infra/compose/docker-compose.yml up postgres -d
-pnpm db:migrate
-pnpm dev
-```
-
-Then launch the development desktop client:
+The Electron shell loads the same web UI. Leave `pnpm dev` running, then:
 
 ```bash
 pnpm --filter @rakazo/desktop dev
 ```
 
-`pnpm dev` supplies the services the desktop client uses: API (`:3100`), Graphile Worker, Vite web UI (`:5173`), and sandbox supervisor (`:7091`). Native red / yellow / green buttons close, minimize, and zoom the Electron window; they do nothing in a browser tab. On first launch Rakazo asks whether bots should keep using Docker or run on this Mac as you. Docker stays the default. macOS will not show a permission prompt for that choice — the consent is Rakazo's.
+Native red / yellow / green buttons close, minimize, and zoom that window. They do nothing in the browser tab. On first launch the desktop app asks whether bots should keep using Docker or run on this Mac as you. Docker stays the default. macOS will not show a permission prompt for that choice — the consent is Rakazo's.
 
-The default desktop web origin is `http://127.0.0.1:5173`. You can still provide `RAKAZO_WEB_URL`, but the app now has a native **Connection Center** so normal endpoint changes do not require launching Electron from Terminal:
+Point Electron at a different origin with `RAKAZO_WEB_URL` (default `http://127.0.0.1:5173`).
 
-- Open **Rakazo → Connection…** on macOS (or press `Cmd+,`; `Ctrl+,` on other platforms).
-- Enter a local or remote/self-hosted `http://` or `https://` Rakazo web origin and choose **Save & Connect**.
-- Rakazo remembers up to five recent endpoints locally. Usernames/passwords embedded in URLs are rejected; provider keys, cookies, tokens, and environment variables are not written to connection settings.
-- If the web origin is down at startup, the app shows Connection Center instead of a black window. It reports web-origin reachability, checks the local API separately when using localhost, and retries automatically until the web origin becomes reachable.
-- **Copy Diagnostics** copies only app version, platform, target URL, navigation error, and web/API health state—no credentials or secret environment data.
-
-Packaged installers:
+Packaged installers (optional):
 
 ```bash
-pnpm --filter @rakazo/desktop pack       # macOS dmg/zip, Windows NSIS, Linux AppImage
-pnpm --filter @rakazo/desktop pack:mac   # universal macOS .dmg (Apple Silicon + Intel)
+pnpm --filter @rakazo/desktop pack
 ```
 
-Outputs land in `apps/desktop/out/`. Building a `.dmg` requires macOS (electron-builder limitation); `pack:mac` produces a single universal binary that runs natively on both Apple Silicon and Intel Macs.
+Outputs land in `apps/desktop/out/` (macOS dmg/zip, Windows NSIS, Linux AppImage). Those builds still need a running API and web origin.
 
-**Important:** the `.dmg` currently packages the Electron client. It does not embed Postgres, the API, Graphile Worker, Vite server, or sandbox supervisor. To use it locally, run the Rakazo stack above; to use it as a thin client, point Connection Center at a reachable self-hosted Rakazo web origin.
-
-## Verify
+## Test
 
 ```bash
-pnpm verify:fast       # unit, property, and in-process contract tests
-pnpm verify            # Postgres via Testcontainers, emulators, API, Playwright
-pnpm verify:providers  # optional live OpenRouter / E2B canaries
+pnpm test              # unit, property, and in-process contract tests
+pnpm test:integration  # Postgres journeys, Graphile jobs, LISTEN/NOTIFY
+pnpm test:e2e          # Playwright against the emulated stack
+pnpm test:topology     # local Docker + Graphile worker recovery (needs Docker)
+pnpm test:canary       # live OpenRouter / E2B canaries
+# explicit real vision-model + real E2B desktop acceptance test:
+COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer
 ```
+
+`pnpm test:topology`, `pnpm test:canary`, and `pnpm test:computer` are for running the product path on your machine. They are not part of pull-request CI. The computer acceptance test also requires `E2B_API_KEY` and `OPENROUTER_API_KEY` (the command reads the root `.env`) and uses a temporary Postgres container. It proves an actual model can observe and click a real browser, then use the sandbox terminal and files.
+
+See [`docs/computer-runtime.md`](./docs/computer-runtime.md) for the agent/runtime boundary, provider switching, and persistence contract.
 
 ## Layout
 

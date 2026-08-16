@@ -1,1 +1,0 @@
-ALTER TABLE "bots" ADD COLUMN "persona" JSONB;

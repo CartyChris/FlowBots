@@ -24,13 +24,11 @@ export const ProductEventType = z.enum([
   "routine.updated",
   "routine.fired",
   "effect.recorded",
+  "agent.tool.called",
   "effect.reconciled",
   "usage.recorded",
   "bot.spawned",
   "bot.deleted",
-  "bot.persona.updated",
-  "message.reaction",
-  "buzz.posted",
 ]);
 export type ProductEventType = z.infer<typeof ProductEventType>;
 
@@ -83,16 +81,6 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     name: z.string(),
     title: z.string().optional(),
     status: z.enum(["created", "deleted"]),
-  }),
-  z.object({
-    kind: z.literal("reactions"),
-    messageId: z.string(),
-    counts: z.record(z.string(), z.number().int().nonnegative()),
-  }),
-  z.object({
-    kind: z.literal("nudge"),
-    emoji: z.string(),
-    text: z.string(),
   }),
 ]);
 export type MessageBlock = z.infer<typeof MessageBlock>;

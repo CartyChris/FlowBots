@@ -1,5 +1,4 @@
-import { type Actor, BOT_COLORS, type Bot, type PersonaConfigInput } from "@rakazo/contracts";
-import { normalizePersona } from "@rakazo/core";
+import { type Actor, BOT_COLORS, type Bot } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
 
@@ -11,7 +10,6 @@ function mapBot(
     title: string;
     description: string;
     instructions: string;
-    persona?: unknown;
     color: string;
     notifyOnFinish: boolean;
     parentBotId: string | null;
@@ -32,7 +30,6 @@ function mapBot(
     title: bot.title,
     description: bot.description,
     instructions: bot.instructions,
-    persona: normalizePersona(bot.persona),
     color: bot.color,
     notifyOnFinish: bot.notifyOnFinish,
     parentBotId: bot.parentBotId,
@@ -49,32 +46,30 @@ export function createRepos(prisma: PrismaClient) {
     async listBots(actor: Actor): Promise<Bot[]> {
       const bots = await prisma.bot.findMany({
         where: { workspaceId: actor.workspaceId, userId: actor.userId },
-        include: { thread: true },
-        orderBy: { updatedAt: "desc" },
-      });
-      const previews = await Promise.all(
-        bots.map(async (bot) => {
-          if (!bot.thread) return { preview: "", status: "idle" };
-          const last = await prisma.message.findFirst({
-            where: { threadId: bot.thread.id },
-            orderBy: { seq: "desc" },
-          });
-          const run = await prisma.run.findFirst({
+        include: {
+          thread: {
+            include: {
+              messages: { orderBy: { seq: "desc" }, take: 1 },
+            },
+          },
+          runs: {
             where: {
-              botId: bot.id,
               status: { in: ["running", "queued", "leased", "waiting_input", "waiting_takeover"] },
             },
             orderBy: { createdAt: "desc" },
-          });
-          let preview = "";
-          if (last) {
-            const blocks = last.blocks as Array<{ kind?: string; text?: string }>;
-            preview = blocks.find((b) => b.text)?.text ?? "";
-          }
-          return { preview, status: run?.status ?? "idle" };
-        }),
-      );
-      return bots.map((bot, i) => mapBot(bot, previews[i]?.preview, previews[i]?.status));
+            take: 1,
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+      return bots.map((bot) => {
+        const blocks = (bot.thread?.messages[0]?.blocks ?? []) as Array<{
+          kind?: string;
+          text?: string;
+        }>;
+        const preview = blocks.find((block) => block.text)?.text ?? "";
+        return mapBot(bot, preview, bot.runs[0]?.status ?? "idle");
+      });
     },
 
     async getBot(actor: Actor, botId: string) {
@@ -93,7 +88,6 @@ export function createRepos(prisma: PrismaClient) {
         title: string;
         description: string;
         instructions: string;
-        persona?: PersonaConfigInput;
         notifyOnFinish: boolean;
         color?: string;
         parentBotId?: string | null;
@@ -126,9 +120,6 @@ export function createRepos(prisma: PrismaClient) {
             title: input.title,
             description: input.description,
             instructions: input.instructions,
-            persona: input.persona
-              ? JSON.parse(JSON.stringify(normalizePersona(input.persona)))
-              : undefined,
             notifyOnFinish: input.notifyOnFinish,
             color,
             parentBotId: input.parentBotId ?? null,

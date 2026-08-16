@@ -11,7 +11,7 @@ describe("detectEnvCredentials", () => {
     const hints = detectEnvCredentials({
       ANTHROPIC_API_KEY: "sk-ant-abcdefghij",
       XAI_API_KEY: "xai-abcdefghijk",
-      OPENAI_API_KEY: "tiny", // too short, ignored
+      OPENAI_API_KEY: "tiny",
     });
     expect(hints.map((hint) => hint.provider)).toEqual(["anthropic", "xai"]);
     expect(hints[0]).toMatchObject({ envVar: "ANTHROPIC_API_KEY", apiKey: "sk-ant-abcdefghij" });

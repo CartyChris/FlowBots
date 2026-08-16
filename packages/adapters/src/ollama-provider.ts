@@ -18,11 +18,17 @@ export function ollamaOpenAiBaseUrl(source: NodeJS.ProcessEnv = process.env): st
   return `${ollamaBaseUrl(source)}/v1`;
 }
 
-/**
- * A keyless local provider. Ollama speaks the OpenAI chat-completions wire
- * format at /v1, so the built-in completions stream handles everything.
- * Models are fetched live from the running server in `ollamaModelIds`.
- */
+export function ollamaStreamSimple(
+  model: Model<never>,
+  context: Context,
+  options?: SimpleStreamOptions,
+) {
+  return streamSimple(model, context, {
+    ...options,
+    apiKey: options?.apiKey ?? "ollama",
+  } as never);
+}
+
 export function ollamaProvider(baseUrl: string): Provider {
   const url = baseUrl.replace(/\/+$/, "");
   const openAiBaseUrl = `${url}/v1`;
@@ -34,8 +40,6 @@ export function ollamaProvider(baseUrl: string): Provider {
       apiKey: {
         name: "No key needed — runs on this machine",
         async resolve() {
-          // Ollama ignores the Authorization header, but the completions
-          // client requires a key to be present.
           return { apiKey: "ollama" };
         },
       },
@@ -43,10 +47,7 @@ export function ollamaProvider(baseUrl: string): Provider {
     models: [],
     api: {
       streamSimple: (model: Model<never>, context: Context, options?: SimpleStreamOptions) =>
-        streamSimple({ ...model, baseUrl: openAiBaseUrl } as never, context, {
-          ...options,
-          apiKey: options?.apiKey ?? "ollama",
-        } as never),
+        ollamaStreamSimple({ ...model, baseUrl: openAiBaseUrl } as never, context, options),
       stream: () => {
         throw new Error("Ollama provider streams via streamSimple only.");
       },

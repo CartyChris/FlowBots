@@ -75,13 +75,12 @@ const NUDGE_FALLBACKS = [
 
 export function ambientNudge(persona: PersonaConfig, botName: string, seed: string): string {
   const definition = personaDefinition(persona.id);
-  const pool = definition.id === "custom" ? NUDGE_FALLBACKS : NUDGE_FALLBACKS;
+  const pool = NUDGE_FALLBACKS;
   let hash = 0;
   const key = `${botName}:${seed}:${definition.id}`;
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   const template = pool[hash % pool.length] ?? NUDGE_FALLBACKS[0]!;
-  const tag = definition.presenceTag;
-  return template.replace("{tag}", tag);
+  return template.replace("{tag}", definition.presenceTag);
 }
 
 export interface LoungeTopic {
@@ -146,7 +145,6 @@ export const STEERING_HINTS = [
 ] as const;
 export type SteeringHint = (typeof STEERING_HINTS)[number];
 
-/** Parses a leading `/hint` steering command off a prompt, e.g. "/funny tell me about my day". */
 export function steeringHintFromPrompt(prompt: string): SteeringHint | null {
   const match = /^\/([a-z]+)[\s\n]+/i.exec(prompt.trimStart());
   if (!match) return null;
@@ -166,7 +164,6 @@ export interface LoungeLineInput {
   reply: string;
 }
 
-/** Prefixes each reply with the bot name so the room reads like a group chat. */
 export function formatLoungeTranscript(lines: LoungeLineInput[]): string {
   return lines
     .map((line) => {
