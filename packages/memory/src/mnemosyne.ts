@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AdapterContext, MemorySearchResult } from "@rakazo/adapter-kit";
 
@@ -120,7 +120,11 @@ export class MnemosyneSemanticIndex {
     if (this.mode === "off" || !request.query.trim() || request.documents.length === 0) return [];
 
     try {
-      const key = memoryIndexKey(context, request.scope, request.botId);
+      const botId = request.scope === "bot" ? request.botId ?? context.botId : undefined;
+      if (request.scope === "bot" && !botId?.trim()) {
+        throw new Error("bot scope requires a concrete bot identity");
+      }
+      const key = memoryIndexKey(context, request.scope, botId);
       const dataDir = path.join(this.rootDir, key);
       await this.ensureIndex(key, dataDir, request.documents, context.signal);
 
@@ -182,13 +186,13 @@ export class MnemosyneSemanticIndex {
     documents: readonly CanonicalMemoryDocument[],
     signal?: AbortSignal,
   ): Promise<void> {
-    await mkdir(dataDir, { recursive: true });
+    await ensurePrivateDirectory(dataDir);
     const fingerprint = memoryFingerprint(documents);
     const manifest = await readManifest(path.join(dataDir, ".rakazo-index.json"));
     if (manifest?.schema === 1 && manifest.fingerprint === fingerprint) return;
 
     await rm(dataDir, { recursive: true, force: true });
-    await mkdir(dataDir, { recursive: true });
+    await ensurePrivateDirectory(dataDir);
     for (const document of [...documents].sort((a, b) => a.path.localeCompare(b.path))) {
       await this.run(
         ["store", document.content, mnemosyneSourceForPath(document.path), "0.8"],
@@ -303,6 +307,11 @@ async function writeManifest(file: string, manifest: MnemosyneManifest): Promise
   const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temp, `${JSON.stringify(manifest)}\n`, { encoding: "utf8", mode: 0o600 });
   await rename(temp, file);
+}
+
+async function ensurePrivateDirectory(directory: string): Promise<void> {
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") await chmod(directory, 0o700);
 }
 
 function clampInteger(value: number, min: number, max: number): number {
