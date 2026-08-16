@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@rakazo/contracts": "workspace:*",
-    "@rakazo/local-runtime": "workspace:*"
+    "@rakazo/local-runtime": "workspace:*",
+    "node-pty": "1.2.0-beta.14"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
@@ -34,6 +35,9 @@
     "files": [
       "dist/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
     ],
     "extraMetadata": {
       "main": "dist/main.js"
