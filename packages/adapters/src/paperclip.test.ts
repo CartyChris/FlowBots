@@ -103,7 +103,8 @@ describe("Paperclip API projection", () => {
       "https://paperclip.example.com/api/companies/company-1/activity",
     ]);
     for (const [, init] of fetchSpy.mock.calls) {
-      expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pc-secret");
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer pc-secret");
     }
     expect(client.baseUrl).not.toContain("pc-secret");
   });

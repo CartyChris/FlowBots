@@ -17,7 +17,10 @@ describe("FlowBots product branding", () => {
     };
     expect(pkg.name).toBe("@rakazo/desktop");
     expect(pkg.build?.productName).toBe("FlowBots");
-    expect(pkg.build?.artifactName).toBe(String.raw`FlowBots-\${version}-\${arch}.\${ext}`);
+    const dollar = "$";
+    expect(pkg.build?.artifactName).toBe(
+      `FlowBots-${dollar}{version}-${dollar}{arch}.${dollar}{ext}`,
+    );
   });
 
   test("desktop runtime launcher and host-boundary errors present FlowBots to the user", async () => {

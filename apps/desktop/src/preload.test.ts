@@ -72,8 +72,12 @@ describe("desktop preload bridge", () => {
     const offActivity = bridge.terminal.onActivity(activityListener);
     const dataEvent = { sessionId: "terminal-1", data: "hello" };
     const activityEvent = { type: "terminal.started", sessionId: "terminal-1" };
-    listeners.get("desktop.terminal.data")?.forEach((listener) => listener({}, dataEvent));
-    listeners.get("desktop.terminal.activity")?.forEach((listener) => listener({}, activityEvent));
+    listeners.get("desktop.terminal.data")?.forEach((listener) => {
+      listener({}, dataEvent);
+    });
+    listeners.get("desktop.terminal.activity")?.forEach((listener) => {
+      listener({}, activityEvent);
+    });
     expect(dataListener).toHaveBeenCalledWith(dataEvent);
     expect(activityListener).toHaveBeenCalledWith(activityEvent);
     offData();

@@ -387,9 +387,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function noValue(): void {
-  return undefined;
-}
+function noValue(): void {}
 
 function requiredString(value: string, label: string): string {
   const normalized = String(value ?? "").trim();
