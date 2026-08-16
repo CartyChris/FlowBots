@@ -5,7 +5,8 @@ import { describe, expect, test } from "vitest";
 describe("desktop main runtime wiring", () => {
   test("Electron uses the three-mode runtime session instead of direct WEB_URL navigation", async () => {
     const source = await readFile(path.join(import.meta.dirname, "main.ts"), "utf8");
-    expect(source).toContain('from "@rakazo/local-runtime"');
+    expect(source).toContain('from "./local-runtime.js"');
+    expect(source).not.toContain('from "@rakazo/local-runtime"');
     expect(source).toContain("DesktopRuntimeSession");
     expect(source).toContain("activateRuntimeProfile");
     expect(source).toContain("probeRuntimeOrigin");
