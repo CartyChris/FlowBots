@@ -13,13 +13,13 @@ function mustStayExternal(specifier) {
   if (specifier === "@electric-sql/pglite" || specifier.startsWith("@electric-sql/pglite/")) {
     return true;
   }
-  // node-postgres is CommonJS internally and uses runtime require() calls for
-  // Node built-ins. Keep it as a normal Node dependency instead of translating
-  // those calls into an ESM bundle where dynamic require is unavailable.
+  // node-postgres is package-native CommonJS and is inexpensive to preserve as
+  // a normal Node dependency. The bundle-level createRequire shim below also
+  // makes bundled CommonJS dependencies safe when they require Node built-ins.
   if (specifier === "pg" || specifier.startsWith("pg/")) return true;
-  // Prisma Client's runtime also performs package-native/dynamic Node requires.
-  // Bundle Rakazo's generated client, but keep Prisma's own runtime package
-  // external so Electron resolves it with its intended Node semantics.
+  // Prisma Client performs package-native Node requires and may resolve runtime
+  // files relative to its own package. Bundle Rakazo's generated client, but
+  // keep Prisma's runtime package external.
   return specifier === "@prisma/client" || specifier.startsWith("@prisma/client/");
 }
 
@@ -32,6 +32,9 @@ await build({
   target: "node22",
   sourcemap: true,
   conditions: ["development", "node", "import", "default"],
+  banner: {
+    js: 'import { createRequire as __flowbotsCreateRequire } from "node:module"; const require = __flowbotsCreateRequire(import.meta.url);',
+  },
   logLevel: "info",
   plugins: [
     {
