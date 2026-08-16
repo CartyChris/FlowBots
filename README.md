@@ -91,16 +91,22 @@ Product defaults are Pi + Docker + Graphile. `pnpm test` pins the emulators (`AG
 
 ### Computer and app modes
 
-The app you open and the computer provider are separate choices. Web, Electron, and mobile are clients of the same API. Docker stays the default. In the Electron app the deployment owner is asked once whether bots should keep using Docker or run on this Mac as you.
+The client you open and the computer provider are separate choices. Web, Electron, and mobile use the same API contracts. For the full web/server stack, Docker stays the default computer provider and E2B is available for stronger remote isolation.
+
+The desktop app has three runtime profiles:
+
+- **Lite (recommended):** a self-contained local runtime on this Mac. It uses the packaged web UI, embedded local database, local job/realtime services, and host computer/filesystem integration. It does not require Docker, a separate Postgres server, `pnpm`, or a separately running web origin.
+- **Full Local:** connects the Electron client to the complete local web/server stack, normally `http://127.0.0.1:5173`. The server's normal computer-provider setting determines Docker / This Mac / another configured backend.
+- **Remote:** connects the Electron client to a trusted FlowBots server. Non-local Remote targets must use HTTPS.
 
 | `SANDBOX_PROVIDER` | Where agent commands run | Best fit | Isolation notes |
 | --- | --- | --- | --- |
-| `docker` (default) | A per-bot Docker container on your machine. The Electron app can switch this to This Mac without changing the env var. | Quick local setup and trusted single-machine self-hosting | Good local isolation and persistent bot homes. The supervisor controls the local Docker daemon, so keep its port private; Rakazo does this by default. |
-| `e2b` | A remote E2B desktop through the E2B SDK | Public or multi-user deployments | Stronger separation from the Rakazo application host. Requires `E2B_API_KEY`. Bot workspace and browser-profile data are checkpointed into Rakazo-owned `DATA_DIR`, so the provider machine is not the durable source of truth. This Mac is not available. |
-| `desktop` | Directly on the API/worker host. Working directories under the process user's home folder are allowed. | A trusted single-user local process | Least isolated. Model-initiated shell commands run with the Rakazo process's OS permissions. Do not use it on a public or shared server. The Electron first-run "This Mac" choice uses this provider while leaving `SANDBOX_PROVIDER=docker`. |
+| `docker` (default for the full stack) | A per-bot Docker container on your machine. | Quick local setup and trusted single-machine self-hosting | Good local isolation and persistent bot homes. The supervisor controls the local Docker daemon, so keep its port private; Rakazo does this by default. |
+| `e2b` | A remote E2B desktop through the E2B SDK | Public or multi-user deployments | Stronger separation from the Rakazo application host. Requires `E2B_API_KEY`. Bot workspace and browser-profile data are checkpointed into Rakazo-owned `DATA_DIR`, so the provider machine is not the durable source of truth. |
+| `desktop` | Directly on the API/worker host. Working directories under the process user's home folder are allowed. | Trusted single-user Lite / local deployments | Least isolated. Model-initiated shell commands run with the Rakazo process's OS permissions. Do not use it on a public or shared server. |
 | `fake` | An in-process emulator | Tests only | Does not run a real computer. |
 
-Docker remains the recommended quick start for someone running Rakazo on their own machine. E2B is the safer boundary when untrusted users or public traffic share a deployment.
+Docker remains the recommended quick start for the full local stack. E2B is the safer boundary when untrusted users or public traffic share a deployment. Lite is deliberately a trusted single-user desktop mode.
 
 If this Postgres was created with `prisma db push` before checked-in migrations existed, mark the baseline once:
 
@@ -110,23 +116,25 @@ pnpm --filter @rakazo/db exec prisma migrate resolve --applied 0001_init
 
 ## Run the desktop app
 
-The Electron shell loads the same web UI. Leave `pnpm dev` running, then:
+For development from the repository, install dependencies and build the web bundle once, then launch Electron:
 
 ```bash
+pnpm install
+pnpm --filter @rakazo/web build
 pnpm --filter @rakazo/desktop dev
 ```
 
-Native red / yellow / green buttons close, minimize, and zoom that window. They do nothing in the browser tab. On first launch the desktop app asks whether bots should keep using Docker or run on this Mac as you. Docker stays the default. macOS will not show a permission prompt for that choice — the consent is Rakazo's.
+On first launch FlowBots shows the runtime chooser. Pick **Lite** for the self-contained local mode, **Full Local** to connect to an already-running full local stack, or **Remote** for a trusted server. The choice is persisted and can be changed later from **FlowBots → Runtime…** (`Cmd+,` on macOS).
 
-Point Electron at a different origin with `RAKAZO_WEB_URL` (default `http://127.0.0.1:5173`).
+Native red / yellow / green buttons close, minimize, and zoom the window. Host-terminal IPC is available only to the exact active loopback FlowBots runtime origin; Remote web content cannot invoke the desktop host terminal bridge.
 
-Packaged installers (optional):
+Packaged macOS installer:
 
 ```bash
-pnpm --filter @rakazo/desktop pack
+pnpm --filter @rakazo/desktop pack:mac
 ```
 
-Outputs land in `apps/desktop/out/` (macOS dmg/zip, Windows NSIS, Linux AppImage). Those builds still need a running API and web origin.
+The universal macOS DMG includes the built web UI and embedded Lite runtime resources, so **Lite does not require `pnpm dev`, Docker, or a separately running Postgres/API/web origin**. Full Local and Remote remain available when you intentionally want those architectures. Build outputs land in `apps/desktop/out/`.
 
 ## Test
 
