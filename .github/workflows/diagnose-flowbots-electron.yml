@@ -1,0 +1,41 @@
+name: Diagnose FlowBots Electron
+
+on:
+  push:
+    branches: [release/flowbots-macos-providers]
+    paths:
+      - ".github/workflows/diagnose-flowbots-electron.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  direct-launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: release/flowbots-macos-providers
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @rakazo/desktop build
+      - name: Direct Electron launch
+        shell: bash
+        run: |
+          set -uo pipefail
+          log="$(mktemp)"
+          status=0
+          timeout 12s xvfb-run --auto-servernum pnpm --filter @rakazo/desktop exec electron . >"$log" 2>&1 || status=$?
+          cat "$log"
+          if [[ "$status" -eq 124 ]]; then
+            echo "Electron remained alive for the 12-second launch window."
+            exit 0
+          fi
+          echo "Electron exited before the launch window (status=$status)." >&2
+          exit "$status"
