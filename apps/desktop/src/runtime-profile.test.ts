@@ -82,4 +82,12 @@ describe("desktop runtime profiles", () => {
     expect(output).toMatch(/data-runtime-mode=["']full-local["']/);
     expect(output).toMatch(/data-runtime-mode=["']remote["']/);
   });
+
+  test("launcher invokes only the hardened runtime.choose preload bridge", () => {
+    const html = required<(error?: string) => string>("runtimeLauncherHtml");
+    if (!html) return;
+    const output = html();
+    expect(output).toMatch(/rakazoDesktop\?\.runtime\?\.choose\?\.\(profile\)/);
+    expect(output).not.toContain("chooseRuntime");
+  });
 });
