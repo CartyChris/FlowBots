@@ -1,5 +1,5 @@
 name: FlowBots macOS package
-# Final exact-head release gate: build, mount, inspect, and launch the universal DMG.
+# Exact-head gate after package-native PGlite, pg, and Prisma runtime fixes.
 
 on:
   push:
