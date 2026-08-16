@@ -14,7 +14,8 @@
     "test:e2e": "pnpm build && playwright test --config e2e/playwright.config.ts"
   },
   "dependencies": {
-    "@rakazo/contracts": "workspace:*"
+    "@rakazo/contracts": "workspace:*",
+    "@rakazo/local-runtime": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
