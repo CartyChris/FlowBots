@@ -67,7 +67,7 @@ describe("OpenHands Agent Server URL policy", () => {
 describe("OpenHandsAgentServerClient", () => {
   it("probes the official server-info response and keeps bearer auth out of the URL", async () => {
     const fetchFn = vi.fn(
-      async (_url: string, _init?: RequestInit) =>
+      async (url: string, init?: RequestInit) =>
         new Response(
           JSON.stringify({
             uptime: 12,

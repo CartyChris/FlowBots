@@ -143,3 +143,5 @@ function snippet(content: string, q: string): string {
 }
 
 export * from "./brain-folders.js";
+export * from "./hybrid-memory.js";
+export * from "./mnemosyne.js";

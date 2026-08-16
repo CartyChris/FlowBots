@@ -1,62 +1,77 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { _electron as electron, expect, test } from "@playwright/test";
+import type { RakazoDesktop } from "@rakazo/contracts";
 
-const require = createRequire(import.meta.url);
-const electronPath = require("electron") as string;
-const desktopDir = path.resolve(import.meta.dirname, "..");
-const FATAL_STARTUP_PATTERN =
-  /ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING|Uncaught Exception|A JavaScript error occurred in the main process/i;
+const fixture = `<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Rakazo desktop smoke</title></head>
+  <body><main>Desktop fixture ready</main></body>
+</html>`;
 
-test("launches FlowBots without a fatal main-process startup error", async () => {
-  const args = process.platform === "linux" ? ["--no-sandbox", "."] : ["."];
-  const child = spawn(electronPath, args, {
-    cwd: desktopDir,
-    env: { ...process.env },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let output = "";
-  child.stdout?.on("data", (chunk) => {
-    output += String(chunk);
-  });
-  child.stderr?.on("data", (chunk) => {
-    output += String(chunk);
+test("launches with a narrow preload bridge and an isolated renderer", async () => {
+  const app = await electron.launch({
+    args: ["."],
+    cwd: path.resolve(import.meta.dirname, ".."),
+    env: {
+      ...process.env,
+      RAKAZO_WEB_URL: `data:text/html;charset=utf-8,${encodeURIComponent(fixture)}`,
+    },
   });
 
-  const exited = processExit(child);
   try {
-    const earlyExit = await Promise.race([exited, sleep(12_000).then(() => null)]);
+    const page = await app.firstWindow();
+    await expect(page.getByText("Desktop fixture ready")).toBeVisible();
+    await expect(page).toHaveTitle("Rakazo desktop smoke");
 
-    expect(earlyExit, `FlowBots exited during startup.\n${output}`).toBeNull();
-    expect(output).not.toMatch(FATAL_STARTUP_PATTERN);
+    const renderer = await page.evaluate(async () => {
+      const desktop = (window as typeof window & { rakazoDesktop?: RakazoDesktop }).rakazoDesktop;
+
+      return {
+        bridgeKeys: desktop ? Object.keys(desktop).sort() : [],
+        windowKeys: desktop ? Object.keys(desktop.window).sort() : [],
+        platform: desktop?.platform,
+        state: await desktop?.window.state(),
+        nodeGlobals: {
+          require: typeof (window as unknown as { require?: unknown }).require,
+          process: typeof (window as unknown as { process?: unknown }).process,
+          module: typeof (window as unknown as { module?: unknown }).module,
+        },
+      };
+    });
+
+    expect(renderer.bridgeKeys).toEqual(["platform", "window"]);
+    expect(renderer.windowKeys).toEqual(["close", "minimize", "state", "toggleMaximize"]);
+    expect(renderer.platform).toBe(process.platform);
+    expect(renderer.state).toEqual({ minimized: false, maximized: false, fullScreen: false });
+    expect(renderer.nodeGlobals).toEqual({
+      require: "undefined",
+      process: "undefined",
+      module: "undefined",
+    });
+
+    const preferences = await app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      return {
+        count: BrowserWindow.getAllWindows().length,
+        nodeIntegration: win?.webContents.getLastWebPreferences().nodeIntegration,
+        contextIsolation: win?.webContents.getLastWebPreferences().contextIsolation,
+        sandbox: win?.webContents.getLastWebPreferences().sandbox,
+        state: {
+          minimized: win?.isMinimized(),
+          maximized: win?.isMaximized(),
+          fullScreen: win?.isFullScreen(),
+        },
+      };
+    });
+
+    expect(preferences).toEqual({
+      count: 1,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      state: renderer.state,
+    });
   } finally {
-    await stopProcess(child, exited);
+    await app.close();
   }
 });
-
-function processExit(
-  child: ChildProcess,
-): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
-  return new Promise((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code, signal) => resolve({ code, signal }));
-  });
-}
-
-async function stopProcess(
-  child: ChildProcess,
-  exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>,
-): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill("SIGTERM");
-  const stopped = await Promise.race([exited.then(() => true), sleep(2_000).then(() => false)]);
-  if (!stopped && child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGKILL");
-    await Promise.race([exited, sleep(1_000)]);
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

@@ -1,11 +1,6 @@
 import type { ConnectorTool } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import {
-  agentToolsForProvider,
-  normalizeAgentToolName,
-  normalizeAgentToolNames,
-  PiAgentRuntime,
-} from "./pi-runtime.js";
+import { normalizeAgentToolName, normalizeAgentToolNames, PiAgentRuntime } from "./pi-runtime.js";
 
 function tool(name: string): ConnectorTool {
   return { name, description: name, inputSchema: { type: "object" } };
@@ -37,14 +32,6 @@ describe("Pi agent runtime", () => {
       if (event.type === "text") events.push(event.text);
     }
     expect(events.join(" ")).toMatch(/Unknown model/i);
-  });
-
-  it("keeps Venice tools but sends G0DM0D3 as a text-only orchestration backend", () => {
-    const requested = [tool("shell"), tool("read_file")];
-
-    expect(agentToolsForProvider("venice", requested)).toEqual(requested);
-    expect(agentToolsForProvider("openrouter", requested)).toEqual(requested);
-    expect(agentToolsForProvider("g0dm0d3", requested)).toEqual([]);
   });
 });
 

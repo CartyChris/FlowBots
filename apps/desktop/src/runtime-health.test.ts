@@ -3,7 +3,7 @@ import { probeRuntimeOrigin } from "./runtime-health.js";
 
 describe("desktop runtime health", () => {
   test("Lite requires Rakazo health and verifies the zero-setup topology", async () => {
-    const fetcher = vi.fn(async (_url: string) => ({
+    const fetcher = vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
       json: async () => ({ ok: true, jobs: "memory", sandbox: "desktop" }),

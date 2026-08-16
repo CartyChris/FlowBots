@@ -34,6 +34,19 @@ export async function runStdioMcpCall(input: StdioMcpCallInput): Promise<{
   >();
   const timeoutMs = Math.max(250, input.timeoutMs ?? 20_000);
 
+  const cleanup = () => {
+    if (done) return;
+    done = true;
+    for (const waiter of pending.values())
+      waiter.reject(new Error("MCP process closed before replying"));
+    pending.clear();
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already gone
+    }
+  };
+
   const failAll = (message: string) => {
     for (const waiter of pending.values()) waiter.reject(new Error(message));
     pending.clear();

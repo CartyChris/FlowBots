@@ -31,6 +31,7 @@ let session: DesktopRuntimeSession | undefined;
 let terminalManager: TerminalSessionManager | undefined;
 const terminalOwners = new Map<string, number>();
 let trustedLauncherUrl = "";
+let trustedTerminalOrigin = "";
 let stoppingForQuit = false;
 
 function windowFrom(event: Electron.IpcMainInvokeEvent) {
@@ -69,8 +70,10 @@ function assertTrustedRuntimeSender(event: Electron.IpcMainInvokeEvent) {
 }
 
 function assertTrustedTerminalSender(event: Electron.IpcMainInvokeEvent) {
-  if (!trustedTerminalSender(senderUrl(event))) {
-    throw new Error("Host terminal access is available only to a loopback FlowBots runtime.");
+  if (!trustedTerminalSender(senderUrl(event), trustedTerminalOrigin)) {
+    throw new Error(
+      "Host terminal access is available only to the active loopback FlowBots runtime.",
+    );
   }
 }
 
@@ -147,12 +150,23 @@ async function createWindow() {
       }),
     probe: (target) => probeRuntimeOrigin(target),
     navigate: async (origin) => {
-      await win.loadURL(origin);
+      const previousTerminalOrigin = trustedTerminalOrigin;
+      const previousLauncherUrl = trustedLauncherUrl;
+      trustedTerminalOrigin = new URL(origin).origin;
+      try {
+        await win.loadURL(origin);
+        trustedLauncherUrl = "";
+      } catch (error) {
+        trustedTerminalOrigin = previousTerminalOrigin;
+        trustedLauncherUrl = previousLauncherUrl;
+        throw error;
+      }
     },
     persist: async (profile: RuntimeProfile) => {
       await writeRuntimeSettings(settingsPath, profile);
     },
     showLauncher: async (error) => {
+      trustedTerminalOrigin = "";
       trustedLauncherUrl = launcherDocumentUrl(error);
       await win.loadURL(trustedLauncherUrl);
     },
@@ -163,6 +177,8 @@ async function createWindow() {
     if (mainWindow !== win) return;
     terminalManager?.closeAll();
     terminalOwners.clear();
+    trustedTerminalOrigin = "";
+    trustedLauncherUrl = "";
     mainWindow = undefined;
     if (session === nextSession) session = undefined;
     void nextSession.stop();
@@ -352,6 +368,8 @@ app.whenReady().then(async () => {
 app.on("before-quit", (event) => {
   terminalManager?.closeAll();
   terminalOwners.clear();
+  trustedTerminalOrigin = "";
+  trustedLauncherUrl = "";
   if (stoppingForQuit || !session) return;
   event.preventDefault();
   stoppingForQuit = true;
@@ -361,5 +379,7 @@ app.on("before-quit", (event) => {
 app.on("window-all-closed", () => {
   terminalManager?.closeAll();
   terminalOwners.clear();
+  trustedTerminalOrigin = "";
+  trustedLauncherUrl = "";
   if (process.platform !== "darwin") app.quit();
 });

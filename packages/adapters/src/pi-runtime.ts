@@ -31,18 +31,6 @@ const AGENT_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const MAX_AGENT_TOOL_NAME_LENGTH = 64;
 const FALLBACK_AGENT_TOOL_NAME = "connector_tool";
 
-/**
- * G0DM0D3's documented chat-completions surface is a text orchestration API.
- * Keep tool/function schemas out of its requests while preserving normal agent
- * tools for Venice and other providers.
- */
-export function agentToolsForProvider(
-  provider: string,
-  tools: readonly ConnectorTool[],
-): readonly ConnectorTool[] {
-  return provider === G0DM0D3_PROVIDER_ID ? [] : tools;
-}
-
 export class PiAgentRuntime implements AgentRuntime {
   describe() {
     return {
@@ -89,8 +77,7 @@ export class PiAgentRuntime implements AgentRuntime {
             : request.model.oauth
               ? undefined
               : (request.model.apiKey ?? providerEnvironmentApiKey(provider));
-        const requestedToolDefs = request.tools.length ? request.tools : builtinAgentTools;
-        const toolDefs = agentToolsForProvider(provider, requestedToolDefs);
+        const toolDefs = request.tools.length ? request.tools : builtinAgentTools;
         const nestedAgents = new Set<Agent>();
         const host: ToolHost = {
           queue,

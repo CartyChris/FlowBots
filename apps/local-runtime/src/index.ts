@@ -18,6 +18,9 @@ export interface StartLocalRuntimeOptions {
   openRouterKey?: string;
   defaultProvider?: string;
   defaultModel?: string;
+  mnemosyneMode?: "auto" | "off" | "required";
+  mnemosyneCommand?: string;
+  mnemosyneTimeoutMs?: number;
 }
 
 export interface LocalRuntimeHandle {
@@ -110,6 +113,9 @@ export async function startLocalRuntime(
       defaultProvider: options.defaultProvider ?? "openrouter",
       defaultModel: options.defaultModel ?? "deepseek/deepseek-v4-flash-0731",
       wakeupDriver: "memory",
+      mnemosyneMode: options.mnemosyneMode ?? "auto",
+      mnemosyneCommand: options.mnemosyneCommand ?? process.env.MNEMOSYNE_COMMAND ?? "mnemosyne",
+      mnemosyneTimeoutMs: options.mnemosyneTimeoutMs ?? 5000,
       port: httpPort,
     });
 
@@ -357,7 +363,7 @@ function waitForListening(server: Server): Promise<void> {
 }
 
 function closeHttpServer(server?: Server): Promise<void> {
-  if (!server?.listening) return Promise.resolve();
+  if (!server || !server.listening) return Promise.resolve();
   return new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });

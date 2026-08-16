@@ -27,15 +27,21 @@ const embeddedEnv: AppEnv = {
   defaultProvider: "openrouter",
   defaultModel: "test/model",
   wakeupDriver: "memory",
+  mnemosyneMode: "off",
+  mnemosyneCommand: "/tmp/test-mnemosyne",
+  mnemosyneTimeoutMs: 1234,
   port: 43117,
 };
 
 describe("loadEnv", () => {
-  it("defaults the product path to Pi, Docker, and Graphile Worker", () => {
+  it("defaults the product path to Pi, Docker, Graphile Worker, and optional local Mnemosyne", () => {
     const env = loadEnv(base);
     expect(env.agentRuntime).toBe("pi");
     expect(env.sandboxProvider).toBe("docker");
     expect(env.wakeupDriver).toBe("graphile");
+    expect(env.mnemosyneMode).toBe("auto");
+    expect(env.mnemosyneCommand).toBe("mnemosyne");
+    expect(env.mnemosyneTimeoutMs).toBe(5000);
   });
 
   it("keeps explicit emulator settings for pnpm test", () => {
@@ -50,11 +56,35 @@ describe("loadEnv", () => {
     expect(env.wakeupDriver).toBe("memory");
   });
 
+  it("loads explicit Mnemosyne configuration", () => {
+    const env = loadEnv({
+      ...base,
+      MNEMOSYNE_MODE: "required",
+      MNEMOSYNE_COMMAND: "/opt/local/bin/mnemosyne",
+      MNEMOSYNE_TIMEOUT_MS: "7500",
+    });
+    expect(env.mnemosyneMode).toBe("required");
+    expect(env.mnemosyneCommand).toBe("/opt/local/bin/mnemosyne");
+    expect(env.mnemosyneTimeoutMs).toBe(7500);
+  });
+
+  it("rejects invalid Mnemosyne mode and timeout configuration", () => {
+    expect(() => loadEnv({ ...base, MNEMOSYNE_MODE: "sometimes" })).toThrow(/MNEMOSYNE_MODE/);
+    expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "not-a-number" })).toThrow(
+      /MNEMOSYNE_TIMEOUT_MS/,
+    );
+    expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "100" })).toThrow(/MNEMOSYNE_TIMEOUT_MS/);
+    expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "120000" })).toThrow(
+      /MNEMOSYNE_TIMEOUT_MS/,
+    );
+  });
+
   it("accepts a fully explicit embedded environment without ambient server variables", () => {
     const env = loadEnv({}, embeddedEnv);
     expect(env).toEqual(embeddedEnv);
     expect(env.sandboxProvider).toBe("desktop");
     expect(env.wakeupDriver).toBe("memory");
+    expect(env.mnemosyneMode).toBe("off");
   });
 
   it("throws when production omits secrets", () => {

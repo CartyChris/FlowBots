@@ -22,7 +22,7 @@ export class DesktopRuntimeSession {
 
   constructor(private readonly deps: DesktopRuntimeSessionDeps) {}
 
-  async start(profile: RuntimeProfile | null): Promise<RuntimeSelectionResult | undefined> {
+  async start(profile: RuntimeProfile | null): Promise<RuntimeSelectionResult | void> {
     if (!profile) {
       await this.deps.showLauncher("");
       return;

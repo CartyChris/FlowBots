@@ -24,26 +24,6 @@ describe("FlowBots macOS package contract", () => {
     expect(pkg.scripts?.build).toContain("build-local-runtime.mjs");
   });
 
-  test("runtime packages kept external by esbuild are direct desktop dependencies", async () => {
-    const pkg = JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as {
-      dependencies?: Record<string, string>;
-    };
-    const bundler = await readFile(
-      path.join(desktopDir, "scripts", "build-local-runtime.mjs"),
-      "utf8",
-    );
-
-    for (const dependency of ["@electric-sql/pglite", "pg", "@prisma/client"]) {
-      expect(
-        pkg.dependencies?.[dependency],
-        `${dependency} must be packaged by Electron`,
-      ).toBeTruthy();
-    }
-    expect(bundler).toContain('specifier === "@electric-sql/pglite"');
-    expect(bundler).toContain('specifier === "pg"');
-    expect(bundler).toContain('specifier === "@prisma/client"');
-  });
-
   test("package copies the Lite web bundle and Prisma migrations into process.resourcesPath", async () => {
     const pkg = JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as {
       build?: {

@@ -73,12 +73,6 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@electric-sql/pglite':
-        specifier: ^0.5.4
-        version: 0.5.5
-      '@prisma/client':
-        specifier: ^7.9.1
-        version: 7.9.1(prisma@7.9.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3))(typescript@5.9.3)
       '@rakazo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -88,9 +82,6 @@ importers:
       node-pty:
         specifier: 1.2.0-beta.14
         version: 1.2.0-beta.14
-      pg:
-        specifier: ^8.16.3
-        version: 8.23.0
     devDependencies:
       '@playwright/test':
         specifier: ^1.55.0
