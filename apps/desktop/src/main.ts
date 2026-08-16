@@ -4,6 +4,7 @@ import { app, BrowserWindow, clipboard, ipcMain, Menu } from "electron";
 import {
   type ConnectionSettings,
   defaultWebUrl,
+  isTrustedConnectionCenterDocument,
   normalizeWebUrl,
   rememberWebUrl,
 } from "./connection.js";
@@ -35,9 +36,16 @@ let retryTimer: ReturnType<typeof setInterval> | undefined;
 let navigationId = 0;
 let healthProbe: Promise<ConnectionHealth> | null = null;
 let healthProbeTarget = "";
+let trustedConnectionCenterUrl = "";
 
 function windowFrom(event: Electron.IpcMainInvokeEvent) {
   return BrowserWindow.fromWebContents(event.sender);
+}
+
+function requireConnectionCenterSender(event: Electron.IpcMainInvokeEvent) {
+  if (!isTrustedConnectionCenterDocument(event.sender.getURL(), trustedConnectionCenterUrl)) {
+    throw new Error("Desktop connection controls are only available from Connection Center.");
+  }
 }
 
 function developmentIcon() {
@@ -96,7 +104,10 @@ async function showConnectionCenter(mode: ConnectionCenterMode, error = lastErro
   lastError = error;
   if (mode === "settings") stopAutoRetry();
   const html = recoveryPageHtml(recoveryModel(mode));
-  await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  const documentUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  trustedConnectionCenterUrl = documentUrl;
+  await win.loadURL(documentUrl);
+  trustedConnectionCenterUrl = win.webContents.getURL();
 
   if (mode === "recovery") startAutoRetry();
   void refreshHealth();
@@ -109,6 +120,7 @@ async function connectToTarget() {
   const target = currentTarget;
   const attemptId = ++navigationId;
   connecting = true;
+  trustedConnectionCenterUrl = "";
   stopAutoRetry();
   health = {
     webStatus: "checking",
@@ -223,20 +235,31 @@ function registerIpc() {
     };
   });
 
-  ipcMain.handle("desktop.connection.retry", async () => {
+  ipcMain.handle("desktop.connection.retry", async (event) => {
+    requireConnectionCenterSender(event);
     void connectToTarget();
     return { ok: true };
   });
-  ipcMain.handle("desktop.connection.setUrl", (_event, value: unknown) =>
-    saveAndConnect(typeof value === "string" ? value : ""),
-  );
-  ipcMain.handle("desktop.connection.reset", () => resetToLocal());
-  ipcMain.handle("desktop.connection.useRecent", (_event, value: unknown) =>
-    saveAndConnect(typeof value === "string" ? value : ""),
-  );
-  ipcMain.handle("desktop.connection.copyDiagnostics", () => copyConnectionDiagnostics());
-  ipcMain.handle("desktop.connection.open", () => openConnectionSettings());
-  ipcMain.handle("desktop.connection.status", () => refreshHealth());
+  ipcMain.handle("desktop.connection.setUrl", (event, value: unknown) => {
+    requireConnectionCenterSender(event);
+    return saveAndConnect(typeof value === "string" ? value : "");
+  });
+  ipcMain.handle("desktop.connection.reset", (event) => {
+    requireConnectionCenterSender(event);
+    return resetToLocal();
+  });
+  ipcMain.handle("desktop.connection.useRecent", (event, value: unknown) => {
+    requireConnectionCenterSender(event);
+    return saveAndConnect(typeof value === "string" ? value : "");
+  });
+  ipcMain.handle("desktop.connection.copyDiagnostics", (event) => {
+    requireConnectionCenterSender(event);
+    return copyConnectionDiagnostics();
+  });
+  ipcMain.handle("desktop.connection.status", (event) => {
+    requireConnectionCenterSender(event);
+    return refreshHealth();
+  });
 }
 
 function installMenu() {
@@ -294,6 +317,7 @@ function createWindow() {
     connected = false;
     connecting = false;
     navigationId += 1;
+    trustedConnectionCenterUrl = "";
     stopAutoRetry();
   });
   void connectToTarget();
@@ -328,6 +352,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  trustedConnectionCenterUrl = "";
   stopAutoRetry();
 });
 
