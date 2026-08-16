@@ -29,6 +29,8 @@ jobs:
           echo "MERGE_EXIT=$status"
           echo "=== unresolved paths ==="
           git diff --name-only --diff-filter=U
+          echo "=== conflict hunks ==="
+          git diff --cc --no-ext-diff --no-color
           echo "=== status ==="
           git status --short
           if [ "$status" -eq 0 ]; then
