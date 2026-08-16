@@ -1,3 +1,4 @@
+import { routineWakeupJob, type JobPublisher } from "@rakazo/adapter-kit";
 import type {
   ActivityEvent,
   AgentRunRequest,
@@ -59,6 +60,18 @@ export type ExecutorDeps = {
 };
 
 const GRAPHICAL_AGENT_TOOLS = new Set(["computer"]);
+
+export async function deferFutureRoutine(
+  jobs: JobPublisher,
+  routineId: string,
+  scheduledAt: Date,
+): Promise<boolean> {
+  if (!routineId.trim()) throw new Error("routineId is required");
+  const timestamp = scheduledAt.getTime();
+  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) return false;
+  await jobs.enqueue(routineWakeupJob(routineId, scheduledAt));
+  return true;
+}
 
 async function selectRunModelCredential<T extends RouteCredential>(
   prompt: string,
