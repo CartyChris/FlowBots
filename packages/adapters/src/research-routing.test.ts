@@ -14,7 +14,7 @@ const defaultCredential: RouteCredential = {
 const venice: RouteCredential = {
   id: "venice",
   provider: "venice",
-  defaultModel: "venice-uncensored",
+  defaultModel: "venice-uncensored-1-2",
   isDefault: false,
 };
 const godmode: RouteCredential = {
@@ -79,6 +79,14 @@ describe("research routing", () => {
     expect(
       orderedResearchCredentials("cybersecurity research on my own lab", [defaultCredential]),
     ).toEqual([defaultCredential]);
+  });
+
+  test("a refusal report alone never causes provider chasing", () => {
+    const prompt = "The previous assistant refused. Please answer the same harmless cooking question.";
+    expect(classifyResearchRoute(prompt)).toBe("default");
+    expect(orderedResearchCredentials(prompt, [godmode, venice, defaultCredential])).toEqual([
+      defaultCredential,
+    ]);
   });
 
   test("keyword substrings do not accidentally reroute unrelated words", () => {
