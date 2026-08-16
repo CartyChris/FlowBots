@@ -40,31 +40,34 @@ describe("Paperclip URL policy", () => {
 
 describe("Paperclip API projection", () => {
   it("probes only the official /api/health endpoint", async () => {
-    const fetchFn = vi.fn(async () =>
+    const fetchSpy = vi.fn(async () =>
       new Response(JSON.stringify({ status: "ok", deploymentMode: "local_trusted" }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
-    ) as unknown as typeof fetch;
-    const client = new PaperclipClient({ baseUrl: "http://localhost:3100", fetchFn });
+    );
+    const client = new PaperclipClient({
+      baseUrl: "http://localhost:3100",
+      fetchFn: fetchSpy as unknown as typeof fetch,
+    });
     await expect(client.probe()).resolves.toMatchObject({ available: true });
-    expect(fetchFn).toHaveBeenCalledWith(
+    expect(fetchSpy).toHaveBeenCalledWith(
       "http://localhost:3100/api/health",
       expect.objectContaining({ headers: expect.objectContaining({ Accept: "application/json" }) }),
     );
   });
 
   it("keeps auth in headers and exposes company/dashboard/agent/issue/activity surfaces", async () => {
-    const fetchFn = vi.fn(async (url: string, init?: RequestInit) =>
+    const fetchSpy = vi.fn(async (url: string, init?: RequestInit) =>
       new Response(JSON.stringify({ url, authorization: (init?.headers as Record<string, string>)?.Authorization }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
-    ) as unknown as typeof fetch;
+    );
     const client = new PaperclipClient({
       baseUrl: "https://paperclip.example.com",
       apiKey: "pc-secret",
-      fetchFn,
+      fetchFn: fetchSpy as unknown as typeof fetch,
     });
 
     await client.listCompanies();
@@ -73,30 +76,33 @@ describe("Paperclip API projection", () => {
     await client.dashboard("company-1");
     await client.activity("company-1");
 
-    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
       "https://paperclip.example.com/api/companies",
       "https://paperclip.example.com/api/companies/company-1/agents",
       "https://paperclip.example.com/api/companies/company-1/issues",
       "https://paperclip.example.com/api/companies/company-1/dashboard",
       "https://paperclip.example.com/api/companies/company-1/activity",
     ]);
-    for (const [, init] of fetchFn.mock.calls) {
+    for (const [, init] of fetchSpy.mock.calls) {
       expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pc-secret");
     }
     expect(client.baseUrl).not.toContain("pc-secret");
   });
 
   it("fetches heartbeat events/issues for Glass Pane external correlation", async () => {
-    const fetchFn = vi.fn(async (url: string) =>
+    const fetchSpy = vi.fn(async (url: string) =>
       new Response(JSON.stringify({ url }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
-    ) as unknown as typeof fetch;
-    const client = new PaperclipClient({ baseUrl: "http://127.0.0.1:3100", fetchFn });
+    );
+    const client = new PaperclipClient({
+      baseUrl: "http://127.0.0.1:3100",
+      fetchFn: fetchSpy as unknown as typeof fetch,
+    });
     await client.heartbeatRunEvents("run-7", 42);
     await client.heartbeatRunIssues("run-7");
-    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([
       "http://127.0.0.1:3100/api/heartbeat-runs/run-7/events?afterSeq=42",
       "http://127.0.0.1:3100/api/heartbeat-runs/run-7/issues",
     ]);
