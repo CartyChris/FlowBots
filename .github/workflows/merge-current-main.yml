@@ -66,6 +66,12 @@ jobs:
           git add -A
       - name: Install merged dependency graph
         run: pnpm install --frozen-lockfile
+      - name: Apply Biome safe formatting and fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm format
+          git add -A
       - name: Generate Prisma client
         run: pnpm db:generate
         env:
