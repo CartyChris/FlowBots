@@ -59,3 +59,10 @@ export function localApiHealthUrl(webUrl: string): string | undefined {
   if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") return undefined;
   return "http://127.0.0.1:3100/health";
 }
+
+export function isTrustedConnectionCenterDocument(
+  senderUrl: string,
+  expectedDocumentUrl: string,
+): boolean {
+  return expectedDocumentUrl.length > 0 && senderUrl === expectedDocumentUrl;
+}
