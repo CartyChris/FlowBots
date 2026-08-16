@@ -10,7 +10,13 @@ function mustStayExternal(specifier) {
   // PGlite resolves its WASM/data assets relative to import.meta.url. Keep the
   // package external so Electron packages those assets beside its JS instead
   // of breaking that runtime URL contract inside an esbuild bundle.
-  return specifier === "@electric-sql/pglite" || specifier.startsWith("@electric-sql/pglite/");
+  if (specifier === "@electric-sql/pglite" || specifier.startsWith("@electric-sql/pglite/")) {
+    return true;
+  }
+  // node-postgres is CommonJS internally and uses runtime require() calls for
+  // Node built-ins. Keep it as a normal Node dependency instead of translating
+  // those calls into an ESM bundle where dynamic require is unavailable.
+  return specifier === "pg" || specifier.startsWith("pg/");
 }
 
 await build({
