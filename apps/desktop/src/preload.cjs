@@ -8,4 +8,8 @@ contextBridge.exposeInMainWorld("rakazoDesktop", {
     toggleMaximize: () => ipcRenderer.invoke("desktop.window.toggleMaximize"),
     state: () => ipcRenderer.invoke("desktop.window.state"),
   },
+  runtime: {
+    choose: (profile) => ipcRenderer.invoke("desktop.runtime.choose", profile),
+    showLauncher: () => ipcRenderer.invoke("desktop.runtime.showLauncher"),
+  },
 });
