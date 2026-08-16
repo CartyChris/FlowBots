@@ -15,6 +15,9 @@ type Start = (input: {
   migrationsDir: string;
   webDir?: string;
   port?: number;
+  mnemosyneMode?: "auto" | "off" | "required";
+  mnemosyneCommand?: string;
+  mnemosyneTimeoutMs?: number;
 }) => Promise<{
   origin: string;
   prisma: {
@@ -36,7 +39,7 @@ function migrationsDir() {
 }
 
 describe("embedded Rakazo LocalRuntime", () => {
-  test("starts without ambient server configuration, reports Lite topology, and persists across restart", async () => {
+  test("starts without ambient server configuration, reports Lite topology and hybrid memory, and persists across restart", async () => {
     const start = requiredStart();
     if (!start) return;
 
@@ -44,8 +47,11 @@ describe("embedded Rakazo LocalRuntime", () => {
     temps.push(dataDir);
     const previousDatabaseUrl = process.env.DATABASE_URL;
     const previousAuth = process.env.BETTER_AUTH_SECRET;
+    const previousMnemosynePath = process.env.MNEMOSYNE_COMMAND;
     delete process.env.DATABASE_URL;
     delete process.env.BETTER_AUTH_SECRET;
+    // The default embedded app must remain bootable even when Mnemosyne/Python is absent.
+    process.env.MNEMOSYNE_COMMAND = path.join(dataDir, "definitely-not-installed-mnemosyne");
 
     let first: Awaited<ReturnType<Start>> | undefined;
     let second: Awaited<ReturnType<Start>> | undefined;
@@ -53,7 +59,14 @@ describe("embedded Rakazo LocalRuntime", () => {
       first = await start({ dataDir, migrationsDir: migrationsDir(), port: 0 });
       expect(new URL(first.origin).hostname).toBe("127.0.0.1");
       const health = await fetch(`${first.origin}/health`).then((response) => response.json());
-      expect(health).toMatchObject({ ok: true, sandbox: "desktop", jobs: "memory", realtime: "memory" });
+      expect(health).toMatchObject({
+        ok: true,
+        sandbox: "desktop",
+        jobs: "memory",
+        realtime: "memory",
+        memory: "markdown+mnemosyne",
+        mnemosyne: "auto",
+      });
 
       await first.prisma.$executeRawUnsafe(
         'CREATE TABLE IF NOT EXISTS "_rakazo_lite_probe" ("value" TEXT PRIMARY KEY)',
@@ -64,7 +77,16 @@ describe("embedded Rakazo LocalRuntime", () => {
       await first.stop();
       first = undefined;
 
-      second = await start({ dataDir, migrationsDir: migrationsDir(), port: 0 });
+      second = await start({
+        dataDir,
+        migrationsDir: migrationsDir(),
+        port: 0,
+        mnemosyneMode: "off",
+        mnemosyneCommand: "/opt/custom/mnemosyne",
+        mnemosyneTimeoutMs: 6789,
+      });
+      const secondHealth = await fetch(`${second.origin}/health`).then((response) => response.json());
+      expect(secondHealth).toMatchObject({ memory: "markdown+mnemosyne", mnemosyne: "off" });
       const rows = await second.prisma.$queryRawUnsafe<Array<{ value: string }>>(
         'SELECT "value" FROM "_rakazo_lite_probe"',
       );
@@ -76,6 +98,8 @@ describe("embedded Rakazo LocalRuntime", () => {
       else process.env.DATABASE_URL = previousDatabaseUrl;
       if (previousAuth === undefined) delete process.env.BETTER_AUTH_SECRET;
       else process.env.BETTER_AUTH_SECRET = previousAuth;
+      if (previousMnemosynePath === undefined) delete process.env.MNEMOSYNE_COMMAND;
+      else process.env.MNEMOSYNE_COMMAND = previousMnemosynePath;
     }
   }, 60_000);
 
