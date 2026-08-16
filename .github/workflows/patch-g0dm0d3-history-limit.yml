@@ -1,0 +1,41 @@
+name: Patch G0DM0D3 history limit
+
+on:
+  push:
+    branches: [feature/rakazo-local-ai-os]
+    paths:
+      - ".github/workflows/patch-g0dm0d3-history-limit.yml"
+      - "scripts/patch-g0dm0d3-history-limit.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/rakazo-local-ai-os
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply exact-once patch
+        run: node scripts/patch-g0dm0d3-history-limit.mjs
+      - name: Verify minimal diff
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = "packages/adapters/src/pi-runtime.ts"
+          git diff -- packages/adapters/src/pi-runtime.ts
+      - name: Commit patch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/adapters/src/pi-runtime.ts
+          git commit -m "fix(adapters): cap G0DM0D3 history below API ceiling"
+          git push origin HEAD:feature/rakazo-local-ai-os
