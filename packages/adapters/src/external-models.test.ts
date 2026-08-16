@@ -6,6 +6,7 @@ import {
   g0dm0d3HealthUrl,
   isG0dm0d3Reachable,
   providerEnvironmentApiKey,
+  providerHistoryLimit,
 } from "./external-models.js";
 
 describe("FlowBots external model providers", () => {
@@ -56,6 +57,12 @@ describe("FlowBots external model providers", () => {
     expect(() =>
       g0dm0d3BaseUrl({ GODMODE_BASE_URL: "https://user:pass@example.com/v1" } as NodeJS.ProcessEnv),
     ).toThrow(/credentials/i);
+  });
+
+  test("G0DM0D3 history stays below its 100-message API ceiling", () => {
+    expect(providerHistoryLimit("g0dm0d3")).toBe(96);
+    expect(providerHistoryLimit("venice")).toBeUndefined();
+    expect(providerHistoryLimit("openrouter")).toBeUndefined();
   });
 
   test("G0DM0D3 reachability uses only its unauthenticated health endpoint and fails closed", async () => {
