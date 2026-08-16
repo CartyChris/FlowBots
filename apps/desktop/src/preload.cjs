@@ -8,4 +8,13 @@ contextBridge.exposeInMainWorld("rakazoDesktop", {
     toggleMaximize: () => ipcRenderer.invoke("desktop.window.toggleMaximize"),
     state: () => ipcRenderer.invoke("desktop.window.state"),
   },
+  connection: {
+    retry: () => ipcRenderer.invoke("desktop.connection.retry"),
+    setUrl: (url) => ipcRenderer.invoke("desktop.connection.setUrl", url),
+    reset: () => ipcRenderer.invoke("desktop.connection.reset"),
+    useRecent: (url) => ipcRenderer.invoke("desktop.connection.useRecent", url),
+    copyDiagnostics: () => ipcRenderer.invoke("desktop.connection.copyDiagnostics"),
+    open: () => ipcRenderer.invoke("desktop.connection.open"),
+    status: () => ipcRenderer.invoke("desktop.connection.status"),
+  },
 });
