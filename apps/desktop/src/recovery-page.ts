@@ -53,7 +53,8 @@ export function recoveryPageHtml(model: RecoveryPageModel): string {
     : `Choose the local or remote Rakazo deployment this desktop client should use. Your current target is <span class="target">${escapeHtml(model.currentUrl)}</span>.`;
   const recentButtons = model.recentUrls
     .map(
-      (url) => `<button class="recent" type="button" data-recent-url="${escapeHtml(url)}"><span></span>${escapeHtml(url)}</button>`,
+      (url) =>
+        `<button class="recent" type="button" data-recent-url="${escapeHtml(url)}"><span></span>${escapeHtml(url)}</button>`,
     )
     .join("");
   const errorBlock = model.error
