@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
@@ -26,10 +26,7 @@ test("launches FlowBots without a fatal main-process startup error", async () =>
 
   const exited = processExit(child);
   try {
-    const earlyExit = await Promise.race([
-      exited,
-      sleep(12_000).then(() => null),
-    ]);
+    const earlyExit = await Promise.race([exited, sleep(12_000).then(() => null)]);
 
     expect(earlyExit, `FlowBots exited during startup.\n${output}`).toBeNull();
     expect(output).not.toMatch(FATAL_STARTUP_PATTERN);
@@ -38,7 +35,9 @@ test("launches FlowBots without a fatal main-process startup error", async () =>
   }
 });
 
-function processExit(child: ChildProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+function processExit(
+  child: ChildProcess,
+): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
   return new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve({ code, signal }));
