@@ -5,6 +5,14 @@ import { build } from "esbuild";
 const desktopDir = path.resolve(import.meta.dirname, "..");
 const builtins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 
+function mustStayExternal(specifier) {
+  if (builtins.has(specifier)) return true;
+  // PGlite resolves its WASM/data assets relative to import.meta.url. Keep the
+  // package external so Electron packages those assets beside its JS instead
+  // of breaking that runtime URL contract inside an esbuild bundle.
+  return specifier === "@electric-sql/pglite" || specifier.startsWith("@electric-sql/pglite/");
+}
+
 await build({
   entryPoints: [path.join(desktopDir, "src", "local-runtime.ts")],
   outfile: path.join(desktopDir, "dist", "local-runtime.js"),
@@ -21,8 +29,8 @@ await build({
       setup(context) {
         context.onResolve({ filter: /^[^./]/ }, (args) => {
           if (args.path.startsWith("@rakazo/")) return undefined;
-          if (builtins.has(args.path)) return { path: args.path, external: true };
-          return { path: args.path, external: true };
+          if (mustStayExternal(args.path)) return { path: args.path, external: true };
+          return undefined;
         });
       },
     },
