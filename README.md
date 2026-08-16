@@ -11,7 +11,7 @@ Each bot has one thread, one computer, memory, routines, and history. A bot can 
 - **Personalities, for real.** Every bot runs a persona — Witty, Unhinged, Wholesome, Genius, Chill, Hype, Zen, or your own Custom voice — with humor / spice / energy / verbosity sliders and an optional swearing toggle. Steer any single reply in place with `/funny`, `/serious`, `/zen`, `/brief`, and friends.
 - **A social layer for your agents.** Live presence in the sidebar (watch bots think), 🔥💀😂👀 reactions on any message, ambient nudges, the **Buzz** feed of everything your roster is up to, and the **Lounge**, where 2–4 bots banter about a topic in one shared room — each fully in character.
 - **Bring everything you already pay for.** At onboarding Rakazo detects API keys already in your environment (Anthropic, OpenAI, Google, xAI, Groq, DeepSeek, Mistral, OpenRouter, Together, Cerebras, Fireworks) and any **local Ollama server** with its models, and imports them with one click. ChatGPT Plus/Pro, GitHub Copilot, and SuperGrok sign in with device codes. Ollama models need no key at all.
-- **Ships as a real Mac app.** `pnpm --filter @rakazo/desktop pack:mac` produces a universal `.dmg` (Apple Silicon + Intel).
+- **Native Mac client.** `pnpm --filter @rakazo/desktop pack:mac` produces a universal `.dmg` (Apple Silicon + Intel). The installer is the desktop client for a running Rakazo deployment; Connection Center handles local/remote endpoint setup and recovery instead of failing to a blank window.
 
 ## Demo
 
@@ -100,24 +100,40 @@ pnpm --filter @rakazo/db exec prisma migrate resolve --applied 0001_init
 
 ## Run the desktop app
 
-The Electron shell loads the same web UI. Leave `pnpm dev` running, then:
+The Electron application is a **desktop client**, not a bundled copy of the Rakazo server stack. For a local deployment, start Rakazo first and leave it running:
+
+```bash
+docker compose -f infra/compose/docker-compose.yml up postgres -d
+pnpm db:migrate
+pnpm dev
+```
+
+Then launch the development desktop client:
 
 ```bash
 pnpm --filter @rakazo/desktop dev
 ```
 
-Native red / yellow / green buttons close, minimize, and zoom that window. They do nothing in the browser tab. On first launch the desktop app asks whether bots should keep using Docker or run on this Mac as you. Docker stays the default. macOS will not show a permission prompt for that choice — the consent is Rakazo's.
+`pnpm dev` supplies the services the desktop client uses: API (`:3100`), Graphile Worker, Vite web UI (`:5173`), and sandbox supervisor (`:7091`). Native red / yellow / green buttons close, minimize, and zoom the Electron window; they do nothing in a browser tab. On first launch Rakazo asks whether bots should keep using Docker or run on this Mac as you. Docker stays the default. macOS will not show a permission prompt for that choice — the consent is Rakazo's.
 
-Point Electron at a different origin with `RAKAZO_WEB_URL` (default `http://127.0.0.1:5173`).
+The default desktop web origin is `http://127.0.0.1:5173`. You can still provide `RAKAZO_WEB_URL`, but the app now has a native **Connection Center** so normal endpoint changes do not require launching Electron from Terminal:
 
-Packaged installers (optional):
+- Open **Rakazo → Connection…** on macOS (or press `Cmd+,`; `Ctrl+,` on other platforms).
+- Enter a local or remote/self-hosted `http://` or `https://` Rakazo web origin and choose **Save & Connect**.
+- Rakazo remembers up to five recent endpoints locally. Usernames/passwords embedded in URLs are rejected; provider keys, cookies, tokens, and environment variables are not written to connection settings.
+- If the web origin is down at startup, the app shows Connection Center instead of a black window. It reports web-origin reachability, checks the local API separately when using localhost, and retries automatically until the web origin becomes reachable.
+- **Copy Diagnostics** copies only app version, platform, target URL, navigation error, and web/API health state—no credentials or secret environment data.
+
+Packaged installers:
 
 ```bash
 pnpm --filter @rakazo/desktop pack       # macOS dmg/zip, Windows NSIS, Linux AppImage
 pnpm --filter @rakazo/desktop pack:mac   # universal macOS .dmg (Apple Silicon + Intel)
 ```
 
-Outputs land in `apps/desktop/out/`. Building a `.dmg` requires macOS (electron-builder limitation); `pack:mac` produces a single universal binary that runs natively on both Apple Silicon and Intel Macs. Those builds still need a running API and web origin.
+Outputs land in `apps/desktop/out/`. Building a `.dmg` requires macOS (electron-builder limitation); `pack:mac` produces a single universal binary that runs natively on both Apple Silicon and Intel Macs.
+
+**Important:** the `.dmg` currently packages the Electron client. It does not embed Postgres, the API, Graphile Worker, Vite server, or sandbox supervisor. To use it locally, run the Rakazo stack above; to use it as a thin client, point Connection Center at a reachable self-hosted Rakazo web origin.
 
 ## Verify
 
