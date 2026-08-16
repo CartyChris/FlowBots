@@ -1,4 +1,5 @@
 import { rm } from "node:fs/promises";
+import path from "node:path";
 import { RPCHandler } from "@orpc/server/fetch";
 import type { JobPublisher, RealtimeFanout, SandboxProvider } from "@rakazo/adapter-kit";
 import {
@@ -25,7 +26,7 @@ import {
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
 import { createDb, createThreadEvents, type PrismaClient, requireMembership } from "@rakazo/db";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+import { HybridMemoryStore, MarkdownMemoryStore, MnemosyneSemanticIndex } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
@@ -79,7 +80,15 @@ export async function createApp(
   const secrets = new EncryptedSecretStore(env.encryptionKey);
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
-  const memory = new MarkdownMemoryStore(prisma);
+  const memory = new HybridMemoryStore(
+    new MarkdownMemoryStore(prisma),
+    new MnemosyneSemanticIndex({
+      rootDir: path.join(env.dataDir, "mnemosyne-index"),
+      mode: env.mnemosyneMode,
+      command: env.mnemosyneCommand,
+      timeoutMs: env.mnemosyneTimeoutMs,
+    }),
+  );
   const stack = createConnectorStack(isComposioEnabled(env.composioApiKey));
   const connector = stack.destination;
   await connector.start();
@@ -187,8 +196,8 @@ export async function createApp(
     }),
   );
   app.on(["GET", "POST"], "/api/auth/*", async (c) => {
-    const path = new URL(c.req.url).pathname.replace("/api/auth", "");
-    if (blockedAuthPaths.some((blocked) => path.startsWith(blocked))) {
+    const requestPath = new URL(c.req.url).pathname.replace("/api/auth", "");
+    if (blockedAuthPaths.some((blocked) => requestPath.startsWith(blocked))) {
       return c.json({ error: "Not available in version 1" }, 404);
     }
     return auth.handler(c.req.raw);
@@ -213,6 +222,8 @@ export async function createApp(
       composio: Boolean(stack.composio),
       jobs: jobKind,
       realtime: realtime.describe().id,
+      memory: memory.describe().id,
+      mnemosyne: env.mnemosyneMode,
     }),
   );
 
