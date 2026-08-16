@@ -1,92 +1,64 @@
-import { mkdir } from "node:fs/promises";
 import type {
-  AgentHomeStore,
-  AgentModelOAuthCredential,
+  ActivityEvent,
+  AgentRunRequest,
   AgentRuntime,
-  ComputerRef,
-  ConnectorProvider,
-  JobPublisher,
-  MemoryStore,
-  NotificationMessage,
-  NotificationProvider,
-  SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { routineWakeupJob, runContinueJob } from "@rakazo/adapter-kit";
-import type { MessageBlock, RunStatus } from "@rakazo/contracts";
-import {
-  assertTransition,
-  containsSecret,
-  createStreamingRedactor,
-  isTerminal,
-  nextCronDate,
-  nextFence,
-  redactSecrets,
-} from "@rakazo/core";
-import { createThreadMessage, type PrismaClient, type ThreadEvents } from "@rakazo/db";
-import { builtinAgentTools } from "./builtin-tools.js";
-import { deleteSpawnedBot, spawnBot } from "./child-bots.js";
-import { collectLogIds } from "./composio-connector.js";
-import { scheduleComputerSleep } from "./computer-idle.js";
-import { observationToolResult, parseComputerActions } from "./computer-tools.js";
-import {
-  checkpointAndRecordComputerWorkspace,
-  restoreComputerWorkspace,
-} from "./computer-workspace.js";
-import { resolveAgentHomePath } from "./home.js";
-import { toOAuthCredential } from "./pi-credentials.js";
-import {
-  parseModelSecret,
-  resolveModelAuth,
-  secretValuesToRedact,
-  serializeModelSecret,
-} from "./pi-oauth.js";
+  AppEvent,
+  ArtifactStore,
+  ComposioConnector,
+  ControlAction,
+  MessageBlock,
+  RunStatus,
+  Sandbox,
+  SandboxRuntimeInfo,
+} from "@rakazo/contracts";
+import { EVENT_TYPES } from "@rakazo/contracts";
+import { decryptCredential } from "./secrets.js";
 import { G0DM0D3_PROVIDER_ID, isG0dm0d3Reachable } from "./external-models.js";
 import { orderedResearchCredentials, type RouteCredential } from "./research-routing.js";
 import { inferScript } from "./scripted-runtime.js";
-import type { EncryptedSecretStore } from "./secrets.js";
+import { builtinAgentTools, type BuiltinAgentTool } from "./builtin-tools.js";
+import { ensureUserComputer } from "./computer-tools.js";
+import { createPiMcpServers } from "./mcp-client.js";
 
-const modelCredentialLocks = new Map<string, Promise<void>>();
-const READ_ONLY_AGENT_TOOLS = new Set([
-  "computer_observe",
-  "list_files",
-  "read_file",
-  "request_takeover",
-  "run_subagent",
-]);
-const MAX_MODEL_FILE_BYTES = 250_000;
-const MAX_AGENT_HISTORY_MESSAGES = 200;
-const GRAPHICAL_AGENT_TOOLS = new Set([
-  "computer_observe",
-  "computer_act",
-  "open_path",
-  "launch_app",
-]);
+export type RunContext = {
+  runId: string;
+  userId: string;
+  workspaceId: string;
+  threadId: string;
+};
 
-export interface ExecutorDeps {
-  prisma: PrismaClient;
-  events: ThreadEvents;
-  runtime: AgentRuntime;
-  sandbox: SandboxProvider;
-  memory: MemoryStore;
-  home: AgentHomeStore;
-  connector?: ConnectorProvider;
+export type RunExecutor = {
+  execute(runId: string): Promise<void>;
+  requestCancel(runId: string): Promise<void>;
+  completeRun(runId: string, status: RunStatus, error?: string): Promise<void>;
+};
+
+type RunRecord = {
+  id: string;
+  userId: string;
+  workspaceId: string;
+  threadId: string;
+  status: string;
+  leaseOwner: string | null;
+  leaseFence: number | null;
+};
+
+export type ExecutorDeps = {
+  prisma: any;
+  events: { appendEvent: (input: any) => Promise<AppEvent> };
+  activity?: { appendActivity?: (input: any) => Promise<ActivityEvent> };
+  realtime?: { publish?: (event: AppEvent) => void };
+  sandbox: Sandbox;
+  artifactStore: ArtifactStore;
+  composio?: ComposioConnector;
+  agentRuntime?: AgentRuntime;
   secrets: string[];
-  secretStore?: EncryptedSecretStore;
-  deploymentModelKey?: string;
-  dataDir?: string;
-  notifications?: NotificationProvider;
-  jobs: JobPublisher;
-}
+  credentialKey?: string;
+  computer?: { resolve?: (userId: string) => Promise<SandboxRuntimeInfo> };
+  now?: () => Date;
+};
 
-export async function deferFutureRoutine(
-  jobs: JobPublisher,
-  routineId: string,
-  scheduledAt: Date,
-): Promise<boolean> {
-  if (scheduledAt.getTime() <= Date.now() + 1_000) return false;
-  await jobs.enqueue(routineWakeupJob(routineId, scheduledAt));
-  return true;
-}
+const GRAPHICAL_AGENT_TOOLS = new Set(["computer"]);
 
 async function selectRunModelCredential<T extends RouteCredential>(
   prompt: string,
@@ -100,1010 +72,189 @@ async function selectRunModelCredential<T extends RouteCredential>(
   return ordered.at(-1);
 }
 
-export function createRunExecutor(deps: ExecutorDeps) {
-  return {
-    async wakeRoutine(routineId: string, scheduledFor: string) {
-      const scheduledAt = new Date(scheduledFor);
-      if (!Number.isFinite(scheduledAt.getTime())) return;
-      const routine = await deps.prisma.routine.findUnique({ where: { id: routineId } });
-      if (!routine?.active || routine.nextRunAt?.getTime() !== scheduledAt.getTime()) return;
-      if (await deferFutureRoutine(deps.jobs, routineId, scheduledAt)) return;
-      const bot = await deps.prisma.bot.findUnique({
-        where: { id: routine.botId },
-        include: { thread: true },
-      });
-      if (!bot?.thread) return;
-      const nextRunAt = nextCronDate(
-        routine.cron,
-        new Date(Math.max(Date.now(), scheduledAt.getTime())),
-        routine.timezone,
-      );
-      const claimed = await deps.prisma.$transaction(async (tx) => {
-        const updated = await tx.routine.updateMany({
-          where: { id: routine.id, active: true, nextRunAt: scheduledAt },
-          data: { lastRunAt: new Date(), nextRunAt },
-        });
-        if (updated.count !== 1) return null;
-        const task = await tx.task.create({
-          data: {
-            workspaceId: routine.workspaceId,
-            botId: bot.id,
-            threadId: bot.thread!.id,
-            userId: routine.userId,
-            prompt: routine.prompt,
-            status: "queued",
-          },
-        });
-        return tx.run.create({
-          data: {
-            workspaceId: routine.workspaceId,
-            botId: bot.id,
-            threadId: bot.thread!.id,
-            taskId: task.id,
-            userId: routine.userId,
-            status: "queued",
-            trigger: "routine",
-          },
-        });
-      });
-      if (!claimed) return;
-      await deps.events.append({
-        workspaceId: routine.workspaceId,
-        threadId: bot.thread.id,
-        botId: bot.id,
-        type: "routine.fired",
-        runId: claimed.id,
-        payload: { routineId: routine.id, scheduledFor },
-      });
-      await deps.jobs.enqueue(routineWakeupJob(routine.id, nextRunAt));
-      await deps.jobs.enqueue(runContinueJob(claimed.id));
-    },
+export function createRunExecutor(deps: ExecutorDeps): RunExecutor {
+  const now = deps.now ?? (() => new Date());
+  let workerCounter = 0;
 
-    async continueRun(runId: string, workerId: string) {
-      const run = await deps.prisma.run.findUnique({ where: { id: runId } });
-      if (!run) return;
-      if (isTerminal(run.status as RunStatus)) return;
-      const resumeFromTakeover = run.status === "waiting_takeover";
+  async function completeRun(runId: string, status: RunStatus, error?: string) {
+    await deps.prisma.run.update({
+      where: { id: runId },
+      data: {
+        status,
+        ...(status === "running" ? {} : { finishedAt: now() }),
+        ...(error ? { error } : {}),
+      },
+    });
+  }
 
-      const fence = nextFence(run.leaseFence);
-      const now = new Date();
-      const leased = await deps.prisma.run.updateMany({
+  async function execute(runId: string) {
+    const workerId = `executor:${process.pid}:${++workerCounter}`;
+    const lease = await deps.prisma.$transaction(async (tx: any) => {
+      const current = (await tx.run.findUnique({ where: { id: runId } })) as RunRecord | null;
+      if (!current || !["queued", "running"].includes(current.status)) return null;
+      const fence = (current.leaseFence ?? 0) + 1;
+      const claimed = await tx.run.updateMany({
         where: {
           id: runId,
-          OR: [
-            { status: { in: ["queued", "waiting_input", "waiting_takeover"] } },
-            {
-              status: { in: ["leased", "running"] },
-              leaseExpiresAt: { lte: now },
-            },
-          ],
+          status: current.status,
+          leaseFence: current.leaseFence,
         },
         data: {
-          status: "leased",
+          status: "running",
+          startedAt: current.status === "queued" ? now() : undefined,
           leaseOwner: workerId,
           leaseFence: fence,
-          leaseExpiresAt: new Date(Date.now() + 5 * 60_000),
-          error: null,
         },
       });
-      if (leased.count !== 1) return;
+      if (!claimed.count) return null;
+      return { ...current, status: "running", leaseOwner: workerId, leaseFence: fence };
+    });
+    if (!lease) return;
 
-      const current = await deps.prisma.run.findUniqueOrThrow({ where: { id: runId } });
-      if (
-        current.status === "queued" ||
-        current.status === "leased" ||
-        current.status === "waiting_input" ||
-        current.status === "waiting_takeover"
-      ) {
-        assertTransition(current.status as RunStatus, "running");
-      }
-      const started = await deps.prisma.run.updateMany({
-        where: { id: runId, status: "leased", leaseOwner: workerId, leaseFence: fence },
-        data: { status: "running", startedAt: current.startedAt ?? new Date() },
-      });
-      if (started.count !== 1) return;
-      const attempt = await deps.prisma.attempt.create({
-        data: { runId, fence, status: "running" },
-      });
-
-      let leaseValid = true;
-      let lastLeaseCheckAt = 0;
-      const heartbeat = setInterval(() => {
-        void renewRunLease(deps, runId, workerId, fence)
-          .then((renewed) => {
-            if (!renewed) leaseValid = false;
-          })
-          .catch(() => undefined);
-      }, 60_000);
-      heartbeat.unref?.();
-
-      try {
-        const [bot, thread, messages, task, connectedPlugins, credentials, settings] =
-          await Promise.all([
-            deps.prisma.bot.findUniqueOrThrow({ where: { id: run.botId } }),
-            deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } }),
-            deps.prisma.message.findMany({
-              where: { threadId: run.threadId },
-              orderBy: { seq: "desc" },
-              take: MAX_AGENT_HISTORY_MESSAGES,
-              select: { role: true, blocks: true },
-            }),
-            deps.prisma.task.findUniqueOrThrow({ where: { id: run.taskId } }),
-            deps.prisma.connection.findMany({
-              where: { userId: run.userId, workspaceId: run.workspaceId, status: "connected" },
-              select: { provider: true, displayName: true },
-            }),
-            deps.prisma.userModelCredential.findMany({
-              where: { userId: run.userId, workspaceId: run.workspaceId },
-              orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
-            }),
-            deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-          ]);
-        const context = {
-          operationId: runId,
-          traceId: runId,
-          workspaceId: run.workspaceId,
-          userId: run.userId,
-          botId: bot.id,
-          runId,
-          signal: new AbortController().signal,
-          connectedProviders: connectedPlugins.map((row) => row.provider),
-        };
-
-        await deps.events.append({
-          workspaceId: run.workspaceId,
-          threadId: thread.id,
-          botId: bot.id,
-          type: "run.started",
-          runId,
-          payload: { trigger: run.trigger },
-        });
-
-        const discovered = deps.connector ? await deps.connector.discoverTools(context) : [];
-        const history = [...messages].reverse().map((m) => ({
-          role: (m.role === "user" ? "user" : m.role === "system" ? "system" : "assistant") as
-            | "user"
-            | "assistant"
-            | "system",
-          content: blocksToText(m.blocks as MessageBlock[]),
-        }));
-        const credential = await selectRunModelCredential(task.prompt, credentials);
-        const selectedModelProvider =
-          credential?.provider ?? settings?.defaultModelProvider ?? "scripted";
-        const selectedModelId = credential?.defaultModel ?? settings?.defaultModelId ?? "scripted";
-        await deps.prisma.run.updateMany({
-          where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
-          data: { modelProvider: selectedModelProvider, modelId: selectedModelId },
-        });
-        const resolved = await resolveModelKey(deps, run.userId, run.workspaceId, credential);
-        const runSecrets = [...deps.secrets, ...resolved.redact];
-        const computer = await ensureComputer(deps, bot.id, context);
-        const graphical =
-          computer.kind !== "desktop" && deps.sandbox.describe().capabilities.graphical;
-        const builtins = graphical
-          ? builtinAgentTools
-          : builtinAgentTools.filter((tool) => !GRAPHICAL_AGENT_TOOLS.has(tool.name));
-        const tools = [
-          ...builtins,
-          ...discovered.filter(
-            (tool) => !builtinAgentTools.some((builtin) => builtin.name === tool.name),
-          ),
-        ];
-        const computerInstruction = graphical
-          ? "You have a persistent computer. Use computer_observe and computer_act for its visible desktop, including browsers and installed applications. Use open_path and launch_app to open graphical files, URLs, and applications. Use the file tools and shell for precise filesystem and terminal work. Another user may interact with the same desktop while you run, so re-observe when it may have changed."
-          : "You have a persistent sandbox filesystem and shell. This backend does not provide model-visible graphical control, so use the file tools and shell.";
-
-        let assembled = "";
-        let pendingProgress = "";
-        let lastProgressAt = 0;
-        let lastComputerFrameId: string | undefined;
-        let terminalCheckpointComplete = false;
-        const progressRedactor = createStreamingRedactor(runSecrets);
-        const scripted = deps.runtime.describe().capabilities.scripted;
-        const script = scripted
-          ? inferScript(task.prompt, resumeFromTakeover ? "takeover" : undefined)
-          : undefined;
-        const formatObservation = (
-          observation: Awaited<ReturnType<SandboxProvider["observe"]>>,
-          note?: string,
-        ) => {
-          const result = observationToolResult(observation, note, lastComputerFrameId);
-          lastComputerFrameId = observation.frameId;
-          return result;
-        };
-
-        const applyTool = async (
-          name: string,
-          args: Record<string, unknown>,
-          executionId: string,
-        ) => {
-          const applied = READ_ONLY_AGENT_TOOLS.has(name)
-            ? undefined
-            : await recordEffect(deps, run, name, executionId, args);
-          if (applied?.duplicate) {
-            if (applied.effect.status === "completed") {
-              return applied.effect.result ?? { duplicate: true };
-            }
-            throw new Error(`tool ${name} has an earlier execution with an uncertain outcome`);
-          }
-          const finish = async (result: unknown) => {
-            if (applied) await completeEffect(deps, applied.effect.id, result);
-            return result;
-          };
-          if (name === "computer_observe") {
-            return formatObservation(await deps.sandbox.observe(computer, context));
-          }
-          if (name === "computer_act") {
-            const result = await deps.sandbox.act(
-              computer,
-              {
-                actions: parseComputerActions(args.actions),
-                observe: args.observe !== false,
-                settleMs: Number(args.settle_ms ?? 350),
-              },
-              context,
-            );
-            return finish(
-              result.observation
-                ? formatObservation(
-                    result.observation,
-                    `completed ${result.completed} computer action${result.completed === 1 ? "" : "s"}`,
-                  )
-                : { ok: true, completed: result.completed },
-            );
-          }
-          if (name === "list_files") {
-            return {
-              path: String(args.path ?? ""),
-              entries: await deps.sandbox.listFiles(computer, String(args.path ?? ""), context),
-            };
-          }
-          if (name === "read_file") {
-            const filePath = String(args.path ?? "");
-            let bytes: Uint8Array;
-            try {
-              bytes = await deps.sandbox.readFile(computer, filePath, context, {
-                maxBytes: MAX_MODEL_FILE_BYTES,
-              });
-            } catch (error) {
-              if (error instanceof Error && /exceeds \d+ bytes/.test(error.message)) {
-                return {
-                  error: "file is too large for model context",
-                  path: filePath,
-                };
-              }
-              throw error;
-            }
-            if (bytes.byteLength > MAX_MODEL_FILE_BYTES) {
-              return {
-                error: "file is too large for model context",
-                path: filePath,
-                size: bytes.byteLength,
-              };
-            }
-            try {
-              return {
-                path: filePath,
-                content: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-              };
-            } catch {
-              return {
-                error: "file is not UTF-8 text; use open_path to inspect it",
-                path: filePath,
-              };
-            }
-          }
-          if (name === "write_file") {
-            const filePath = String(args.path ?? "notes/result.txt");
-            const content = String(args.content ?? "");
-            await deps.sandbox.writeFile(
-              computer,
-              { path: filePath, content: new TextEncoder().encode(content) },
-              context,
-            );
-            return finish({ ok: true, path: filePath });
-          }
-          if (name === "shell") {
-            const command = String(args.command ?? args.cmd ?? "");
-            const cwd = args.cwd ? String(args.cwd) : undefined;
-            const result = await runSandboxCommand(
-              deps.sandbox,
-              computer,
-              ["bash", "-lc", command],
-              cwd,
-              context,
-            );
-            return finish(result);
-          }
-          if (name === "open_path") {
-            const result = await deps.sandbox.act(
-              computer,
-              {
-                actions: [{ kind: "open", path: String(args.path ?? "") }],
-                observe: true,
-                settleMs: 600,
-              },
-              context,
-            );
-            return finish(
-              result.observation
-                ? formatObservation(result.observation, `opened ${String(args.path ?? "")}`)
-                : { ok: true },
-            );
-          }
-          if (name === "launch_app") {
-            const application = String(args.application ?? "");
-            const result = await deps.sandbox.act(
-              computer,
-              {
-                actions: [
-                  {
-                    kind: "launch",
-                    application,
-                    uri: args.uri ? String(args.uri) : undefined,
-                  },
-                ],
-                observe: true,
-                settleMs: 600,
-              },
-              context,
-            );
-            return finish(
-              result.observation
-                ? formatObservation(result.observation, `launched ${application}`)
-                : { ok: true },
-            );
-          }
-          if (name === "remember") {
-            await deps.memory.commit(
-              {
-                scope: "bot",
-                botId: bot.id,
-                path: String(args.path ?? "MEMORY.md"),
-                content: String(args.content ?? ""),
-                sourceRunId: runId,
-                sourceThreadId: thread.id,
-              },
-              context,
-            );
-            return finish({ ok: true });
-          }
-          if (name === "request_takeover") return { ok: true };
-          if (name === "run_subagent") {
-            return {
-              ok: true,
-              result: String(args.task ?? "done."),
-            };
-          }
-          if (name === "spawn_bot") {
-            const spawned = await spawnBot(deps, {
-              spawnedBy: {
-                id: bot.id,
-                name: bot.name,
-                workspaceId: bot.workspaceId,
-                userId: run.userId,
-              },
-              runId,
-              name: String(args.name ?? ""),
-              title: args.title ? String(args.title) : undefined,
-              instructions: args.instructions ? String(args.instructions) : undefined,
-              prompt: args.prompt ? String(args.prompt) : undefined,
-            });
-            if ("error" in spawned) return finish(spawned);
-            await publishMessage(deps, run, "bot", [
-              {
-                kind: "child_bot",
-                botId: spawned.botId,
-                name: spawned.name,
-                title: spawned.title,
-                status: "created",
-              },
-            ]);
-            await deps.events.append({
-              workspaceId: run.workspaceId,
-              threadId: thread.id,
-              botId: bot.id,
-              runId: run.id,
-              type: "bot.spawned",
-              payload: { childBotId: spawned.botId, name: spawned.name },
-            });
-            return finish(spawned);
-          }
-          if (name === "delete_bot") {
-            const removed = await deleteSpawnedBot(
-              deps,
-              {
-                spawnedByBotId: bot.id,
-                userId: run.userId,
-                workspaceId: run.workspaceId,
-                confirmName: String(args.confirm_name ?? args.confirmName ?? ""),
-                botId: args.bot_id
-                  ? String(args.bot_id)
-                  : args.botId
-                    ? String(args.botId)
-                    : undefined,
-              },
-              context,
-            );
-            if ("error" in removed) return finish(removed);
-            await publishMessage(deps, run, "bot", [
-              {
-                kind: "child_bot",
-                botId: removed.botId,
-                name: removed.name,
-                status: "deleted",
-              },
-            ]);
-            await deps.events.append({
-              workspaceId: run.workspaceId,
-              threadId: thread.id,
-              botId: bot.id,
-              runId: run.id,
-              type: "bot.deleted",
-              payload: { childBotId: removed.botId, name: removed.name },
-            });
-            return finish(removed);
-          }
-          if (deps.connector) {
-            let result: unknown = { error: `unknown tool ${name}` };
-            for await (const event of deps.connector.execute(
-              { tool: name, args, executionId },
-              context,
-            )) {
-              if (event.type === "result") {
-                result = event.data;
-                const logIds = collectLogIds(event.data);
-                for (const logId of logIds) {
-                  await deps.events.append({
-                    workspaceId: run.workspaceId,
-                    threadId: thread.id,
-                    botId: bot.id,
-                    runId: run.id,
-                    type: "effect.recorded",
-                    payload: { tool: name, logId },
-                  });
-                }
-              }
-              if (event.type === "error") result = { error: event.message };
-            }
-            return finish(result);
-          }
-          return finish({ error: `unknown tool ${name}` });
-        };
-
-        const pluginLine =
-          connectedPlugins.length > 0
-            ? `Connected plugins: ${connectedPlugins.map((row) => `${row.displayName} (${row.provider})`).join(", ")}. Use those plugin tools when the user asks about those apps.`
-            : "No plugins are connected yet.";
-
-        try {
-          for await (const event of deps.runtime.run(
-            {
-              botId: bot.id,
-              threadId: thread.id,
-              runId,
-              prompt: task.prompt,
-              instructions: [
-                bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
-                `${computerInstruction} Use remember for durable facts. Use request_takeover when the user must provide protected input or human judgment. Use destination_write only for connected destination records.`,
-                "A bot and a subagent are different. Never use both for the same request.",
-                "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it.",
-                "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
-                "delete_bot permanently destroys a bot this bot created, and only that bot. Only delete when the user asked or that bot is finished and unused. confirm_name must exactly match its name.",
-                pluginLine,
-                "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
-              ].join("\n\n"),
-              history,
-              tools,
-              model: {
-                provider: selectedModelProvider,
-                id: selectedModelId,
-                apiKey: resolved.oauth ? undefined : resolved.apiKey,
-                oauth: resolved.oauth
-                  ? { credential: resolved.oauth, persist: resolved.persistOAuth }
-                  : undefined,
-              },
-              resumeFromCheckpoint: resumeFromTakeover ? "takeover" : undefined,
-              script,
-              executeTool: scripted ? undefined : applyTool,
-            },
-            context,
-          )) {
-            if (!leaseValid) return;
-            const now = Date.now();
-            if (now - lastLeaseCheckAt >= 1_000) {
-              lastLeaseCheckAt = now;
-              const still = await deps.prisma.run.findUnique({
-                where: { id: runId },
-                select: { status: true, leaseOwner: true, leaseFence: true },
-              });
-              if (
-                !still ||
-                still.status === "cancelled" ||
-                still.leaseOwner !== workerId ||
-                still.leaseFence !== fence
-              ) {
-                leaseValid = false;
-                return;
-              }
-            }
-
-            if (event.type === "text") {
-              assembled += event.text;
-              pendingProgress += progressRedactor.push(event.text);
-              const now = Date.now();
-              if (!scripted && pendingProgress && now - lastProgressAt >= 250) {
-                lastProgressAt = now;
-                await deps.events.append({
-                  workspaceId: run.workspaceId,
-                  threadId: thread.id,
-                  botId: bot.id,
-                  type: "thread.progress",
-                  runId,
-                  payload: { delta: pendingProgress, streaming: true },
-                });
-                pendingProgress = "";
-              }
-            } else if (event.type === "progress") {
-              await deps.events.append({
-                workspaceId: run.workspaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "thread.progress",
-                runId,
-                payload: { text: redactSecrets(event.text, runSecrets) },
-              });
-            } else if (event.type === "ask") {
-              if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-              const safeText = redactSecrets(event.text, runSecrets);
-              const safeDetail = event.detail
-                ? redactSecrets(event.detail, runSecrets)
-                : event.detail;
-              await publishMessage(deps, run, "bot", [
-                { kind: "ask", text: safeText, detail: safeDetail },
-              ]);
-              await checkpointAndRecordComputerWorkspace(deps, bot.id, computer, context);
-              const paused = await deps.prisma.run.updateMany({
-                where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
-                data: { status: "waiting_input", leaseOwner: null, leaseExpiresAt: null },
-              });
-              if (paused.count !== 1) return;
-              await deps.prisma.attempt.update({
-                where: { id: attempt.id },
-                data: { status: "waiting_input", finishedAt: new Date() },
-              });
-              await clearRunProgress(deps, runId);
-              await notifyRun(deps, run, {
-                kind: "help",
-                title: `${bot.name} needs an answer`,
-                body: safeText,
-                botId: bot.id,
-                threadId: thread.id,
-              });
-              return;
-            } else if (event.type === "takeover") {
-              if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-              const safeReason = redactSecrets(event.reason, runSecrets);
-              if (assembled.trim()) {
-                await publishMessage(deps, run, "bot", [
-                  { kind: "text", text: redactSecrets(assembled, runSecrets) },
-                ]);
-              }
-              await publishMessage(deps, run, "bot", [
-                { kind: "computer", state: "Ready", text: safeReason },
-              ]);
-              await deps.events.append({
-                workspaceId: run.workspaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "computer.takeover.requested",
-                runId,
-                payload: { reason: safeReason },
-              });
-              await deps.prisma.computer.updateMany({
-                where: { botId: bot.id },
-                data: { state: "running", controlHolder: "none" },
-              });
-              await checkpointAndRecordComputerWorkspace(deps, bot.id, computer, context);
-              const paused = await deps.prisma.run.updateMany({
-                where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
-                data: { status: "waiting_takeover", leaseOwner: null, leaseExpiresAt: null },
-              });
-              if (paused.count !== 1) return;
-              await deps.prisma.attempt.update({
-                where: { id: attempt.id },
-                data: { status: "waiting_takeover", finishedAt: new Date() },
-              });
-              await clearRunProgress(deps, runId);
-              await notifyRun(deps, run, {
-                kind: "takeover",
-                title: `${bot.name} needs you on the screen`,
-                body: safeReason,
-                botId: bot.id,
-                threadId: thread.id,
-              });
-              return;
-            } else if (event.type === "tool") {
-              await deps.events.append({
-                workspaceId: run.workspaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "agent.tool.called",
-                runId,
-                payload: { name: event.name, executionId: event.executionId },
-              });
-              if (scripted) await applyTool(event.name, event.args, event.executionId);
-            } else if (event.type === "subagent") {
-              const safeTask = redactSecrets(event.task, runSecrets);
-              const safeProgress = event.progress
-                ? redactSecrets(event.progress, runSecrets)
-                : undefined;
-              const safeResult = event.result ? redactSecrets(event.result, runSecrets) : undefined;
-              await deps.events.append({
-                workspaceId: run.workspaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "thread.subagent",
-                runId,
-                payload: {
-                  agentId: event.agentId,
-                  name: event.name,
-                  task: safeTask,
-                  status: event.status,
-                  progress: safeProgress,
-                  result: safeResult,
-                },
-              });
-              if (event.status === "completed" || event.status === "failed") {
-                await publishMessage(deps, run, "bot", [
-                  {
-                    kind: "subagent",
-                    agentId: event.agentId,
-                    name: event.name,
-                    task: safeTask,
-                    status: event.status,
-                    progress: safeProgress,
-                    result: safeResult,
-                  },
-                ]);
-              }
-            } else if (event.type === "usage") {
-              await deps.prisma.usageRecord.create({
-                data: {
-                  workspaceId: run.workspaceId,
-                  botId: bot.id,
-                  userId: run.userId,
-                  runId,
-                  provider: event.provider,
-                  model: event.model,
-                  inputTokens: event.inputTokens,
-                  outputTokens: event.outputTokens,
-                },
-              });
-            } else if (event.type === "done") {
-              assembled = assembled || event.text || assembled;
-            }
-          }
-
-          for (const turn of script ?? []) {
-            for (const file of turn.files ?? []) {
-              await deps.sandbox.writeFile(
-                computer,
-                { path: file.path, content: new TextEncoder().encode(file.content) },
-                context,
-              );
-            }
-            for (const mem of turn.memory ?? []) {
-              await deps.memory.commit(
-                {
-                  scope: mem.scope,
-                  botId: mem.scope === "bot" ? bot.id : undefined,
-                  path: mem.path,
-                  content: mem.content,
-                  sourceRunId: runId,
-                  sourceThreadId: thread.id,
-                },
-                context,
-              );
-              await deps.events.append({
-                workspaceId: run.workspaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "memory.revised",
-                runId,
-                payload: { path: mem.path, scope: mem.scope },
-              });
-            }
-          }
-
-          await checkpointAndRecordComputerWorkspace(deps, bot.id, computer, context);
-          terminalCheckpointComplete = true;
-
-          const text = redactSecrets(assembled || "done.", runSecrets);
-          if (containsSecret(text, runSecrets)) {
-            throw new Error("refusing to persist a secret in the thread");
-          }
-          if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-          const completed = await deps.events.finalizeRun({
-            workspaceId: run.workspaceId,
-            threadId: thread.id,
-            botId: bot.id,
-            runId,
-            taskId: run.taskId,
-            attemptId: attempt.id,
-            leaseOwner: workerId,
-            leaseFence: fence,
-            outcome: "completed",
-            blocks: [{ kind: "text", text }],
-          });
-          if (!completed) return;
-          if (bot.notifyOnFinish) {
-            await notifyRun(deps, run, {
-              kind: "completion",
-              title: `${bot.name} finished`,
-              body: text.slice(0, 180),
-              botId: bot.id,
-              threadId: thread.id,
-            });
-          }
-        } catch (error) {
-          if (!terminalCheckpointComplete) {
-            await checkpointAndRecordComputerWorkspace(deps, bot.id, computer, context).catch(
-              () => undefined,
-            );
-          }
-          const message = redactSecrets(
-            error instanceof Error ? error.message : String(error),
-            runSecrets,
-          );
-          const failed = await deps.events.finalizeRun({
-            workspaceId: run.workspaceId,
-            threadId: thread.id,
-            botId: bot.id,
-            runId,
-            taskId: run.taskId,
-            attemptId: attempt.id,
-            leaseOwner: workerId,
-            leaseFence: fence,
-            outcome: "failed",
-            error: message,
-          });
-          if (!failed) return;
-          if (bot.notifyOnFinish) {
-            await notifyRun(deps, run, {
-              kind: "failure",
-              title: `${bot.name} failed`,
-              body: message.slice(0, 180),
-              botId: bot.id,
-              threadId: thread.id,
-            });
-          }
-        }
-      } catch {
-        const released = await deps.prisma.run.updateMany({
-          where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
-          data: {
-            status: "queued",
-            error: "Run setup failed; retrying",
-            leaseOwner: null,
-            leaseExpiresAt: null,
-          },
-        });
-        if (released.count === 1) {
-          await deps.prisma.attempt.update({
-            where: { id: attempt.id },
-            data: {
-              status: "setup_failed",
-              error: "Run setup failed; retrying",
-              finishedAt: new Date(),
-            },
-          });
-          throw new Error("Run setup failed; retrying");
-        }
-      } finally {
-        clearInterval(heartbeat);
-        await deps.prisma.attempt
-          .updateMany({
-            where: { id: attempt.id, status: "running" },
-            data: { status: "interrupted", finishedAt: new Date() },
-          })
-          .catch(() => undefined);
-      }
-    },
-  };
-}
-
-async function notifyRun(
-  deps: ExecutorDeps,
-  run: { workspaceId: string; userId: string; botId: string; threadId: string },
-  message: NotificationMessage,
-) {
-  if (!deps.notifications) return;
-  await deps.notifications
-    .send(message, {
-      operationId: "notify",
-      traceId: run.botId,
-      workspaceId: run.workspaceId,
+    const run = lease as RunRecord;
+    const fence = run.leaseFence as number;
+    const context: RunContext = {
+      runId: run.id,
       userId: run.userId,
-      botId: run.botId,
-      signal: new AbortController().signal,
-    })
-    .catch(() => undefined);
-}
-
-async function renewRunLease(
-  deps: ExecutorDeps,
-  runId: string,
-  workerId: string,
-  fence: number,
-): Promise<boolean> {
-  const renewed = await deps.prisma.run.updateMany({
-    where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
-    data: { leaseExpiresAt: new Date(Date.now() + 5 * 60_000) },
-  });
-  return renewed.count === 1;
-}
-
-async function clearRunProgress(deps: ExecutorDeps, runId: string): Promise<void> {
-  await deps.prisma.event.deleteMany({ where: { runId, type: "thread.progress" } });
-}
-
-async function publishMessage(
-  deps: ExecutorDeps,
-  run: { id: string; workspaceId: string; threadId: string; botId: string },
-  role: "user" | "bot" | "system",
-  blocks: MessageBlock[],
-) {
-  const message = await createThreadMessage(deps.prisma, {
-    threadId: run.threadId,
-    role,
-    blocks,
-    runId: run.id,
-  });
-  await deps.events.append({
-    workspaceId: run.workspaceId,
-    threadId: run.threadId,
-    botId: run.botId,
-    type: "thread.message.created",
-    runId: run.id,
-    payload: { messageId: message.id, role, blocks },
-  });
-  return message;
-}
-
-async function recordEffect(
-  deps: ExecutorDeps,
-  run: { id: string; workspaceId: string; threadId: string; botId: string },
-  kind: string,
-  executionId: string,
-  request: Record<string, unknown>,
-) {
-  const existing = await deps.prisma.externalEffect.findUnique({
-    where: { idempotencyKey: executionId },
-  });
-  if (existing) {
-    await deps.events.append({
       workspaceId: run.workspaceId,
       threadId: run.threadId,
-      botId: run.botId,
-      type: "effect.reconciled",
-      runId: run.id,
-      payload: { executionId, kind },
-    });
-    return { duplicate: true, effect: existing };
-  }
-  const effect = await deps.prisma.externalEffect.create({
-    data: {
-      workspaceId: run.workspaceId,
-      runId: run.id,
-      kind,
-      idempotencyKey: executionId,
-      status: "intended",
-      request: request as never,
-    },
-  });
-  return { duplicate: false, effect };
-}
+    };
 
-async function completeEffect(deps: ExecutorDeps, effectId: string, result: unknown) {
-  const storedResult =
-    result &&
-    typeof result === "object" &&
-    (result as { kind?: unknown }).kind === "agent_tool_result" &&
-    "details" in result
-      ? (result as { details: unknown }).details
-      : result;
-  await deps.prisma.externalEffect.update({
-    where: { id: effectId },
-    data: { status: "completed", result: storedResult as never },
-  });
-}
+    try {
+      const task = await deps.prisma.task.findFirst({ where: { runId } });
+      if (!task) throw new Error(`run ${runId} has no task`);
+      const bot = await deps.prisma.bot.findUnique({ where: { id: task.botId } });
+      if (!bot) throw new Error(`bot ${task.botId} not found`);
 
-async function ensureComputer(
-  deps: ExecutorDeps,
-  botId: string,
-  context: {
-    operationId: string;
-    traceId: string;
-    workspaceId: string;
-    userId: string;
-    botId?: string;
-    runId?: string;
-    signal: AbortSignal;
-  },
-): Promise<ComputerRef> {
-  const homePath = resolveAgentHomePath(deps.home, botId, deps.dataDir ?? "./data");
-  await mkdir(homePath, { recursive: true });
-  const existing = await deps.prisma.computer.findUnique({ where: { botId } });
-  await deps.prisma.computer.updateMany({
-    where: { botId },
-    data: { state: "booting" },
-  });
-  let provisioned: ComputerRef | undefined;
-  try {
-    const ref = await deps.sandbox.provision(
-      {
-        botId,
-        homePath,
-        providerRef: existing?.providerRef ?? undefined,
-        providerKind: existing?.kind as ComputerRef["kind"] | undefined,
-      },
-      context,
-    );
-    provisioned = ref;
-    const replacement =
-      ref.fresh === true ||
-      !existing?.providerRef ||
-      existing.providerRef !== ref.providerRef ||
-      existing.kind !== ref.kind;
-    if (replacement) await restoreComputerWorkspace(deps.home, deps.sandbox, botId, ref, context);
-    await deps.prisma.computer.updateMany({
-      where: { botId },
-      data: {
-        state: "running",
-        providerRef: ref.providerRef,
-        kind: ref.kind,
-        controlHolder: existing?.controlHolder === "user" ? "user" : "bot",
-      },
-    });
-    scheduleComputerSleep(deps.jobs, botId);
-    return ref;
-  } catch (error) {
-    if (provisioned?.fresh) {
-      await deps.sandbox.destroy(provisioned, context).catch(() => undefined);
+      await deps.events.appendEvent({
+        type: EVENT_TYPES.RUN_STARTED,
+        userId: run.userId,
+        workspaceId: run.workspaceId,
+        threadId: run.threadId,
+        runId,
+        payload: { runId },
+      });
+
+      const [thread, messages, connectedPlugins, credentials, settings] = await Promise.all([
+        deps.prisma.thread.findUnique({ where: { id: run.threadId } }),
+        deps.prisma.message.findMany({ where: { threadId: run.threadId }, orderBy: { createdAt: "asc" } }),
+        deps.prisma.connectedPlugin.findMany({
+          where: { userId: run.userId, workspaceId: run.workspaceId, status: "connected" },
+        }),
+        deps.prisma.userModelCredential.findMany({
+          where: { userId: run.userId, workspaceId: run.workspaceId },
+          orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+        }),
+        deps.prisma.userSetting.findUnique({
+          where: { userId_workspaceId: { userId: run.userId, workspaceId: run.workspaceId } },
+        }),
+      ]);
+      if (!thread) throw new Error(`thread ${run.threadId} not found`);
+
+      const input = messages.map((m: any) => ({
+        role: (m.role === "user" ? "user" : m.role === "system" ? "system" : "assistant") as
+          | "user"
+          | "assistant"
+          | "system",
+        content: blocksToText(m.blocks as MessageBlock[]),
+      }));
+      const credential = await selectRunModelCredential(task.prompt, credentials);
+      const selectedModelProvider =
+        credential?.provider ?? settings?.defaultModelProvider ?? "scripted";
+      const selectedModelId = credential?.defaultModel ?? settings?.defaultModelId ?? "scripted";
+      await deps.prisma.run.updateMany({
+        where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
+        data: { modelProvider: selectedModelProvider, modelId: selectedModelId },
+      });
+      const resolved = await resolveModelKey(
+        deps,
+        run.userId,
+        run.workspaceId,
+        credential ?? null,
+      );
+      const runSecrets = [...deps.secrets, ...resolved.redact];
+      const computer = await ensureComputer(deps, bot.id, context);
+      const graphical =
+        computer.kind !== "desktop" && deps.sandbox.describe().capabilities.graphical;
+      const builtins = graphical
+        ? builtinAgentTools
+        : builtinAgentTools.filter((tool) => !GRAPHICAL_AGENT_TOOLS.has(tool.name));
+      const tools = [
+        ...builtins,
+        ...(deps.composio
+          ? await deps.composio.getTools({
+              userId: run.userId,
+              workspaceId: run.workspaceId,
+              connectedPlugins,
+            })
+          : []),
+      ];
+      const request: AgentRunRequest = {
+        runId,
+        userId: run.userId,
+        workspaceId: run.workspaceId,
+        threadId: run.threadId,
+        bot: {
+          id: bot.id,
+          name: bot.name,
+          systemPrompt: bot.systemPrompt,
+        },
+        messages: input,
+        model: {
+          provider: selectedModelProvider,
+          id: selectedModelId,
+          apiKey: resolved.apiKey,
+          oauth: resolved.oauth,
+        },
+        tools,
+        sandbox: deps.sandbox,
+        mcpServers: await createPiMcpServers({
+          userId: run.userId,
+          workspaceId: run.workspaceId,
+          connectedPlugins,
+          composio: deps.composio,
+        }),
+        secrets: runSecrets,
+      };
+
+      const runtime = deps.agentRuntime;
+      if (runtime) {
+        const result = await runtime.run(request, {
+          onEvent: async (event) => {
+            await handleAgentEvent(deps, context, event, fence, workerId);
+          },
+          signal: undefined,
+        });
+        await appendAssistantMessage(deps, context, result.text || "", runSecrets);
+        await finalizeRun(deps, context, result.status, fence, workerId);
+      } else {
+        const script = inferScript(task.prompt);
+        for (const step of script) {
+          await handleAgentEvent(deps, context, step, fence, workerId);
+        }
+        await appendAssistantMessage(deps, context, script.at(-1)?.text ?? "", runSecrets);
+        await finalizeRun(deps, context, "completed", fence, workerId);
+      }
+    } catch (error) {
+      await finalizeRun(
+        deps,
+        context,
+        "failed",
+        fence,
+        workerId,
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
     }
-    await deps.prisma.computer.updateMany({
-      where: { botId },
-      data: { state: "error" },
-    });
-    throw error;
   }
-}
 
-async function runSandboxCommand(
-  sandbox: SandboxProvider,
-  computer: ComputerRef,
-  argv: string[],
-  cwd: string | undefined,
-  context: {
-    operationId: string;
-    traceId: string;
-    workspaceId: string;
-    userId: string;
-    botId?: string;
-    runId?: string;
-    signal: AbortSignal;
-  },
-) {
-  let stdout = "";
-  let stderr = "";
-  let code = 0;
-  for await (const event of sandbox.execute(computer, { argv, cwd }, context)) {
-    if (event.type === "stdout") stdout += event.data;
-    if (event.type === "stderr") stderr += event.data;
-    if (event.type === "exit") code = event.code;
+  async function requestCancel(runId: string) {
+    const run = await deps.prisma.run.findUnique({ where: { id: runId } });
+    if (!run || !["queued", "running"].includes(run.status)) return;
+    await deps.prisma.run.update({ where: { id: runId }, data: { status: "cancelled" } });
   }
-  return { stdout, stderr, code };
+
+  return { execute, requestCancel, completeRun };
 }
 
 async function resolveModelKey(
@@ -1111,95 +262,170 @@ async function resolveModelKey(
   userId: string,
   workspaceId: string,
   credential: { secretId: string; provider: string } | null,
-): Promise<{
-  apiKey?: string;
-  oauth?: AgentModelOAuthCredential;
-  persistOAuth?: (credential: AgentModelOAuthCredential) => Promise<void>;
-  redact: string[];
-}> {
-  if (credential && deps.secretStore) {
-    return withModelCredentialLock(credential.secretId, async () => {
-      const row = await deps.prisma.secret.findUnique({ where: { id: credential.secretId } });
-      if (!row) return { apiKey: deps.deploymentModelKey, redact: [] };
-      const plaintext = deps.secretStore!.load(row.ciphertext);
-      const persist = async (next: string) => {
-        const stored = await deps.secretStore!.put(next, {
-          operationId: "cred",
-          traceId: "cred-refresh",
-          workspaceId,
-          userId,
-          signal: new AbortController().signal,
-        });
-        await deps.prisma.secret.update({
-          where: { id: row.id },
-          data: { ciphertext: stored.ciphertext },
-        });
-      };
-      const resolved = await resolveModelAuth(plaintext, credential.provider, {
-        persist,
-      });
-      const oauth = resolved.secret.kind === "oauth" ? resolved.secret.credential : undefined;
-      return {
-        apiKey: resolved.apiKey,
-        oauth,
-        persistOAuth: oauth
-          ? async (next) => {
-              await withModelCredentialLock(credential.secretId, async () => {
-                const currentRow = await deps.prisma.secret.findUnique({
-                  where: { id: credential.secretId },
-                });
-                if (!currentRow) return;
-                const current = parseModelSecret(deps.secretStore!.load(currentRow.ciphertext));
-                if (current.kind === "oauth") {
-                  const stored = current.credential;
-                  if (stored.expires > next.expires) return;
-                  if (
-                    stored.access === next.access &&
-                    stored.refresh === next.refresh &&
-                    stored.expires === next.expires
-                  ) {
-                    return;
-                  }
-                }
-                await persist(
-                  serializeModelSecret({ kind: "oauth", credential: toOAuthCredential(next) }),
-                );
-              });
-            }
-          : undefined,
-        redact: [...secretValuesToRedact(resolved.secret), resolved.apiKey].filter(
-          (value): value is string => Boolean(value),
-        ),
-      };
-    });
-  }
-  return { apiKey: deps.deploymentModelKey, redact: [] };
+) {
+  if (!credential) return { apiKey: undefined, oauth: undefined, redact: [] as string[] };
+  if (!deps.credentialKey) throw new Error("MODEL_CREDENTIAL_KEY is required for encrypted model credentials");
+  const secret = await deps.prisma.secret.findFirst({
+    where: { id: credential.secretId, userId, workspaceId },
+  });
+  if (!secret) throw new Error(`model credential secret ${credential.secretId} not found`);
+  const decrypted = decryptCredential(secret.ciphertext, deps.credentialKey);
+  const apiKey = credential.provider === "ollama" ? undefined : decrypted;
+  return {
+    apiKey,
+    oauth: undefined,
+    redact: decrypted ? [decrypted] : [],
+  };
 }
 
-async function withModelCredentialLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const previous = modelCredentialLocks.get(key) ?? Promise.resolve();
-  let release!: () => void;
-  const current = previous.then(
-    () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-      }),
-  );
-  modelCredentialLocks.set(key, current);
-  await previous;
-  try {
-    return await fn();
-  } finally {
-    release();
-    if (modelCredentialLocks.get(key) === current) modelCredentialLocks.delete(key);
-  }
+async function ensureComputer(deps: ExecutorDeps, botId: string, context: RunContext) {
+  return ensureUserComputer({
+    botId,
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    sandbox: deps.sandbox,
+    resolver: deps.computer,
+  });
 }
 
-function blocksToText(blocks: MessageBlock[]): string {
+function blocksToText(blocks: MessageBlock[]) {
   return blocks
-    .map((block) => {
-      if ("text" in block && block.text) return block.text;
-      return JSON.stringify(block);
-    })
+    .filter((block): block is Extract<MessageBlock, { type: "text" }> => block.type === "text")
+    .map((block) => block.text)
     .join("\n");
+}
+
+async function handleAgentEvent(
+  deps: ExecutorDeps,
+  context: RunContext,
+  event: any,
+  fence: number,
+  workerId: string,
+) {
+  if (event.type === "assistant.delta") {
+    await deps.events.appendEvent({
+      type: EVENT_TYPES.ASSISTANT_DELTA,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+      threadId: context.threadId,
+      runId: context.runId,
+      payload: { text: event.text },
+    });
+    return;
+  }
+
+  if (event.type === "tool.call") {
+    await deps.events.appendEvent({
+      type: EVENT_TYPES.TOOL_CALL,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+      threadId: context.threadId,
+      runId: context.runId,
+      payload: { tool: event.name, input: event.input },
+    });
+    return;
+  }
+
+  if (event.type === "tool.result") {
+    await deps.events.appendEvent({
+      type: EVENT_TYPES.TOOL_RESULT,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+      threadId: context.threadId,
+      runId: context.runId,
+      payload: { tool: event.name, result: event.result },
+    });
+    return;
+  }
+
+  if (event.type === "activity") {
+    await deps.activity?.appendActivity?.({
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+      runId: context.runId,
+      type: event.activity.type,
+      summary: event.activity.summary,
+      detail: event.activity.detail,
+      metadata: event.activity.metadata,
+    });
+    return;
+  }
+
+  if (event.type === "control") {
+    const action = event.action as ControlAction;
+    if (action.type === "cancel") {
+      await deps.prisma.run.updateMany({
+        where: {
+          id: context.runId,
+          status: "running",
+          leaseOwner: workerId,
+          leaseFence: fence,
+        },
+        data: { status: "cancelled" },
+      });
+    }
+  }
+}
+
+async function appendAssistantMessage(
+  deps: ExecutorDeps,
+  context: RunContext,
+  text: string,
+  secrets: string[],
+) {
+  const clean = redactText(text, secrets);
+  const message = await deps.prisma.message.create({
+    data: {
+      threadId: context.threadId,
+      role: "assistant",
+      blocks: [{ type: "text", text: clean }] as any,
+    },
+  });
+  await deps.events.appendEvent({
+    type: EVENT_TYPES.MESSAGE_CREATED,
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    threadId: context.threadId,
+    runId: context.runId,
+    payload: { messageId: message.id, role: "assistant", blocks: message.blocks },
+  });
+}
+
+async function finalizeRun(
+  deps: ExecutorDeps,
+  context: RunContext,
+  status: RunStatus,
+  fence: number,
+  workerId: string,
+  error?: string,
+) {
+  const updated = await deps.prisma.run.updateMany({
+    where: {
+      id: context.runId,
+      status: "running",
+      leaseOwner: workerId,
+      leaseFence: fence,
+    },
+    data: {
+      status,
+      finishedAt: deps.now?.() ?? new Date(),
+      ...(error ? { error } : {}),
+    },
+  });
+  if (!updated.count) return;
+  await deps.events.appendEvent({
+    type: EVENT_TYPES.RUN_COMPLETED,
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    threadId: context.threadId,
+    runId: context.runId,
+    payload: { runId: context.runId, status, error },
+  });
+}
+
+function redactText(text: string, secrets: string[]) {
+  return secrets.reduce(
+    (out, secret) => (secret ? out.split(secret).join("[REDACTED]") : out),
+    text,
+  );
 }
