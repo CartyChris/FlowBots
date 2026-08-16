@@ -10,13 +10,12 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
-import { OLLAMA_PROVIDER_ID, ollamaBaseUrl, ollamaProvider } from "./ollama-provider.js";
+import { OLLAMA_PROVIDER_ID, ollamaStreamSimple } from "./ollama-provider.js";
 import { ollamaRuntimeModel } from "./ollama-runtime.js";
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
 
 const running = new Map<string, AbortController>();
 const catalogModels = builtinModels();
-const ollama = ollamaProvider(ollamaBaseUrl());
 const MAX_PARALLEL_SUBAGENTS = 4;
 // Pi forwards these names to OpenAI Responses, whose function-name contract is
 // ^[a-zA-Z0-9_-]+$ with a maximum length of 64 characters.
@@ -179,7 +178,7 @@ export class PiAgentRuntime implements AgentRuntime {
 
 function streamModel(models: Models, model: Model<Api>, context: Parameters<Models["streamSimple"]>[1], options: Parameters<Models["streamSimple"]>[2]) {
   return model.provider === OLLAMA_PROVIDER_ID
-    ? ollama.api.streamSimple(model as never, context, options)
+    ? ollamaStreamSimple(model as never, context, options)
     : models.streamSimple(model, context, options);
 }
 
