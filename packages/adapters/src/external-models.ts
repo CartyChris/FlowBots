@@ -11,9 +11,20 @@ const EXTERNAL_CATALOG: PiCatalogEntry[] = [
   {
     provider: VENICE_PROVIDER_ID,
     providerName: "Venice AI",
+    id: "venice-uncensored-1-2",
+    label: "Venice Uncensored 1.2 (Recommended)",
+    billing:
+      "Uses your Venice API key. Current 128K private uncensored text model; charges are billed by Venice.",
+    auth: "api-key",
+    subscription: false,
+  },
+  {
+    provider: VENICE_PROVIDER_ID,
+    providerName: "Venice AI",
     id: "venice-uncensored",
-    label: "Venice Uncensored",
-    billing: "Uses your Venice API key. Private high-control text model; charges are billed by Venice.",
+    label: "Venice Uncensored (Legacy Alias)",
+    billing:
+      "Uses your Venice API key. Legacy 32K uncensored alias; charges are billed by Venice.",
     auth: "api-key",
     subscription: false,
   },
@@ -97,6 +108,12 @@ export function g0dm0d3HealthUrl(source: NodeJS.ProcessEnv = process.env): strin
   return `${g0dm0d3BaseUrl(source)}/health`;
 }
 
+function veniceContextWindow(modelId: string): number {
+  if (modelId === "venice-uncensored") return 32_768;
+  if (modelId === "venice-uncensored-1-2") return 128_000;
+  return 200_000;
+}
+
 export function externalRuntimeModel(
   provider: string,
   modelId: string,
@@ -112,7 +129,7 @@ export function externalRuntimeModel(
       reasoning: false,
       input: ["text"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: modelId === "venice-uncensored" ? 128_000 : 200_000,
+      contextWindow: veniceContextWindow(modelId),
       maxTokens: 16_384,
       compat: {
         supportsDeveloperRole: false,
