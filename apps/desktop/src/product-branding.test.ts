@@ -27,7 +27,7 @@ describe("FlowBots product branding", () => {
     expect(runtime).toContain('<div class="eyebrow">FlowBots Runtime</div>');
     expect(runtime).toContain("<h1>How should FlowBots run?</h1>");
     expect(runtime).toContain("trusted FlowBots server");
-    expect(main).toContain("FlowBots's local runtime launcher");
+    expect(main).toContain("FlowBots local runtime launcher");
     expect(main).toContain("loopback FlowBots runtime");
     expect(main).toContain("FlowBots terminal service is unavailable");
     expect(main).toContain("this FlowBots window");
