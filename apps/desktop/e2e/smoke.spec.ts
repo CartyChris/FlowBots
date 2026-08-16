@@ -7,6 +7,7 @@ import type { RakazoDesktop } from "@rakazo/contracts";
 test("launches the runtime chooser with a narrow privileged bridge and isolated renderer", async () => {
   const configHome = mkdtempSync(path.join(os.tmpdir(), "flowbots-electron-smoke-"));
   const args = process.platform === "linux" && process.env.CI ? ["--no-sandbox", "."] : ["."];
+  console.log("SMOKE_STAGE before-launch", { args, configHome });
   const app = await electron.launch({
     args,
     cwd: path.resolve(import.meta.dirname, ".."),
@@ -15,12 +16,18 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
       XDG_CONFIG_HOME: configHome,
     },
   });
+  console.log("SMOKE_STAGE after-launch");
 
   try {
+    console.log("SMOKE_STAGE before-first-window");
     const page = await app.firstWindow();
+    console.log("SMOKE_STAGE after-first-window", { url: page.url() });
     await expect(page.getByText("How should FlowBots run?")).toBeVisible();
+    console.log("SMOKE_STAGE launcher-visible");
     await expect(page).toHaveTitle("Choose how FlowBots runs");
+    console.log("SMOKE_STAGE title-ok");
 
+    console.log("SMOKE_STAGE before-renderer-evaluate");
     const renderer = await page.evaluate(async () => {
       const desktop = (window as typeof window & { rakazoDesktop?: RakazoDesktop }).rakazoDesktop;
       let terminalError = "";
@@ -45,6 +52,7 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
         },
       };
     });
+    console.log("SMOKE_STAGE after-renderer-evaluate", renderer);
 
     expect(renderer.bridgeKeys).toEqual(["platform", "runtime", "terminal", "window"]);
     expect(renderer.windowKeys).toEqual(["close", "minimize", "state", "toggleMaximize"]);
@@ -66,7 +74,9 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
       process: "undefined",
       module: "undefined",
     });
+    console.log("SMOKE_STAGE renderer-assertions-ok");
 
+    console.log("SMOKE_STAGE before-main-evaluate");
     const preferences = await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0];
       return {
@@ -81,6 +91,7 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
         },
       };
     });
+    console.log("SMOKE_STAGE after-main-evaluate", preferences);
 
     expect(preferences).toEqual({
       count: 1,
@@ -89,8 +100,12 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
       sandbox: true,
       state: renderer.state,
     });
+    console.log("SMOKE_STAGE preferences-ok");
   } finally {
+    console.log("SMOKE_STAGE before-app-close");
     await app.close();
+    console.log("SMOKE_STAGE after-app-close");
     rmSync(configHome, { recursive: true, force: true });
+    console.log("SMOKE_STAGE cleanup-done");
   }
 });
