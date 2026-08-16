@@ -25,9 +25,14 @@ export function normalizeWebUrl(value: string): string {
       "Credential-bearing URLs are not allowed. Enter credentials inside Rakazo instead.",
     );
   }
+  if (parsed.search || parsed.hash) {
+    throw new Error(
+      "Rakazo connection URLs cannot include query strings or fragments. Enter only the server URL and optional path.",
+    );
+  }
 
   const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
-  return `${parsed.origin}${pathname}${parsed.search}${parsed.hash}`;
+  return `${parsed.origin}${pathname}`;
 }
 
 export function defaultWebUrl(env: NodeJS.ProcessEnv = process.env): string {
