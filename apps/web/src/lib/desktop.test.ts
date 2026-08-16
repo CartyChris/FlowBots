@@ -13,6 +13,19 @@ function desktop(platform: string): RakazoDesktop {
       toggleMaximize: async () => undefined,
       state: async () => ({ minimized: false, maximized: false, fullScreen: false }),
     },
+    runtime: {
+      choose: async () => undefined,
+      showLauncher: async () => undefined,
+    },
+    terminal: {
+      create: async () => ({ id: "terminal-test", pid: 1, cwd: "/tmp" }),
+      write: async () => undefined,
+      resize: async () => undefined,
+      interrupt: async () => undefined,
+      close: async () => true,
+      onData: () => () => undefined,
+      onActivity: () => () => undefined,
+    },
   };
 }
 
