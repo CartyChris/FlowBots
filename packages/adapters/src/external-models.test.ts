@@ -1,9 +1,10 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   externalCatalogEntries,
   externalRuntimeModel,
   g0dm0d3BaseUrl,
   g0dm0d3HealthUrl,
+  isG0dm0d3Reachable,
   providerEnvironmentApiKey,
 } from "./external-models.js";
 
@@ -41,6 +42,17 @@ describe("FlowBots external model providers", () => {
     expect(() =>
       g0dm0d3BaseUrl({ GODMODE_BASE_URL: "https://user:pass@example.com/v1" } as NodeJS.ProcessEnv),
     ).toThrow(/credentials/i);
+  });
+
+  test("G0DM0D3 reachability uses only its unauthenticated health endpoint and fails closed", async () => {
+    const okFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", { status: 200 }));
+    await expect(isG0dm0d3Reachable({ fetchFn: okFetch })).resolves.toBe(true);
+    expect(okFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:7860/v1/health",
+      expect.objectContaining({ method: "GET", headers: { accept: "application/json" } }),
+    );
+    const failingFetch = vi.fn<typeof fetch>().mockRejectedValue(new Error("offline"));
+    await expect(isG0dm0d3Reachable({ fetchFn: failingFetch })).resolves.toBe(false);
   });
 
   test("provider environment keys are provider-specific", () => {
