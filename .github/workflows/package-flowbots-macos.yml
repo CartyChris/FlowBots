@@ -1,5 +1,5 @@
 name: FlowBots macOS package
-# Final release gate: build, mount, inspect, and launch the universal DMG.
+# Exact-head release gate: build, mount, inspect, and launch the universal DMG.
 
 on:
   push:
