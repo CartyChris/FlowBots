@@ -16,7 +16,7 @@ import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js
 
 const running = new Map<string, AbortController>();
 const catalogModels = builtinModels();
-catalogModels.setProvider(ollamaProvider(ollamaBaseUrl()));
+const ollama = ollamaProvider(ollamaBaseUrl());
 const MAX_PARALLEL_SUBAGENTS = 4;
 // Pi forwards these names to OpenAI Responses, whose function-name contract is
 // ^[a-zA-Z0-9_-]+$ with a maximum length of 64 characters.
@@ -86,7 +86,7 @@ export class PiAgentRuntime implements AgentRuntime {
         const history = toHistory(request.history, request.prompt);
 
         const agent = new Agent({
-          streamFn: (m, ctx, options) => models.streamSimple(m, ctx, options),
+          streamFn: (m, ctx, options) => streamModel(models, m, ctx, options),
           getApiKey: async () => apiKey,
           transformContext: async (messages) => pruneComputerScreenshotContext(messages),
           initialState: {
@@ -175,6 +175,12 @@ export class PiAgentRuntime implements AgentRuntime {
       running.delete(request.runId);
     }
   }
+}
+
+function streamModel(models: Models, model: Model<Api>, context: Parameters<Models["streamSimple"]>[1], options: Parameters<Models["streamSimple"]>[2]) {
+  return model.provider === OLLAMA_PROVIDER_ID
+    ? ollama.api.streamSimple(model as never, context, options)
+    : models.streamSimple(model, context, options);
 }
 
 function modelsForRequest(request: AgentRunRequest, provider: string): Models {
@@ -404,7 +410,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   );
   const nestedHost: ToolHost = { ...host, depth: 1 };
   const nested = new Agent({
-    streamFn: (m, ctx, options) => host.models.streamSimple(m, ctx, options),
+    streamFn: (m, ctx, options) => streamModel(host.models, m, ctx, options),
     getApiKey: async () => host.apiKey,
     transformContext: async (messages) => pruneComputerScreenshotContext(messages),
     initialState: {
