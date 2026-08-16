@@ -15,6 +15,7 @@ import {
   externalStreamSimple,
   G0DM0D3_PROVIDER_ID,
   providerEnvironmentApiKey,
+  providerHistoryLimit,
   VENICE_PROVIDER_ID,
 } from "./external-models.js";
 import { OLLAMA_PROVIDER_ID, ollamaStreamSimple } from "./ollama-provider.js";
@@ -90,7 +91,10 @@ export class PiAgentRuntime implements AgentRuntime {
           depth: 0,
         };
         const tools = toAgentTools(toolDefs, host);
-        const history = toHistory(request.history, request.prompt);
+        const fullHistory = toHistory(request.history, request.prompt);
+        const historyLimit = providerHistoryLimit(provider);
+        const history =
+          historyLimit === undefined ? fullHistory : fullHistory.slice(-historyLimit);
 
         const agent = new Agent({
           streamFn: (m, ctx, options) => streamModel(models, m, ctx, options),
