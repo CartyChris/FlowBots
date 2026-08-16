@@ -8,6 +8,7 @@
     "dev": "pnpm build && electron .",
     "build": "tsc -p tsconfig.json && cp src/preload.cjs dist/preload.cjs",
     "pack": "pnpm build && electron-builder --mac --win --linux",
+    "pack:mac": "pnpm build && electron-builder --mac --universal",
     "pack:dir": "pnpm build && electron-builder --dir",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root ../.. apps/desktop/src",
@@ -27,7 +28,8 @@
   },
   "build": {
     "appId": "dev.rakazo.desktop",
-    "productName": "Rakazo",
+    "productName": "FlowBots",
+    "artifactName": "FlowBots-${version}-${arch}.${ext}",
     "directories": {
       "output": "out",
       "buildResources": "assets"
