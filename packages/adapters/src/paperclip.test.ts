@@ -8,16 +8,18 @@ import {
 } from "./paperclip.js";
 
 describe("Paperclip managed local lifecycle", () => {
-  it("uses the official one-command onboarding and run surfaces with direct argv", () => {
+  it("uses the official one-command onboarding/run surfaces and isolates state with PAPERCLIP_HOME", () => {
     expect(buildPaperclipManagedInvocation("onboard", "/Users/me/Library/Application Support/Rakazo/paperclip")).toEqual({
       command: "npx",
       args: ["paperclipai", "onboard", "--yes"],
       cwd: "/Users/me/Library/Application Support/Rakazo/paperclip",
+      env: { PAPERCLIP_HOME: "/Users/me/Library/Application Support/Rakazo/paperclip" },
     });
     expect(buildPaperclipManagedInvocation("run", "/tmp/paperclip; touch /tmp/nope")).toEqual({
       command: "npx",
       args: ["paperclipai", "run"],
       cwd: "/tmp/paperclip; touch /tmp/nope",
+      env: { PAPERCLIP_HOME: "/tmp/paperclip; touch /tmp/nope" },
     });
   });
 });
@@ -114,12 +116,27 @@ describe("Paperclip adapter translation", () => {
       paperclipAdapterForHarness({
         harnessId: "hermes-gateway",
         cwd: "/work",
-        gatewayUrl: "http://127.0.0.1:8642",
+        gatewayUrl: "http://127.0.0.1:9119",
+        gatewaySecretRef: "hermes-api-key",
       }),
     ).toEqual({
       adapterType: "hermes_gateway",
-      adapterConfig: { url: "http://127.0.0.1:8642" },
+      adapterConfig: {
+        apiBaseUrl: "http://127.0.0.1:9119",
+        apiKey: { type: "secret_ref", secretId: "hermes-api-key", version: "latest" },
+        sessionKeyStrategy: "issue",
+      },
     });
+  });
+
+  it("requires a Paperclip secret reference for Hermes gateway instead of copying a key", () => {
+    expect(() =>
+      paperclipAdapterForHarness({
+        harnessId: "hermes-gateway",
+        cwd: "/work",
+        gatewayUrl: "http://127.0.0.1:9119",
+      }),
+    ).toThrow(/secret/i);
   });
 
   it("uses Paperclip's process adapter for Prime/Kimi/OpenHands/custom harnesses without copying secrets", () => {
