@@ -25,12 +25,14 @@ https://github.com/user-attachments/assets/dccdeddb-2134-4a56-8eed-b2e591736b1c
 - Pi
 - Any sandbox provider (tested with Docker and E2B)
 - Composio
+- Optional Mnemosyne local semantic memory
 
 ## Requirements
 
 - Node.js 22+
 - pnpm 9
 - Docker Desktop (Postgres plus the graphical bot computer)
+- Optional for semantic memory: Python 3.10+ with `mnemosyne-memory==3.15.1`
 
 ## Run locally (web)
 
@@ -46,6 +48,15 @@ Edit `.env`:
 - Put your OpenRouter key in `OPENROUTER_API_KEY` (or skip the key and paste one during onboarding).
 - ChatGPT Plus or Pro, GitHub Copilot, or SuperGrok / X Premium: skip the key and sign in on the **Connect a model** screen. Pick **OpenAI Codex**, **GitHub Copilot**, or **xAI**, then sign in with the device code Pi shows. Claude Pro is not in the Rakazo UI yet — Pi's Claude login opens a localhost callback, which does not work from the web app.
 - Optional: `COMPOSIO_API_KEY` if you want Plugins to talk to live apps.
+- Optional: install Mnemosyne for local semantic recall. The default `MNEMOSYNE_MODE=auto` uses it when available and falls back to the canonical Markdown memory store when it is not.
+
+To enable the tested Mnemosyne release:
+
+```bash
+python3 -m pip install "mnemosyne-memory==3.15.1"
+```
+
+Advanced Mnemosyne controls are `MNEMOSYNE_MODE=auto|off|required`, `MNEMOSYNE_COMMAND=/path/to/mnemosyne`, and `MNEMOSYNE_TIMEOUT_MS` (500–60000 ms, default 5000). Rakazo stores each derived semantic index in an opaque, per-user/workspace/scope directory under `DATA_DIR/mnemosyne-index/`. Those SQLite indexes are rebuildable caches; Markdown/Brain memory remains the authoritative, portable source of truth.
 
 Then:
 
@@ -62,15 +73,21 @@ pnpm dev
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Sign up, pick a model from the Pi catalog (paste an API key, sign in with ChatGPT / Copilot / SuperGrok, or Skip if the deployment key is set), create a bot, send a message. The computer pane is a live Linux desktop. The model can observe and control the screen, use browsers and other graphical applications, run terminal commands, and work with files. You can interact with the same desktop while it runs; taking control makes the viewer editable but does not impose an exclusive agent/user lock. Ask a bot to spawn another bot, or to run a subagent for work that should stay inside this turn.
 
+### Venice AI and G0DM0D3 research routing
+
+The model catalog also supports **Venice AI** through its OpenAI-compatible API and **Pliny G0DM0D3** through a local/self-hosted OpenAI-compatible endpoint. Paste the corresponding provider key during model setup. G0DM0D3 defaults to `http://127.0.0.1:7860/v1` and can be redirected with `GODMODE_BASE_URL`; environment-key deployments can use `VENICE_API_KEY` and `GODMODE_API_KEY`.
+
+Rakazo does not rewrite prompts into jailbreaks or retry providers merely because a model refused a request. When the user has connected the relevant providers, ordinary prompts stay on the normal default model, high-control/tool-capable research and cybersecurity prompts can prefer Venice, and explicit G0DM0D3 / ULTRAPLINIAN / CONSORTIUM / multi-model requests can prefer G0DM0D3.
+
 Confirm the product path:
 
 ```bash
 curl -s http://127.0.0.1:3100/health
 ```
 
-You want `"runtime":"pi"`, `"sandbox":"docker"`, `"jobs":"graphile"`, and `"realtime":"postgres"`. `"composio":true` only if the Composio key is set.
+You want `"runtime":"pi"`, `"sandbox":"docker"`, `"jobs":"graphile"`, `"realtime":"postgres"`, `"memory":"markdown+mnemosyne"`, and normally `"mnemosyne":"auto"`. `"composio":true` only if the Composio key is set.
 
-Product defaults are Pi + Docker + Graphile. `pnpm test` pins the emulators (`AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) so default tests never call live models or Composio.
+Product defaults are Pi + Docker + Graphile. `pnpm test` pins the emulators (`AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) so default tests never call live models or Composio. Mnemosyne remains optional in normal tests; a dedicated CI acceptance installs exactly `mnemosyne-memory==3.15.1` and exercises the real local SQLite store/recall path.
 
 ### Computer and app modes
 
