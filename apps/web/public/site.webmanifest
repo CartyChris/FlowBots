@@ -1,6 +1,6 @@
 {
-  "name": "Rakazo",
-  "short_name": "Rakazo",
+  "name": "FlowBots",
+  "short_name": "FlowBots",
   "description": "Your team of always-on agents.",
   "start_url": "/",
   "display": "standalone",
