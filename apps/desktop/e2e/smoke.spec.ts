@@ -1,34 +1,40 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 import type { RakazoDesktop } from "@rakazo/contracts";
 
-const fixture = `<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8"><title>Rakazo desktop smoke</title></head>
-  <body><main>Desktop fixture ready</main></body>
-</html>`;
-
-test("launches with a narrow preload bridge and an isolated renderer", async () => {
+test("launches the runtime chooser with a narrow privileged bridge and isolated renderer", async () => {
+  const configHome = mkdtempSync(path.join(os.tmpdir(), "flowbots-electron-smoke-"));
   const app = await electron.launch({
     args: ["."],
     cwd: path.resolve(import.meta.dirname, ".."),
     env: {
       ...process.env,
-      RAKAZO_WEB_URL: `data:text/html;charset=utf-8,${encodeURIComponent(fixture)}`,
+      XDG_CONFIG_HOME: configHome,
     },
   });
 
   try {
     const page = await app.firstWindow();
-    await expect(page.getByText("Desktop fixture ready")).toBeVisible();
-    await expect(page).toHaveTitle("Rakazo desktop smoke");
+    await expect(page.getByText("How should FlowBots run?")).toBeVisible();
+    await expect(page).toHaveTitle("Choose how FlowBots runs");
 
     const renderer = await page.evaluate(async () => {
       const desktop = (window as typeof window & { rakazoDesktop?: RakazoDesktop }).rakazoDesktop;
+      let terminalError = "";
+      try {
+        await desktop?.terminal.create({ cols: 80, rows: 24 });
+      } catch (error) {
+        terminalError = String(error);
+      }
 
       return {
         bridgeKeys: desktop ? Object.keys(desktop).sort() : [],
         windowKeys: desktop ? Object.keys(desktop.window).sort() : [],
+        runtimeKeys: desktop ? Object.keys(desktop.runtime).sort() : [],
+        terminalKeys: desktop ? Object.keys(desktop.terminal).sort() : [],
+        terminalError,
         platform: desktop?.platform,
         state: await desktop?.window.state(),
         nodeGlobals: {
@@ -39,8 +45,19 @@ test("launches with a narrow preload bridge and an isolated renderer", async () 
       };
     });
 
-    expect(renderer.bridgeKeys).toEqual(["platform", "window"]);
+    expect(renderer.bridgeKeys).toEqual(["platform", "runtime", "terminal", "window"]);
     expect(renderer.windowKeys).toEqual(["close", "minimize", "state", "toggleMaximize"]);
+    expect(renderer.runtimeKeys).toEqual(["choose", "showLauncher"]);
+    expect(renderer.terminalKeys).toEqual([
+      "close",
+      "create",
+      "interrupt",
+      "onActivity",
+      "onData",
+      "resize",
+      "write",
+    ]);
+    expect(renderer.terminalError).toMatch(/active loopback FlowBots runtime/i);
     expect(renderer.platform).toBe(process.platform);
     expect(renderer.state).toEqual({ minimized: false, maximized: false, fullScreen: false });
     expect(renderer.nodeGlobals).toEqual({
@@ -73,5 +90,6 @@ test("launches with a narrow preload bridge and an isolated renderer", async () 
     });
   } finally {
     await app.close();
+    rmSync(configHome, { recursive: true, force: true });
   }
 });
