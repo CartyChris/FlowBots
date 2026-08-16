@@ -13,6 +13,17 @@ describe("FlowBots macOS package contract", () => {
     expect(pkg.scripts?.["pack:mac"]).toContain("electron-builder --mac --universal");
   });
 
+  test("desktop bundles LocalRuntime instead of importing workspace TypeScript at runtime", async () => {
+    const pkg = JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const main = await readFile(path.join(desktopDir, "src", "main.ts"), "utf8");
+
+    expect(main).toContain('from "./local-runtime.js"');
+    expect(main).not.toContain('from "@rakazo/local-runtime"');
+    expect(pkg.scripts?.build).toContain("build-local-runtime.mjs");
+  });
+
   test("package copies the Lite web bundle and Prisma migrations into process.resourcesPath", async () => {
     const pkg = JSON.parse(await readFile(path.join(desktopDir, "package.json"), "utf8")) as {
       build?: {
