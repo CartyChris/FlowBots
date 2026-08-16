@@ -17,3 +17,14 @@ This file is append-only. Accepted stages are never rewritten; later entries cor
 ### Next single feature
 
 Implement `runtime-lite` only: persistent embedded PostgreSQL, migrations, one pg/Prisma connection, in-memory jobs/realtime, DesktopSandboxProvider, loopback API, idempotent stop/restart. Do not start desktop UI integration until the no-Docker restart-persistence test is green.
+
+## 2026-08-16 — Task 10 native terminal continuation checkpoint
+
+- Recovered the actual long-running Stage-5 head rather than restarting from the older summary checkpoint.
+- Glass Pane activity ledger and Activity Bus are implemented with managed-vs-observed coverage, parent/child traces, secret redaction, lifecycle accounting, and cancellation restricted to sessions Rakazo actually owns.
+- Integrated Terminal policy/lifecycle manager is implemented with approved-root cwd enforcement, raw PTY input, resize, Ctrl-C interrupt, output subscriptions, idempotent close, and close-all cleanup.
+- Electron preload exposes only narrow terminal session operations/events; Remote non-loopback pages do not receive host-terminal capability.
+- Electron main now owns native PTY sessions through an injected `node-pty` adapter, re-authorizes every terminal IPC mutation, binds sessions to the creating webContents, bounds writes, streams data/activity, and reaps sessions on teardown.
+- Desktop production dependency pins `node-pty@1.2.0-beta.14` and unpacks its native files from ASAR.
+- The previous frozen-lockfile failure was expected after adding the native dependency. GitHub Actions refreshed `pnpm-lock.yaml` canonically at `46b94e3b77608b9b1d68717b8458283c37c3c269`.
+- This documentation-only checkpoint intentionally triggers a fresh `pnpm install --frozen-lockfile` plus the full focused verification before product branding changes begin.
