@@ -2,8 +2,8 @@ import {
   desiredScheduledState,
   type LocalClock,
   type ScheduleClosePolicy,
-  type ScheduleWindow,
   type ScheduledServiceState,
+  type ScheduleWindow,
 } from "./service-schedule.js";
 
 export type RuntimeControlPlane =

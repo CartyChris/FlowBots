@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
@@ -65,7 +65,8 @@ export async function startLocalRuntime(
       socket.addEventListener("listening", onListening, { once: true });
       socket.addEventListener(
         "error",
-        (event) => reject((event as CustomEvent<Error>).detail ?? new Error("PGlite socket failed")),
+        (event) =>
+          reject((event as CustomEvent<Error>).detail ?? new Error("PGlite socket failed")),
         { once: true },
       );
     });
@@ -186,10 +187,10 @@ export async function applyLiteMigrations(db: PGlite, migrationsDir: string): Pr
     await db.exec("BEGIN");
     try {
       await db.exec(sql);
-      await db.query(
-        'INSERT INTO "_rakazo_lite_migrations" ("id", "checksum") VALUES ($1, $2)',
-        [entry.name, checksum],
-      );
+      await db.query('INSERT INTO "_rakazo_lite_migrations" ("id", "checksum") VALUES ($1, $2)', [
+        entry.name,
+        checksum,
+      ]);
       await db.exec("COMMIT");
     } catch (error) {
       await db.exec("ROLLBACK").catch(() => undefined);

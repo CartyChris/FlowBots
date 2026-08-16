@@ -21,9 +21,9 @@ describe("FlowBots external model providers", () => {
       ]),
     );
     for (const entry of entries) {
-      expect(Object.prototype.hasOwnProperty.call(entry, "apiKey")).toBe(false);
-      expect(Object.prototype.hasOwnProperty.call(entry, "secret")).toBe(false);
-      expect(Object.prototype.hasOwnProperty.call(entry, "token")).toBe(false);
+      expect(Object.hasOwn(entry, "apiKey")).toBe(false);
+      expect(Object.hasOwn(entry, "secret")).toBe(false);
+      expect(Object.hasOwn(entry, "token")).toBe(false);
     }
     expect(JSON.stringify(entries)).not.toMatch(/(?:sk-|g0d_)[A-Za-z0-9_-]{8,}/);
   });

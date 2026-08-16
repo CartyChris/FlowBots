@@ -3,10 +3,7 @@ import path from "node:path";
 import { build } from "esbuild";
 
 const desktopDir = path.resolve(import.meta.dirname, "..");
-const builtins = new Set([
-  ...builtinModules,
-  ...builtinModules.map((name) => `node:${name}`),
-]);
+const builtins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 
 await build({
   entryPoints: [path.join(desktopDir, "src", "local-runtime.ts")],

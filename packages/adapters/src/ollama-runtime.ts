@@ -1,9 +1,6 @@
 import { OLLAMA_PROVIDER_ID, ollamaOpenAiBaseUrl } from "./ollama-provider.js";
 
-export function ollamaRuntimeModel(
-  modelId: string,
-  source: NodeJS.ProcessEnv = process.env,
-) {
+export function ollamaRuntimeModel(modelId: string, source: NodeJS.ProcessEnv = process.env) {
   return {
     id: modelId,
     name: modelId,

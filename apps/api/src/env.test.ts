@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv, type AppEnv } from "./env.js";
+import { type AppEnv, loadEnv } from "./env.js";
 
 const base = {
   DATABASE_URL: "postgres://rakazo:rakazo@127.0.0.1:5433/rakazo",
@@ -73,9 +73,7 @@ describe("loadEnv", () => {
     expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "not-a-number" })).toThrow(
       /MNEMOSYNE_TIMEOUT_MS/,
     );
-    expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "100" })).toThrow(
-      /MNEMOSYNE_TIMEOUT_MS/,
-    );
+    expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "100" })).toThrow(/MNEMOSYNE_TIMEOUT_MS/);
     expect(() => loadEnv({ ...base, MNEMOSYNE_TIMEOUT_MS: "120000" })).toThrow(
       /MNEMOSYNE_TIMEOUT_MS/,
     );

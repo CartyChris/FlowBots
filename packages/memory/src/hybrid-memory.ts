@@ -130,7 +130,5 @@ function mergeSearchResults(
     const existing = byPath.get(result.path);
     if (!existing || result.score > existing.score) byPath.set(result.path, result);
   }
-  return [...byPath.values()].sort(
-    (a, b) => b.score - a.score || a.path.localeCompare(b.path),
-  );
+  return [...byPath.values()].sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 }

@@ -58,8 +58,8 @@ describe("desktop runtime bootstrap boundaries", () => {
     expect(trustedTerminalSender("data:text/html,hello", active)).toBe(false);
     expect(trustedTerminalSender(undefined, active)).toBe(false);
     expect(trustedTerminalSender("http://127.0.0.1:43117/chat", "")).toBe(false);
-    expect(
-      trustedTerminalSender("http://127.0.0.1:43117/chat", "https://127.0.0.1:43117"),
-    ).toBe(false);
+    expect(trustedTerminalSender("http://127.0.0.1:43117/chat", "https://127.0.0.1:43117")).toBe(
+      false,
+    );
   });
 });

@@ -65,7 +65,8 @@ export class TerminalSessionManager {
   constructor(private readonly options: TerminalSessionManagerOptions) {
     this.canonicalize = options.canonicalizePath ?? ((value) => path.resolve(value));
     this.roots = options.allowedRoots.map((root) => this.canonicalize(root));
-    if (this.roots.length === 0) throw new Error("At least one approved terminal root is required.");
+    if (this.roots.length === 0)
+      throw new Error("At least one approved terminal root is required.");
   }
 
   create(input: { cwd?: string; cols: number; rows: number; shell?: string }): TerminalSessionInfo {
@@ -102,7 +103,11 @@ export class TerminalSessionManager {
       closed: false,
     });
     this.sessions.set(id, live);
-    this.options.onActivity?.({ type: "terminal.started", sessionId: id, data: { pid: process.pid, cwd, shell } });
+    this.options.onActivity?.({
+      type: "terminal.started",
+      sessionId: id,
+      data: { pid: process.pid, cwd, shell },
+    });
     return this.info(live);
   }
 

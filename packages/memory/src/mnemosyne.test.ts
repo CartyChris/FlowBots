@@ -3,11 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import {
+  type MnemosyneCommandRunner,
   MnemosyneSemanticIndex,
   memoryFingerprint,
   memoryIndexKey,
   mnemosyneSourceForPath,
-  type MnemosyneCommandRunner,
 } from "./mnemosyne.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -28,7 +28,12 @@ function context() {
 
 const docs = [
   { id: "1", path: "preferences.md", content: "User prefers Vitest over Jest.", revision: 2 },
-  { id: "2", path: "projects/rakazo.md", content: "Rakazo is a local-first agent OS.", revision: 4 },
+  {
+    id: "2",
+    path: "projects/rakazo.md",
+    content: "Rakazo is a local-first agent OS.",
+    revision: 4,
+  },
 ];
 
 describe("Mnemosyne semantic memory index", () => {
@@ -96,9 +101,7 @@ describe("Mnemosyne semantic memory index", () => {
       { query: "testing preference", scope: "bot", botId: context().botId, documents: docs },
       context(),
     );
-    expect(first).toEqual([
-      expect.objectContaining({ path: "preferences.md", score: 0.91 }),
-    ]);
+    expect(first).toEqual([expect.objectContaining({ path: "preferences.md", score: 0.91 })]);
     expect(calls.some((call) => call.args[0] === "--version" || call.args[0] === "version")).toBe(
       false,
     );
@@ -129,7 +132,10 @@ describe("Mnemosyne semantic memory index", () => {
         query: "testing preference",
         scope: "bot",
         botId: context().botId,
-        documents: [{ ...docs[0]!, revision: 3, content: "User prefers Node test runner." }, docs[1]!],
+        documents: [
+          { ...docs[0]!, revision: 3, content: "User prefers Node test runner." },
+          docs[1]!,
+        ],
       },
       context(),
     );

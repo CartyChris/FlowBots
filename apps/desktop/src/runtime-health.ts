@@ -46,7 +46,8 @@ export async function probeRuntimeOrigin(
       ) {
         return {
           ok: false,
-          error: "Lite runtime is reachable but did not report the required memory jobs and desktop sandbox topology.",
+          error:
+            "Lite runtime is reachable but did not report the required memory jobs and desktop sandbox topology.",
         };
       }
       return { ok: true };

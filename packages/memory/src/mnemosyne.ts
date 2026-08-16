@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AdapterContext, MemorySearchResult } from "@rakazo/adapter-kit";
@@ -120,7 +120,7 @@ export class MnemosyneSemanticIndex {
     if (this.mode === "off" || !request.query.trim() || request.documents.length === 0) return [];
 
     try {
-      const botId = request.scope === "bot" ? request.botId ?? context.botId : undefined;
+      const botId = request.scope === "bot" ? (request.botId ?? context.botId) : undefined;
       if (request.scope === "bot" && !botId?.trim()) {
         throw new Error("bot scope requires a concrete bot identity");
       }
@@ -134,7 +134,9 @@ export class MnemosyneSemanticIndex {
         context.signal,
       );
       const payload = parseRecallPayload(response.stdout);
-      const canonicalByPath = new Map(request.documents.map((document) => [document.path, document]));
+      const canonicalByPath = new Map(
+        request.documents.map((document) => [document.path, document]),
+      );
       const merged = new Map<string, MemorySearchResult>();
 
       for (const candidate of payload) {
@@ -153,9 +155,7 @@ export class MnemosyneSemanticIndex {
         if (!existing || next.score > existing.score) merged.set(next.path, next);
       }
 
-      return [...merged.values()].sort(
-        (a, b) => b.score - a.score || a.path.localeCompare(b.path),
-      );
+      return [...merged.values()].sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
     } catch (error) {
       if (this.mode === "required") {
         const detail = error instanceof Error ? error.message : String(error);
@@ -272,7 +272,8 @@ const nodeMnemosyneRunner: MnemosyneCommandRunner = {
         if (settled) return;
         if (code === 0) finish();
         else {
-          const detail = stderr.trim() || `exit ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`;
+          const detail =
+            stderr.trim() || `exit ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`;
           finish(new Error(`Mnemosyne command failed: ${detail}`));
         }
       });
@@ -290,7 +291,9 @@ function parseRecallPayload(raw: string): MnemosyneRecallResult[] {
   if (!parsed || typeof parsed !== "object") return [];
   const results = (parsed as { results?: unknown }).results;
   if (!Array.isArray(results)) return [];
-  return results.filter((item): item is MnemosyneRecallResult => Boolean(item && typeof item === "object"));
+  return results.filter((item): item is MnemosyneRecallResult =>
+    Boolean(item && typeof item === "object"),
+  );
 }
 
 async function readManifest(file: string): Promise<MnemosyneManifest | undefined> {

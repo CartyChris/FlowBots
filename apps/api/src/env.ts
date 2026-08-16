@@ -43,7 +43,8 @@ export function loadEnv(
   );
   return {
     databaseUrl,
-    realtimeDatabaseUrl: overrides.realtimeDatabaseUrl ?? source.REALTIME_DATABASE_URL ?? databaseUrl,
+    realtimeDatabaseUrl:
+      overrides.realtimeDatabaseUrl ?? source.REALTIME_DATABASE_URL ?? databaseUrl,
     authSecret,
     authUrl:
       overrides.authUrl ?? source.BETTER_AUTH_URL ?? source.WEB_ORIGIN ?? "http://127.0.0.1:5173",
@@ -92,7 +93,12 @@ function resolveCommand(value: string): string {
   return command;
 }
 
-function resolveBoundedInteger(name: string, value: string | number, min: number, max: number): number {
+function resolveBoundedInteger(
+  name: string,
+  value: string | number,
+  min: number,
+  max: number,
+): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
     throw new Error(`${name} must be an integer between ${min} and ${max}`);

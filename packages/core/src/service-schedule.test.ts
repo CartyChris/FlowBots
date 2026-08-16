@@ -29,9 +29,9 @@ describe("isScheduleWindowActive", () => {
   });
 
   it("supports all-day windows and disabled windows", () => {
-    expect(
-      isScheduleWindowActive({ days: [2], startMinute: 0, endMinute: 0 }, clock(2, 14)),
-    ).toBe(true);
+    expect(isScheduleWindowActive({ days: [2], startMinute: 0, endMinute: 0 }, clock(2, 14))).toBe(
+      true,
+    );
     expect(
       isScheduleWindowActive(
         { days: [2], startMinute: 0, endMinute: 0, enabled: false },
@@ -71,6 +71,8 @@ describe("desiredScheduledState", () => {
   });
 
   it("never starts a disabled service even during its schedule", () => {
-    expect(desiredScheduledState({ ...scheduled, enabled: false }, clock(1, 10), 0)).toBe("stopped");
+    expect(desiredScheduledState({ ...scheduled, enabled: false }, clock(1, 10), 0)).toBe(
+      "stopped",
+    );
   });
 });

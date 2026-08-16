@@ -16,10 +16,7 @@ export function buildPaperclipManagedInvocation(
   const cwd = requiredString(home, "Paperclip home");
   return {
     command: "npx",
-    args:
-      action === "onboard"
-        ? ["paperclipai", "onboard", "--yes"]
-        : ["paperclipai", "run"],
+    args: action === "onboard" ? ["paperclipai", "onboard", "--yes"] : ["paperclipai", "run"],
     cwd,
     env: { PAPERCLIP_HOME: cwd },
   };
@@ -214,7 +211,10 @@ export function paperclipAdapterForHarness(
       };
     }
     default: {
-      const command = requiredString(input.command, `Command for ${input.harnessId || "custom harness"}`);
+      const command = requiredString(
+        input.command,
+        `Command for ${input.harnessId || "custom harness"}`,
+      );
       return {
         adapterType: "process",
         adapterConfig: {

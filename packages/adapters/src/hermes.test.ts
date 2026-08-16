@@ -88,10 +88,12 @@ describe("Hermes Mixture of Agents", () => {
 
 describe("Hermes managed services", () => {
   it("builds direct argv for the JSON-RPC/WebSocket backend", () => {
-    expect(buildHermesServeInvocation({ host: "127.0.0.1", port: 9119, profile: "coder" })).toEqual({
-      command: "hermes",
-      args: ["-p", "coder", "serve", "--host", "127.0.0.1", "--port", "9119"],
-    });
+    expect(buildHermesServeInvocation({ host: "127.0.0.1", port: 9119, profile: "coder" })).toEqual(
+      {
+        command: "hermes",
+        args: ["-p", "coder", "serve", "--host", "127.0.0.1", "--port", "9119"],
+      },
+    );
   });
 
   it("builds gateway lifecycle commands without shell interpolation", () => {

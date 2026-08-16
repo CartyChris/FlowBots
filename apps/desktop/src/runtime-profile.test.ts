@@ -10,7 +10,8 @@ function required<T>(name: string): T | undefined {
 describe("desktop runtime profiles", () => {
   test("first run has no implicit profile and the launcher exposes exactly three modes", () => {
     const parse = required<(value: unknown) => unknown>("parseRuntimeProfile");
-    const modes = required<Array<{ id: string; recommended?: boolean; title: string }>>("RUNTIME_MODES");
+    const modes =
+      required<Array<{ id: string; recommended?: boolean; title: string }>>("RUNTIME_MODES");
     if (!parse || !modes) return;
     expect(parse(undefined)).toBeNull();
     expect(modes.map((mode) => mode.id)).toEqual(["lite", "full-local", "remote"]);
@@ -18,9 +19,10 @@ describe("desktop runtime profiles", () => {
   });
 
   test("normalizes Full Local and Remote origins without credentials, query strings, or fragments", () => {
-    const normalize = required<
-      (value: { mode: string; serverUrl?: string }) => { mode: string; serverUrl?: string }
-    >("normalizeRuntimeProfile");
+    const normalize =
+      required<
+        (value: { mode: string; serverUrl?: string }) => { mode: string; serverUrl?: string }
+      >("normalizeRuntimeProfile");
     if (!normalize) return;
 
     expect(normalize({ mode: "full-local" })).toEqual({
@@ -40,12 +42,13 @@ describe("desktop runtime profiles", () => {
   });
 
   test("only Lite mode is allowed to start the embedded LocalRuntime", async () => {
-    const activate = required<
-      (
-        value: { mode: string; serverUrl?: string },
-        deps: { startLite(): Promise<{ origin: string; stop(): Promise<void> }> },
-      ) => Promise<{ mode: string; origin: string; stop?: () => Promise<void> }>
-    >("activateRuntimeProfile");
+    const activate =
+      required<
+        (
+          value: { mode: string; serverUrl?: string },
+          deps: { startLite(): Promise<{ origin: string; stop(): Promise<void> }> },
+        ) => Promise<{ mode: string; origin: string; stop?: () => Promise<void> }>
+      >("activateRuntimeProfile");
     if (!activate) return;
 
     const stop = vi.fn(async () => undefined);

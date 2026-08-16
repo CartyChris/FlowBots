@@ -23,8 +23,7 @@ const EXTERNAL_CATALOG: PiCatalogEntry[] = [
     providerName: "Venice AI",
     id: "venice-uncensored",
     label: "Venice Uncensored (Legacy Alias)",
-    billing:
-      "Uses your Venice API key. Legacy 32K uncensored alias; charges are billed by Venice.",
+    billing: "Uses your Venice API key. Legacy 32K uncensored alias; charges are billed by Venice.",
     auth: "api-key",
     subscription: false,
   },

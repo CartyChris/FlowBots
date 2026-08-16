@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import * as localRuntime from "./index.js";
 
@@ -29,7 +29,9 @@ type Start = (input: {
 
 function requiredStart(): Start | undefined {
   const value = (localRuntime as Record<string, unknown>).startLocalRuntime;
-  expect(typeof value, "startLocalRuntime must be exported by @rakazo/local-runtime").toBe("function");
+  expect(typeof value, "startLocalRuntime must be exported by @rakazo/local-runtime").toBe(
+    "function",
+  );
   return typeof value === "function" ? (value as Start) : undefined;
 }
 
@@ -85,7 +87,9 @@ describe("embedded Rakazo LocalRuntime", () => {
         mnemosyneCommand: "/opt/custom/mnemosyne",
         mnemosyneTimeoutMs: 6789,
       });
-      const secondHealth = await fetch(`${second.origin}/health`).then((response) => response.json());
+      const secondHealth = await fetch(`${second.origin}/health`).then((response) =>
+        response.json(),
+      );
       expect(secondHealth).toMatchObject({ memory: "markdown+mnemosyne", mnemosyne: "off" });
       const rows = await second.prisma.$queryRawUnsafe<Array<{ value: string }>>(
         'SELECT "value" FROM "_rakazo_lite_probe"',
@@ -110,7 +114,11 @@ describe("embedded Rakazo LocalRuntime", () => {
     const webDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-lite-web-"));
     temps.push(dataDir, webDir);
     await mkdir(path.join(webDir, "assets"), { recursive: true });
-    await writeFile(path.join(webDir, "index.html"), "<!doctype html><div id=app>RAKAZO_LITE_UI</div>", "utf8");
+    await writeFile(
+      path.join(webDir, "index.html"),
+      "<!doctype html><div id=app>RAKAZO_LITE_UI</div>",
+      "utf8",
+    );
     await writeFile(path.join(webDir, "assets", "app.js"), "globalThis.RAKAZO_ASSET=true;", "utf8");
 
     const runtime = await start({ dataDir, migrationsDir: migrationsDir(), webDir, port: 0 });

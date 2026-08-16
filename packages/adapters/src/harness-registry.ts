@@ -1,8 +1,4 @@
-import {
-  BUILTIN_CLI_AGENTS,
-  runCliProcess,
-  type CliAgentDefinition,
-} from "./cli-agent.js";
+import { BUILTIN_CLI_AGENTS, type CliAgentDefinition, runCliProcess } from "./cli-agent.js";
 
 export type HarnessKind = "cli" | "rpc" | "acp" | "agent-server" | "api" | "mcp";
 export type HarnessInteractionMode = "chat" | "headless" | "rpc" | "acp" | "http" | "mcp";

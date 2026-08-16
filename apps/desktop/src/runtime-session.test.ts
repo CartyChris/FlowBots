@@ -85,7 +85,9 @@ describe("desktop runtime session", () => {
 
     await expect(h.session.choose({ mode: "lite" })).resolves.toMatchObject({ ok: false });
     expect(h.liteStop).toHaveBeenCalledTimes(1);
-    expect(h.showLauncher).toHaveBeenCalledWith(expect.stringMatching(/connection|navigation|load/i));
+    expect(h.showLauncher).toHaveBeenCalledWith(
+      expect.stringMatching(/connection|navigation|load/i),
+    );
   });
 
   test("showLauncher and stop release any active Lite runtime idempotently", async () => {

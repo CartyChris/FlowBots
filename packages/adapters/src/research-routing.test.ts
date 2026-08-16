@@ -28,7 +28,11 @@ describe("research routing", () => {
   test("ordinary work stays on the user's default provider", () => {
     expect(classifyResearchRoute("Draft a concise project update for my team.")).toBe("default");
     expect(
-      orderedResearchCredentials("Draft a concise project update", [godmode, venice, defaultCredential]),
+      orderedResearchCredentials("Draft a concise project update", [
+        godmode,
+        venice,
+        defaultCredential,
+      ]),
     ).toEqual([defaultCredential]);
   });
 
@@ -70,19 +74,22 @@ describe("research routing", () => {
 
   test("only connected credentials are candidates and the default remains the fallback", () => {
     expect(
-      orderedResearchCredentials("cybersecurity research on my own lab", [defaultCredential, venice]),
+      orderedResearchCredentials("cybersecurity research on my own lab", [
+        defaultCredential,
+        venice,
+      ]),
     ).toEqual([venice, defaultCredential]);
-    expect(orderedResearchCredentials("G0DM0D3 this analysis", [defaultCredential, venice])).toEqual([
-      venice,
-      defaultCredential,
-    ]);
+    expect(
+      orderedResearchCredentials("G0DM0D3 this analysis", [defaultCredential, venice]),
+    ).toEqual([venice, defaultCredential]);
     expect(
       orderedResearchCredentials("cybersecurity research on my own lab", [defaultCredential]),
     ).toEqual([defaultCredential]);
   });
 
   test("a refusal report alone never causes provider chasing", () => {
-    const prompt = "The previous assistant refused. Please answer the same harmless cooking question.";
+    const prompt =
+      "The previous assistant refused. Please answer the same harmless cooking question.";
     expect(classifyResearchRoute(prompt)).toBe("default");
     expect(orderedResearchCredentials(prompt, [godmode, venice, defaultCredential])).toEqual([
       defaultCredential,
@@ -91,7 +98,9 @@ describe("research routing", () => {
 
   test("keyword substrings do not accidentally reroute unrelated words", () => {
     expect(
-      classifyResearchRoute("Write a retrospective about exploiting market opportunities responsibly"),
+      classifyResearchRoute(
+        "Write a retrospective about exploiting market opportunities responsibly",
+      ),
     ).toBe("default");
     expect(classifyResearchRoute("Summarize a reverse mortgage article")).toBe("default");
   });

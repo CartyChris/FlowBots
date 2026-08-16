@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export interface BrainRoot {
@@ -64,7 +64,12 @@ async function listMarkdownFiles(root: string): Promise<string[]> {
   return files;
 }
 
-function chunkMarkdown(rootName: string, root: string, file: string, content: string): BrainChunk[] {
+function chunkMarkdown(
+  rootName: string,
+  root: string,
+  file: string,
+  content: string,
+): BrainChunk[] {
   const relativePath = path.relative(root, file);
   const lines = content.split(/\r?\n/);
   const out: BrainChunk[] = [];
@@ -91,7 +96,9 @@ function chunkMarkdown(rootName: string, root: string, file: string, content: st
 }
 
 function tokenize(value: string): string[] {
-  return [...new Set(value.toLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? [])].filter((term) => term.length > 1);
+  return [...new Set(value.toLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? [])].filter(
+    (term) => term.length > 1,
+  );
 }
 
 function scoreChunk(chunk: BrainChunk, terms: string[]): number {

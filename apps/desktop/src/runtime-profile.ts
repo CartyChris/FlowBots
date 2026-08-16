@@ -16,13 +16,15 @@ export const RUNTIME_MODES: RuntimeModeOption[] = [
   {
     id: "lite",
     title: "Lite",
-    description: "Runs entirely on this Mac. No Docker, separate Postgres, pnpm, or Terminal setup.",
+    description:
+      "Runs entirely on this Mac. No Docker, separate Postgres, pnpm, or Terminal setup.",
     recommended: true,
   },
   {
     id: "full-local",
     title: "Full Local",
-    description: "Connect to a full local FlowBots stack with PostgreSQL and your chosen computer provider.",
+    description:
+      "Connect to a full local FlowBots stack with PostgreSQL and your chosen computer provider.",
   },
   {
     id: "remote",
@@ -140,11 +142,15 @@ document.getElementById('remote-form').addEventListener('submit',(event)=>{event
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  })[char]!);
+  return value.replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[char]!,
+  );
 }

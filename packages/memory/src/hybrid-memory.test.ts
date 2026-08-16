@@ -132,7 +132,10 @@ describe("HybridMemoryStore", () => {
     );
     expect(semantic.search).toHaveBeenCalledTimes(2);
     expect(semantic.search).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: "user", documents: [expect.objectContaining({ path: "PREFS.md" })] }),
+      expect.objectContaining({
+        scope: "user",
+        documents: [expect.objectContaining({ path: "PREFS.md" })],
+      }),
       expect.any(Object),
     );
     expect(semantic.search).toHaveBeenCalledWith(
@@ -161,7 +164,8 @@ describe("HybridMemoryStore", () => {
     const semantic = semanticIndex();
     const memory = new HybridMemoryStore(primary.store, semantic);
     const exported: PortableFile[] = [];
-    for await (const file of memory.exportMarkdown({ scope: "user" }, context())) exported.push(file);
+    for await (const file of memory.exportMarkdown({ scope: "user" }, context()))
+      exported.push(file);
     expect(exported.map((file) => file.path)).toEqual(["PREFS.md"]);
 
     async function* files() {

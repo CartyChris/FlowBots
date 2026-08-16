@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
-  "exports": {"./app": "./src/app.ts", "./env": "./src/env.ts"},
+  "exports": {
+    "./app": "./src/app.ts",
+    "./env": "./src/env.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -22,5 +25,8 @@
     "@rakazo/memory": "workspace:*",
     "hono": "^4.9.6"
   },
-  "devDependencies": {"typescript": "^5.9.2", "vitest": "^4.1.10"}
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
+  }
 }

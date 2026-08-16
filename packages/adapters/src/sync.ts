@@ -76,12 +76,14 @@ export async function detectLocalModelServers(opts?: {
     });
     return [{ provider: "ollama", baseUrl, running: true, models }];
   } catch (error) {
-    return [{
-      provider: "ollama",
-      baseUrl,
-      running: false,
-      models: [],
-      error: error instanceof Error ? error.message : "Ollama is not reachable",
-    }];
+    return [
+      {
+        provider: "ollama",
+        baseUrl,
+        running: false,
+        models: [],
+        error: error instanceof Error ? error.message : "Ollama is not reachable",
+      },
+    ];
   }
 }

@@ -17,12 +17,16 @@ function required<T>(name: string): T | undefined {
 
 describe("Markdown Brain Folders", () => {
   test("scans Markdown into cited heading chunks and searches lexically", async () => {
-    const create = required<
-      (roots: Array<{ name: string; path: string; writable: boolean }>) => {
-        refresh(): Promise<void>;
-        search(query: string, limit?: number): Promise<Array<{ text: string; sourcePath: string; heading: string }>>;
-      }
-    >("createBrainIndex");
+    const create =
+      required<
+        (roots: Array<{ name: string; path: string; writable: boolean }>) => {
+          refresh(): Promise<void>;
+          search(
+            query: string,
+            limit?: number,
+          ): Promise<Array<{ text: string; sourcePath: string; heading: string }>>;
+        }
+      >("createBrainIndex");
     if (!create) return;
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-brain-"));
     temps.push(root);
@@ -41,10 +45,21 @@ describe("Markdown Brain Folders", () => {
   });
 
   test("a proposed write is diff-first and does not mutate until applied", async () => {
-    const propose = required<
-      (input: { root: string; relativePath: string; content: string; frozenRoots?: string[] }) =>
-        Promise<{ target: string; before: string; after: string; changed: boolean; apply(): Promise<void> }>
-    >("proposeBrainWrite");
+    const propose =
+      required<
+        (input: {
+          root: string;
+          relativePath: string;
+          content: string;
+          frozenRoots?: string[];
+        }) => Promise<{
+          target: string;
+          before: string;
+          after: string;
+          changed: boolean;
+          apply(): Promise<void>;
+        }>
+      >("proposeBrainWrite");
     if (!propose) return;
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-brain-write-"));
     temps.push(root);
@@ -65,18 +80,22 @@ describe("Markdown Brain Folders", () => {
   });
 
   test("rejects traversal and absolute-path escapes", async () => {
-    const safe = required<(root: string, relativePath: string) => Promise<string>>("resolveBrainPath");
+    const safe =
+      required<(root: string, relativePath: string) => Promise<string>>("resolveBrainPath");
     if (!safe) return;
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-brain-safe-"));
     temps.push(root);
     await expect(safe(root, "../../outside.md")).rejects.toThrow(/outside|escape|root/i);
-    await expect(safe(root, path.resolve(root, "..", "outside.md"))).rejects.toThrow(/outside|escape|root/i);
+    await expect(safe(root, path.resolve(root, "..", "outside.md"))).rejects.toThrow(
+      /outside|escape|root/i,
+    );
     await expect(safe(root, "nested/note.md")).resolves.toBe(path.join(root, "nested", "note.md"));
   });
 
   test("rejects a symlink that escapes the selected brain root", async () => {
     if (process.platform === "win32") return;
-    const safe = required<(root: string, relativePath: string) => Promise<string>>("resolveBrainPath");
+    const safe =
+      required<(root: string, relativePath: string) => Promise<string>>("resolveBrainPath");
     if (!safe) return;
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-brain-link-"));
     const outside = await mkdtemp(path.join(os.tmpdir(), "rakazo-outside-"));
@@ -87,9 +106,15 @@ describe("Markdown Brain Folders", () => {
   });
 
   test("frozen eval roots can never be writable brain destinations", async () => {
-    const propose = required<
-      (input: { root: string; relativePath: string; content: string; frozenRoots?: string[] }) => Promise<unknown>
-    >("proposeBrainWrite");
+    const propose =
+      required<
+        (input: {
+          root: string;
+          relativePath: string;
+          content: string;
+          frozenRoots?: string[];
+        }) => Promise<unknown>
+      >("proposeBrainWrite");
     if (!propose) return;
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-frozen-"));
     temps.push(root);

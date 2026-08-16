@@ -3,8 +3,8 @@ import {
   buildPrimeAgentRpcInvocation,
   LfJsonlDecoder,
   PrimeAgentRpcClient,
-  primeAgentHarnessDefinition,
   type PrimeRpcTransport,
+  primeAgentHarnessDefinition,
 } from "./prime-agent.js";
 
 function fakeTransport() {
@@ -129,7 +129,12 @@ describe("PrimeAgentRpcClient", () => {
     written.forEach((command) => {
       fake.emit({ id: command.id, type: "response", command: command.type, success: true });
     });
-    await expect(Promise.all(commands)).resolves.toEqual([undefined, undefined, undefined, undefined]);
+    await expect(Promise.all(commands)).resolves.toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 
   it("covers stats, A2A messaging, observation, schedules and heartbeats through the same client", async () => {
@@ -170,9 +175,7 @@ describe("PrimeAgentRpcClient", () => {
         data: { index },
       });
     });
-    await expect(Promise.all(pending)).resolves.toEqual(
-      sent.map((_, index) => ({ index })),
-    );
+    await expect(Promise.all(pending)).resolves.toEqual(sent.map((_, index) => ({ index })));
   });
 
   it("preserves observed subagent events as events for Glass Pane correlation", () => {

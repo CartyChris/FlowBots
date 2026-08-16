@@ -66,18 +66,19 @@ describe("OpenHands Agent Server URL policy", () => {
 
 describe("OpenHandsAgentServerClient", () => {
   it("probes the official server-info response and keeps bearer auth out of the URL", async () => {
-    const fetchFn = vi.fn(async (url: string, init?: RequestInit) =>
-      new Response(
-        JSON.stringify({
-          uptime: 12,
-          idle_time: 0,
-          title: "OpenHands Agent Server",
-          version: "1.11.4",
-          docs: "/docs",
-          redoc: "/redoc",
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      ),
+    const fetchFn = vi.fn(
+      async (url: string, init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            uptime: 12,
+            idle_time: 0,
+            title: "OpenHands Agent Server",
+            version: "1.11.4",
+            docs: "/docs",
+            redoc: "/redoc",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
     ) as unknown as typeof fetch;
     const client = new OpenHandsAgentServerClient({
       baseUrl: "http://127.0.0.1:18000",
@@ -100,11 +101,12 @@ describe("OpenHandsAgentServerClient", () => {
   });
 
   it("sends a current Agent Server user event with optional run=true", async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
     ) as unknown as typeof fetch;
     const client = new OpenHandsAgentServerClient({
       baseUrl: "https://agents.example.com",

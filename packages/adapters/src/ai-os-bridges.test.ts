@@ -26,17 +26,18 @@ describe("CLI agent bridge", () => {
   });
 
   test("builds safe noninteractive Claude, Codex, Kimi, and OpenCode invocations", () => {
-    const build = required<
-      (input: {
-        agentId: string;
-        prompt: string;
-        cwd: string;
-        mode: "analyze" | "write";
-        model?: string;
-        maxTurns?: number;
-        additionalDirs?: string[];
-      }) => { command: string; args: string[]; cwd: string; outerVerificationRequired: boolean }
-    >("buildCliInvocation");
+    const build =
+      required<
+        (input: {
+          agentId: string;
+          prompt: string;
+          cwd: string;
+          mode: "analyze" | "write";
+          model?: string;
+          maxTurns?: number;
+          additionalDirs?: string[];
+        }) => { command: string; args: string[]; cwd: string; outerVerificationRequired: boolean }
+      >("buildCliInvocation");
     if (!build) return;
 
     const claude = build({
@@ -64,14 +65,26 @@ describe("CLI agent bridge", () => {
     );
     expect(claude.args).not.toContain("--dangerously-skip-permissions");
 
-    const codex = build({ agentId: "codex", prompt: "audit", cwd: "/tmp/project", mode: "analyze" });
+    const codex = build({
+      agentId: "codex",
+      prompt: "audit",
+      cwd: "/tmp/project",
+      mode: "analyze",
+    });
     expect(codex.command).toBe("codex");
     expect(codex.args.slice(0, 2)).toEqual(["exec", "--json"]);
     expect(codex.args).toEqual(expect.arrayContaining(["--sandbox", "read-only", "audit"]));
 
-    const kimi = build({ agentId: "kimi-code", prompt: "review", cwd: "/tmp/project", mode: "analyze" });
+    const kimi = build({
+      agentId: "kimi-code",
+      prompt: "review",
+      cwd: "/tmp/project",
+      mode: "analyze",
+    });
     expect(kimi.command).toBe("kimi");
-    expect(kimi.args).toEqual(expect.arrayContaining(["-p", "review", "--output-format", "stream-json"]));
+    expect(kimi.args).toEqual(
+      expect.arrayContaining(["-p", "review", "--output-format", "stream-json"]),
+    );
     expect(kimi.args).not.toContain("--plan");
     expect(kimi.outerVerificationRequired).toBe(true);
 
@@ -84,19 +97,22 @@ describe("CLI agent bridge", () => {
     });
     expect(opencode.command).toBe("opencode");
     expect(opencode.args.slice(0, 2)).toEqual(["run", "--format"]);
-    expect(opencode.args).toEqual(expect.arrayContaining(["json", "--model", "openrouter/example", "check"]));
+    expect(opencode.args).toEqual(
+      expect.arrayContaining(["json", "--model", "openrouter/example", "check"]),
+    );
   });
 
   test("custom CLI definitions remain argv-based rather than shell strings", () => {
-    const build = required<
-      (input: {
-        agentId: string;
-        prompt: string;
-        cwd: string;
-        mode: "analyze" | "write";
-        custom?: { executable: string; args: string[] };
-      }) => { command: string; args: string[] }
-    >("buildCliInvocation");
+    const build =
+      required<
+        (input: {
+          agentId: string;
+          prompt: string;
+          cwd: string;
+          mode: "analyze" | "write";
+          custom?: { executable: string; args: string[] };
+        }) => { command: string; args: string[] }
+      >("buildCliInvocation");
     if (!build) return;
     const invocation = build({
       agentId: "custom",
@@ -110,15 +126,16 @@ describe("CLI agent bridge", () => {
   });
 
   test("runner captures output and kills a timed-out process", async () => {
-    const run = required<
-      (input: {
-        command: string;
-        args: string[];
-        cwd: string;
-        timeoutMs: number;
-        maxOutputBytes?: number;
-      }) => Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>
-    >("runCliProcess");
+    const run =
+      required<
+        (input: {
+          command: string;
+          args: string[];
+          cwd: string;
+          timeoutMs: number;
+          maxOutputBytes?: number;
+        }) => Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>
+      >("runCliProcess");
     if (!run) return;
     const cwd = await mkdtemp(path.join(os.tmpdir(), "rakazo-cli-"));
     temps.push(cwd);
@@ -146,16 +163,17 @@ describe("CLI agent bridge", () => {
 
 describe("MCP bridge", () => {
   test("stdio MCP performs initialization before tools and returns tool results", async () => {
-    const call = required<
-      (input: {
-        command: string;
-        args: string[];
-        cwd: string;
-        tool: string;
-        arguments?: Record<string, unknown>;
-        timeoutMs?: number;
-      }) => Promise<{ tools: Array<{ name: string }>; result: unknown }>
-    >("runStdioMcpCall");
+    const call =
+      required<
+        (input: {
+          command: string;
+          args: string[];
+          cwd: string;
+          tool: string;
+          arguments?: Record<string, unknown>;
+          timeoutMs?: number;
+        }) => Promise<{ tools: Array<{ name: string }>; result: unknown }>
+      >("runStdioMcpCall");
     if (!call) return;
     const cwd = await mkdtemp(path.join(os.tmpdir(), "rakazo-mcp-"));
     temps.push(cwd);
