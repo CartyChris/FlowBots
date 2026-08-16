@@ -17,3 +17,10 @@ export async function attemptNavigation(
     };
   }
 }
+
+export function shouldAutoRetry(state: {
+  connected: boolean;
+  windowDestroyed: boolean;
+}): boolean {
+  return !state.connected && !state.windowDestroyed;
+}
