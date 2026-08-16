@@ -29,7 +29,9 @@ jobs:
       - run: pnpm --filter @rakazo/db test
       - run: pnpm --filter @rakazo/api test -- env.test.ts
       - run: pnpm --filter @rakazo/core test -- ai-os-kernel.test.ts
+      - run: pnpm --filter @rakazo/core check
       - run: pnpm --filter @rakazo/adapters test -- ai-os-bridges.test.ts
+      - run: pnpm --filter @rakazo/adapters check
       - run: pnpm --filter @rakazo/memory test -- brain-folders.test.ts
       - run: pnpm --filter @rakazo/local-runtime test
       - run: pnpm --filter @rakazo/desktop test -- runtime-profile.test.ts
