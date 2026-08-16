@@ -126,9 +126,9 @@ describe("PrimeAgentRpcClient", () => {
       { id: "r3", type: "follow_up", message: "then document it" },
       { id: "r4", type: "abort" },
     ]);
-    written.forEach((command) =>
-      fake.emit({ id: command.id, type: "response", command: command.type, success: true }),
-    );
+    written.forEach((command) => {
+      fake.emit({ id: command.id, type: "response", command: command.type, success: true });
+    });
     await expect(Promise.all(commands)).resolves.toEqual([undefined, undefined, undefined, undefined]);
   });
 
@@ -161,15 +161,15 @@ describe("PrimeAgentRpcClient", () => {
     });
     expect(sent[4]).toMatchObject({ schedule: "0 9 * * 1-5", prompt: "run morning checks" });
 
-    sent.forEach((command, index) =>
+    sent.forEach((command, index) => {
       fake.emit({
         id: command.id,
         type: "response",
         command: command.type,
         success: true,
         data: { index },
-      }),
-    );
+      });
+    });
     await expect(Promise.all(pending)).resolves.toEqual(
       sent.map((_, index) => ({ index })),
     );
