@@ -1,17 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  defaultWebUrl,
-  localApiHealthUrl,
-  normalizeWebUrl,
-  rememberWebUrl,
-} from "./connection.js";
+import { defaultWebUrl, localApiHealthUrl, normalizeWebUrl, rememberWebUrl } from "./connection.js";
 
 describe("desktop connection profiles", () => {
   it("normalizes supported web URLs", () => {
     expect(normalizeWebUrl(" https://example.com/ ")).toBe("https://example.com");
-    expect(normalizeWebUrl("http://127.0.0.1:5173/room/")).toBe(
-      "http://127.0.0.1:5173/room",
-    );
+    expect(normalizeWebUrl("http://127.0.0.1:5173/room/")).toBe("http://127.0.0.1:5173/room");
     expect(normalizeWebUrl("https://example.com/path/?view=1#chat")).toBe(
       "https://example.com/path?view=1#chat",
     );
@@ -35,10 +28,7 @@ describe("desktop connection profiles", () => {
 
   it("keeps recent URLs newest-first, unique, and capped at five", () => {
     expect(
-      rememberWebUrl(
-        { recentUrls: ["https://b.test", "https://a.test"] },
-        "https://a.test",
-      ),
+      rememberWebUrl({ recentUrls: ["https://b.test", "https://a.test"] }, "https://a.test"),
     ).toEqual({
       activeUrl: "https://a.test",
       recentUrls: ["https://a.test", "https://b.test"],
@@ -66,12 +56,8 @@ describe("desktop connection profiles", () => {
   });
 
   it("derives the local API health endpoint only for local web origins", () => {
-    expect(localApiHealthUrl("http://127.0.0.1:5173")).toBe(
-      "http://127.0.0.1:3100/health",
-    );
-    expect(localApiHealthUrl("http://localhost:5173/foo")).toBe(
-      "http://127.0.0.1:3100/health",
-    );
+    expect(localApiHealthUrl("http://127.0.0.1:5173")).toBe("http://127.0.0.1:3100/health");
+    expect(localApiHealthUrl("http://localhost:5173/foo")).toBe("http://127.0.0.1:3100/health");
     expect(localApiHealthUrl("https://rakazo.example")).toBeUndefined();
   });
 });
