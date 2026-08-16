@@ -1,0 +1,55 @@
+name: patch-pi-ollama
+on:
+  push:
+    branches: [feature/rakazo-local-ai-os]
+    paths: [.github/workflows/patch-pi-ollama.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: feature/rakazo-local-ai-os
+      - name: Patch only Pi Ollama integration points
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/adapters/src/pi-runtime.ts')
+          s = p.read_text()
+          replacements = [
+            (
+              'import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";\nimport { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";',
+              'import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";\nimport { OLLAMA_PROVIDER_ID, ollamaBaseUrl, ollamaProvider } from "./ollama-provider.js";\nimport { ollamaRuntimeModel } from "./ollama-runtime.js";\nimport { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";'
+            ),
+            (
+              'const catalogModels = builtinModels();\nconst MAX_PARALLEL_SUBAGENTS = 4;',
+              'const catalogModels = builtinModels();\ncatalogModels.setProvider(ollamaProvider(ollamaBaseUrl()));\nconst MAX_PARALLEL_SUBAGENTS = 4;'
+            ),
+            (
+              '        const model = models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId);',
+              '        const model =\n          provider === OLLAMA_PROVIDER_ID\n            ? ollamaRuntimeModel(modelId)\n            : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId));'
+            ),
+            (
+              '        const apiKey = request.model.oauth\n          ? undefined\n          : (request.model.apiKey ?? process.env.OPENROUTER_API_KEY);',
+              '        const apiKey =\n          provider === OLLAMA_PROVIDER_ID\n            ? "ollama"\n            : request.model.oauth\n              ? undefined\n              : (request.model.apiKey ?? process.env.OPENROUTER_API_KEY);'
+            ),
+          ]
+          for old, new in replacements:
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:80]!r}')
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          git diff --check
+          git diff -- packages/adapters/src/pi-runtime.ts
+      - name: Commit patched runtime only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/adapters/src/pi-runtime.ts
+          git commit -m "feat(adapters): route Pi runtime through configured Ollama"
+          git push origin HEAD:feature/rakazo-local-ai-os
