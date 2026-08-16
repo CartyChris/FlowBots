@@ -62,24 +62,24 @@ function senderUrl(event: Electron.IpcMainInvokeEvent) {
 
 function assertTrustedRuntimeSender(event: Electron.IpcMainInvokeEvent) {
   if (!trustedRuntimeSender(senderUrl(event), trustedLauncherUrl)) {
-    throw new Error("Runtime controls are available only from Rakazo's local runtime launcher.");
+    throw new Error("Runtime controls are available only from the FlowBots local runtime launcher.");
   }
 }
 
 function assertTrustedTerminalSender(event: Electron.IpcMainInvokeEvent) {
   if (!trustedTerminalSender(senderUrl(event))) {
-    throw new Error("Host terminal access is available only to a loopback Rakazo runtime.");
+    throw new Error("Host terminal access is available only to a loopback FlowBots runtime.");
   }
 }
 
 function requireTerminalManager(): TerminalSessionManager {
-  if (!terminalManager) throw new Error("Rakazo terminal service is unavailable.");
+  if (!terminalManager) throw new Error("FlowBots terminal service is unavailable.");
   return terminalManager;
 }
 
 function assertTerminalOwner(event: Electron.IpcMainInvokeEvent, sessionId: string): void {
   if (terminalOwners.get(sessionId) !== event.sender.id) {
-    throw new Error("Terminal session is not owned by this Rakazo window.");
+    throw new Error("Terminal session is not owned by this FlowBots window.");
   }
 }
 
@@ -246,7 +246,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop.runtime.choose", async (event, raw: unknown) => {
     assertTrustedRuntimeSender(event);
     const profile = normalizeRuntimeProfile((raw ?? {}) as { mode: string; serverUrl?: string });
-    if (!session) throw new Error("Rakazo runtime session is unavailable.");
+    if (!session) throw new Error("FlowBots runtime session is unavailable.");
     return session.choose(profile);
   });
   ipcMain.handle("desktop.runtime.showLauncher", async (event) => {
