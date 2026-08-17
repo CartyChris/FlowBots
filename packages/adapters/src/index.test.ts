@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { inferScript, ScriptedAgentRuntime } from "./scripted-runtime.js";
 import { EncryptedSecretStore } from "./secrets.js";
@@ -104,11 +104,67 @@ describe("builtin tools", () => {
         "write_file",
         "shell",
         "remember",
+        "recall_memory",
         "request_takeover",
         "run_subagent",
         "spawn_bot",
         "delete_bot",
       ]),
+    );
+  });
+});
+
+describe("memory recall", () => {
+  it("searches user and current-bot memory through a bounded read-only boundary", async () => {
+    const context = {
+      operationId: "run-1",
+      traceId: "run-1",
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      botId: "bot-1",
+      runId: "run-1",
+      signal: new AbortController().signal,
+    };
+    const search = vi.fn(
+      async (request: { query: string; scope: "user" | "bot"; botId?: string }) =>
+        Array.from({ length: 6 }, (_, index) => ({
+          path: `${request.scope}-${index}.md`,
+          snippet: `${request.scope}: ${"x".repeat(600)}`,
+          score: 100 - index - (request.scope === "bot" ? 0.5 : 0),
+        })),
+    );
+    type RecallResult = {
+      scope: "user" | "bot";
+      path: string;
+      snippet: string;
+      score: number;
+    };
+    type RecallMemory = (
+      memory: { search: typeof search },
+      query: string,
+      botId: string,
+      ctx: typeof context,
+    ) => Promise<RecallResult[]>;
+    const executor = await import("./executor.js");
+    const recallMemoryForAgent = (executor as { recallMemoryForAgent?: RecallMemory })
+      .recallMemoryForAgent;
+
+    expect(recallMemoryForAgent).toBeTypeOf("function");
+    if (!recallMemoryForAgent) return;
+
+    const results = await recallMemoryForAgent({ search }, "  roadmap  ", "bot-1", context);
+
+    expect(search).toHaveBeenNthCalledWith(1, { query: "roadmap", scope: "user" }, context);
+    expect(search).toHaveBeenNthCalledWith(
+      2,
+      { query: "roadmap", scope: "bot", botId: "bot-1" },
+      context,
+    );
+    expect(results).toHaveLength(8);
+    expect(results.every((result) => result.snippet.length <= 500)).toBe(true);
+    expect(new Set(results.map((result) => result.scope))).toEqual(new Set(["user", "bot"]));
+    expect(results.map((result) => result.score)).toEqual(
+      [...results.map((result) => result.score)].sort((a, b) => b - a),
     );
   });
 });
