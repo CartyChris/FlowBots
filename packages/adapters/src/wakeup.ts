@@ -123,9 +123,7 @@ export class InMemoryJobQueue implements JobPublisher, JobWorkerHost {
         this.timers.delete(timer);
         if (job.replaceKey && this.keyed.get(job.replaceKey) !== timer) return;
 
-        const remaining = job.availableAt
-          ? Math.max(0, job.availableAt.getTime() - Date.now())
-          : 0;
+        const remaining = job.availableAt ? Math.max(0, job.availableAt.getTime() - Date.now()) : 0;
         if (remaining > 0) {
           this.schedule(job);
           return;
