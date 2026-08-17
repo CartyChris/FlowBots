@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import type { MemoryStore } from "@rakazo/adapter-kit";
+import { describe, expect, it, vi } from "vitest";
+import { recallMemoryForAgent } from "./executor.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { inferScript, ScriptedAgentRuntime } from "./scripted-runtime.js";
 import { EncryptedSecretStore } from "./secrets.js";
@@ -104,12 +106,77 @@ describe("builtin tools", () => {
         "write_file",
         "shell",
         "remember",
+        "recall_memory",
         "request_takeover",
         "run_subagent",
         "spawn_bot",
         "delete_bot",
       ]),
     );
+  });
+});
+
+describe("memory recall", () => {
+  it("searches user and current-bot memory through a bounded read-only boundary", async () => {
+    const context = {
+      operationId: "run-1",
+      traceId: "run-1",
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      botId: "bot-1",
+      runId: "run-1",
+      signal: new AbortController().signal,
+    };
+    const search = vi.fn(
+      async (request: { query: string; scope: "user" | "bot" | "all"; botId?: string }) =>
+        Array.from({ length: 6 }, (_, index) => ({
+          path: `${request.scope}-${index}.md`,
+          snippet: `${request.scope}: ${"x".repeat(600)}`,
+          score: 100 - index - (request.scope === "bot" ? 0.5 : 0),
+        })),
+    );
+    const memory: MemoryStore = {
+      describe: () => ({
+        id: "test-memory",
+        contractVersion: "1",
+        adapterVersion: "1",
+        capabilities: { search: true, revisions: true, markdownPortable: true },
+      }),
+      read: async () => ({ documents: [] }),
+      search,
+      commit: async (request) => ({
+        id: "revision-1",
+        path: request.path,
+        revision: 1,
+        content: request.content,
+      }),
+      exportMarkdown: async function* () {},
+      importMarkdown: async () => ({
+        id: "revision-1",
+        path: "MEMORY.md",
+        revision: 1,
+        content: "",
+      }),
+    };
+
+    const results = await recallMemoryForAgent(memory, "  roadmap  ", "bot-1", context);
+
+    expect(search).toHaveBeenNthCalledWith(1, { query: "roadmap", scope: "user" }, context);
+    expect(search).toHaveBeenNthCalledWith(
+      2,
+      { query: "roadmap", scope: "bot", botId: "bot-1" },
+      context,
+    );
+    expect(results).toHaveLength(8);
+    expect(results.every((result) => result.snippet.length <= 500)).toBe(true);
+    expect(new Set(results.map((result) => result.scope))).toEqual(new Set(["user", "bot"]));
+    expect(results.map((result) => result.score)).toEqual(
+      [...results.map((result) => result.score)].sort((a, b) => b - a),
+    );
+
+    search.mockClear();
+    expect(await recallMemoryForAgent(memory, "   ", "bot-1", context)).toEqual([]);
+    expect(search).not.toHaveBeenCalled();
   });
 });
 
