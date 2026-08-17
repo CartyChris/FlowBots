@@ -7,6 +7,8 @@ import {
 } from "@rakazo/adapter-kit";
 import { makeWorkerUtils, type Runner, run, type WorkerUtils } from "graphile-worker";
 
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
 export class GraphileJobPublisher implements JobPublisher {
   private utils: Promise<WorkerUtils> | undefined;
   private closed = false;
@@ -86,20 +88,7 @@ export class InMemoryJobQueue implements JobPublisher, JobWorkerHost {
   async enqueue(job: BackgroundJob): Promise<void> {
     if (this.closed) throw new Error("Background job publisher is closed");
     if (job.replaceKey) await this.cancel(job.replaceKey);
-    const delay = job.availableAt ? Math.max(0, job.availableAt.getTime() - Date.now()) : 0;
-    const timer = setTimeout(() => {
-      this.timers.delete(timer);
-      if (job.replaceKey && this.keyed.get(job.replaceKey) === timer) {
-        this.keyed.delete(job.replaceKey);
-      }
-      const handlers = this.handlers;
-      if (!handlers) return;
-      void dispatchBackgroundJob(handlers, job.name, job.payload).catch((error) =>
-        console.error(job.name, error),
-      );
-    }, delay);
-    this.timers.add(timer);
-    if (job.replaceKey) this.keyed.set(job.replaceKey, timer);
+    this.schedule(job);
   }
 
   async cancel(key: string): Promise<void> {
@@ -125,5 +114,33 @@ export class InMemoryJobQueue implements JobPublisher, JobWorkerHost {
     if (this.closed) return;
     this.closed = true;
     await this.stop();
+  }
+
+  private schedule(job: BackgroundJob): void {
+    const remaining = job.availableAt ? Math.max(0, job.availableAt.getTime() - Date.now()) : 0;
+    const timer = setTimeout(
+      () => {
+        this.timers.delete(timer);
+        if (job.replaceKey && this.keyed.get(job.replaceKey) !== timer) return;
+
+        const remaining = job.availableAt
+          ? Math.max(0, job.availableAt.getTime() - Date.now())
+          : 0;
+        if (remaining > 0) {
+          this.schedule(job);
+          return;
+        }
+
+        if (job.replaceKey) this.keyed.delete(job.replaceKey);
+        const handlers = this.handlers;
+        if (!handlers) return;
+        void dispatchBackgroundJob(handlers, job.name, job.payload).catch((error) =>
+          console.error(job.name, error),
+        );
+      },
+      Math.min(remaining, MAX_TIMEOUT_MS),
+    );
+    this.timers.add(timer);
+    if (job.replaceKey) this.keyed.set(job.replaceKey, timer);
   }
 }
