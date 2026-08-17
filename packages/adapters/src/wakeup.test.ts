@@ -38,11 +38,13 @@ describe("InMemoryJobQueue", () => {
     const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const queue = new InMemoryJobQueue();
     const target = handlers();
+    const availableAt = new Date(Date.now() + MAX_TIMEOUT_MS + 10_000);
+    const scheduledFor = availableAt.toISOString();
     await queue.start(target);
     await queue.enqueue({
       name: "routine.wakeup",
-      payload: { routineId: "routine-1", scheduledFor: "future" },
-      availableAt: new Date(Date.now() + MAX_TIMEOUT_MS + 10_000),
+      payload: { routineId: "routine-1", scheduledFor },
+      availableAt,
       replaceKey: "routine.wakeup:routine-1",
     });
 
@@ -53,6 +55,10 @@ describe("InMemoryJobQueue", () => {
     expect(target["routine.wakeup"]).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(target["routine.wakeup"]).toHaveBeenCalledTimes(1);
+    expect(target["routine.wakeup"]).toHaveBeenCalledWith({
+      routineId: "routine-1",
+      scheduledFor,
+    });
     await queue.close();
     timeoutSpy.mockRestore();
   });
