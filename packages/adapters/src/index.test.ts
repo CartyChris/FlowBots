@@ -1,4 +1,6 @@
+import type { MemoryStore } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
+import { recallMemoryForAgent } from "./executor.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { inferScript, ScriptedAgentRuntime } from "./scripted-runtime.js";
 import { EncryptedSecretStore } from "./secrets.js";
@@ -126,33 +128,38 @@ describe("memory recall", () => {
       signal: new AbortController().signal,
     };
     const search = vi.fn(
-      async (request: { query: string; scope: "user" | "bot"; botId?: string }) =>
+      async (request: { query: string; scope: "user" | "bot" | "all"; botId?: string }) =>
         Array.from({ length: 6 }, (_, index) => ({
           path: `${request.scope}-${index}.md`,
           snippet: `${request.scope}: ${"x".repeat(600)}`,
           score: 100 - index - (request.scope === "bot" ? 0.5 : 0),
         })),
     );
-    type RecallResult = {
-      scope: "user" | "bot";
-      path: string;
-      snippet: string;
-      score: number;
+    const memory: MemoryStore = {
+      describe: () => ({
+        id: "test-memory",
+        contractVersion: "1",
+        adapterVersion: "1",
+        capabilities: { search: true, revisions: true, markdownPortable: true },
+      }),
+      read: async () => ({ documents: [] }),
+      search,
+      commit: async (request) => ({
+        id: "revision-1",
+        path: request.path,
+        revision: 1,
+        content: request.content,
+      }),
+      exportMarkdown: async function* () {},
+      importMarkdown: async () => ({
+        id: "revision-1",
+        path: "MEMORY.md",
+        revision: 1,
+        content: "",
+      }),
     };
-    type RecallMemory = (
-      memory: { search: typeof search },
-      query: string,
-      botId: string,
-      ctx: typeof context,
-    ) => Promise<RecallResult[]>;
-    const executor = await import("./executor.js");
-    const recallMemoryForAgent = (executor as { recallMemoryForAgent?: RecallMemory })
-      .recallMemoryForAgent;
 
-    expect(recallMemoryForAgent).toBeTypeOf("function");
-    if (!recallMemoryForAgent) return;
-
-    const results = await recallMemoryForAgent({ search }, "  roadmap  ", "bot-1", context);
+    const results = await recallMemoryForAgent(memory, "  roadmap  ", "bot-1", context);
 
     expect(search).toHaveBeenNthCalledWith(1, { query: "roadmap", scope: "user" }, context);
     expect(search).toHaveBeenNthCalledWith(
@@ -166,6 +173,10 @@ describe("memory recall", () => {
     expect(results.map((result) => result.score)).toEqual(
       [...results.map((result) => result.score)].sort((a, b) => b - a),
     );
+
+    search.mockClear();
+    expect(await recallMemoryForAgent(memory, "   ", "bot-1", context)).toEqual([]);
+    expect(search).not.toHaveBeenCalled();
   });
 });
 
