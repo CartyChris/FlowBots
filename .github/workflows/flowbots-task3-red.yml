@@ -21,7 +21,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
-      - run: pnpm exec biome check packages/adapters/src/model-catalog.test.ts packages/adapters/src/model-catalog.ts packages/adapters/src/pi-models.ts
+      - run: pnpm exec biome check packages/adapters/src/model-catalog.test.ts packages/adapters/src/model-catalog.ts packages/adapters/src/pi-models.ts apps/api/src/model-catalog-router.test.ts
       - run: pnpm --filter @rakazo/adapters check
 
   expected-red:
@@ -34,5 +34,6 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
       - name: Expected behavioral RED
-        run: pnpm exec vitest run packages/adapters/src/model-catalog.test.ts
+        run: pnpm exec vitest run packages/adapters/src/model-catalog.test.ts apps/api/src/model-catalog-router.test.ts
