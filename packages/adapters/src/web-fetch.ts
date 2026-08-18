@@ -142,7 +142,10 @@ export async function safeWebFetch(
 async function resolvePublicHost(hostname: string): Promise<ResolvedAddress[]> {
   const entries = await dnsLookup(hostname, { all: true, verbatim: true });
   return entries
-    .filter((entry): entry is { address: string; family: 4 | 6 } => entry.family === 4 || entry.family === 6)
+    .filter(
+      (entry): entry is { address: string; family: 4 | 6 } =>
+        entry.family === 4 || entry.family === 6,
+    )
     .map((entry) => ({ address: entry.address, family: entry.family }));
 }
 
@@ -172,7 +175,8 @@ function requestNodeHop(input: WebFetchHop): Promise<WebFetchHopResult> {
         method: "GET",
         path: `${url.pathname}${url.search}`,
         headers: {
-          accept: "text/html,application/xhtml+xml,application/json,text/plain,application/xml,text/xml;q=0.9,*/*;q=0.1",
+          accept:
+            "text/html,application/xhtml+xml,application/json,text/plain,application/xml,text/xml;q=0.9,*/*;q=0.1",
           "accept-encoding": "identity",
           host: url.host,
           "user-agent": "FlowBots/1.0 (+local web fetch)",
@@ -310,10 +314,14 @@ function isPublicIp(address: string): boolean {
 
 function isPublicIpv4(address: string): boolean {
   const parts = address.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
     return false;
   }
-  const value = (((parts[0]! << 24) >>> 0) + (parts[1]! << 16) + (parts[2]! << 8) + parts[3]!) >>> 0;
+  const value =
+    (((parts[0]! << 24) >>> 0) + (parts[1]! << 16) + (parts[2]! << 8) + parts[3]!) >>> 0;
   return ![
     ["0.0.0.0", 8],
     ["10.0.0.0", 8],
@@ -351,7 +359,8 @@ function isPublicIpv6(address: string): boolean {
   const loopback = bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1;
   if (allZero || loopback) return false;
 
-  const mappedV4 = bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
+  const mappedV4 =
+    bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
   const compatibleV4 = bytes.slice(0, 12).every((byte) => byte === 0);
   if (mappedV4 || compatibleV4) {
     return isPublicIpv4(`${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`);

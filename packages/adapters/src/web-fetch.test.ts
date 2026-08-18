@@ -32,7 +32,14 @@ describe("validatePublicUrl", () => {
   });
 
   it("rejects literal loopback, ULA, link-local, multicast, and mapped-private IPv6", async () => {
-    for (const host of ["[::1]", "[fc00::1]", "[fd12::1]", "[fe80::1]", "[ff02::1]", "[::ffff:127.0.0.1]"]) {
+    for (const host of [
+      "[::1]",
+      "[fc00::1]",
+      "[fd12::1]",
+      "[fe80::1]",
+      "[ff02::1]",
+      "[::ffff:127.0.0.1]",
+    ]) {
       await rejects(`http://${host}/`, /public internet/i);
     }
   });
@@ -47,10 +54,12 @@ describe("validatePublicUrl", () => {
   });
 
   it("returns only validated public addresses", async () => {
-    await expect(validatePublicUrl("https://example.com/a", publicResolver)).resolves.toMatchObject({
-      url: "https://example.com/a",
-      addresses: [{ address: "93.184.216.34", family: 4 }],
-    });
+    await expect(validatePublicUrl("https://example.com/a", publicResolver)).resolves.toMatchObject(
+      {
+        url: "https://example.com/a",
+        addresses: [{ address: "93.184.216.34", family: 4 }],
+      },
+    );
   });
 });
 

@@ -90,7 +90,8 @@ export class DestinationEmulator implements ConnectorProvider {
             url: { type: "string", description: "Public http(s) URL to retrieve." },
             max_chars: {
               type: "number",
-              description: "Optional maximum readable characters to return (default 80000, max 200000).",
+              description:
+                "Optional maximum readable characters to return (default 80000, max 200000).",
             },
           },
           required: ["url"],
@@ -107,8 +108,7 @@ export class DestinationEmulator implements ConnectorProvider {
           data: await safeWebFetch(
             {
               url: String(call.args.url ?? ""),
-              maxChars:
-                typeof call.args.max_chars === "number" ? call.args.max_chars : undefined,
+              maxChars: typeof call.args.max_chars === "number" ? call.args.max_chars : undefined,
             },
             { signal: context.signal },
           ),
