@@ -102,14 +102,13 @@ describe("refreshable model catalog", () => {
     const fetchFn = (async () => {
       throw new Error("offline");
     }) as typeof fetch;
-    await expect(
-      listModelCatalog({
-        refresh: true,
-        staticCatalog,
-        ollamaBaseUrl: "http://127.0.0.1:11434",
-        xaiApiKey: "xai-test-secret",
-        fetchFn,
-      }),
-    ).resolves.toEqual(staticCatalog);
+    const catalog = await listModelCatalog({
+      refresh: true,
+      staticCatalog,
+      ollamaBaseUrl: "http://127.0.0.1:11434",
+      xaiApiKey: "xai-test-secret",
+      fetchFn,
+    });
+    expect(catalog).toEqual(staticCatalog);
   });
 });
