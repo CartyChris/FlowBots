@@ -26,6 +26,7 @@ export * from "./host-aware-sandbox.js";
 export * from "./job-reconciler.js";
 export * from "./mcp-client.js";
 export * from "./mcp-emulator.js";
+export * from "./model-catalog.js";
 export * from "./ollama-provider.js";
 export * from "./ollama-runtime.js";
 export * from "./openhands.js";
