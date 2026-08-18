@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: flowbots-task3-green
+  cancel-in-progress: false
+
 jobs:
   green:
     runs-on: ubuntu-latest
@@ -45,6 +49,8 @@ jobs:
               lines[i + 1:i + 1] = block
 
           def replace_exact_line(lines, exact, block):
+              if block and block[0] in lines:
+                  return
               matches = [i for i, line in enumerate(lines) if line == exact]
               if len(matches) != 1:
                   raise SystemExit(f"expected one exact line {exact!r}, found {len(matches)}")
@@ -137,7 +143,6 @@ jobs:
               ],
           )
 
-          # Insert the refresh control immediately after the unique model-search input.
           placeholder = '              placeholder="Search providers and models"'
           matches = [i for i, line in enumerate(onboarding) if line == placeholder]
           if len(matches) != 1:
@@ -180,7 +185,6 @@ jobs:
                   ],
               )
 
-          # Product copy: exact whole-line changes only, no broad substring replacement.
           for i, line in enumerate(onboarding):
               if line == "              Rakazo does not pay for model usage. Paste an API key, sign in with ChatGPT, Copilot,":
                   onboarding[i] = "              FlowBots can use local Ollama models, your API keys, or supported provider sign-ins."
