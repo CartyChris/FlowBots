@@ -5,12 +5,14 @@ on:
     branches: [feature/flowbots-local-social-vnext]
     paths:
       - ".github/workflows/flowbots-task3-finish.yml"
+  pull_request:
 
 permissions:
   contents: write
 
 jobs:
   finish:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'feature/flowbots-local-social-vnext'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
