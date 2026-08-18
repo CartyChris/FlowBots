@@ -1,5 +1,5 @@
-import type { PiCatalogEntry } from "./pi-models.js";
 import { ollamaModelIds } from "./ollama-provider.js";
+import type { PiCatalogEntry } from "./pi-models.js";
 
 export interface LiveModelCatalogOptions {
   staticCatalog: readonly PiCatalogEntry[];
@@ -9,7 +9,9 @@ export interface LiveModelCatalogOptions {
   signal?: AbortSignal;
 }
 
-export async function liveModelCatalog(options: LiveModelCatalogOptions): Promise<PiCatalogEntry[]> {
+export async function liveModelCatalog(
+  options: LiveModelCatalogOptions,
+): Promise<PiCatalogEntry[]> {
   const base = options.staticCatalog.map((entry) => ({ ...entry }));
   const discovered: PiCatalogEntry[] = [];
 
@@ -46,7 +48,8 @@ export async function liveModelCatalog(options: LiveModelCatalogOptions): Promis
       providerName: "xAI",
       id,
       label: id,
-      billing: "Uses your xAI credential. FlowBots refreshes this list from the models available to your account.",
+      billing:
+        "Uses your xAI credential. FlowBots refreshes this list from the models available to your account.",
       auth: "api-key",
       subscription: false,
     });
