@@ -41,3 +41,4 @@ export * from "./scripted-runtime.js";
 export * from "./secrets.js";
 export * from "./sync.js";
 export * from "./wakeup.js";
+export * from "./web-fetch.js";
