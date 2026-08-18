@@ -20,6 +20,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
       - run: pnpm exec biome check packages/adapters/src/model-catalog.test.ts packages/adapters/src/model-catalog.ts packages/adapters/src/pi-models.ts
       - run: pnpm --filter @rakazo/adapters check
 
