@@ -56,8 +56,8 @@ describe("models.list refresh", () => {
       "http://127.0.0.1:11434/api/tags",
       expect.objectContaining({ method: "GET" }),
     );
-    expect(
-      models.filter((entry) => entry.provider === "ollama").map((entry) => entry.id),
-    ).toEqual(expect.arrayContaining(["qwen3.8:9b", "devstral:latest"]));
+    expect(models.filter((entry) => entry.provider === "ollama").map((entry) => entry.id)).toEqual(
+      expect.arrayContaining(["qwen3.8:9b", "devstral:latest"]),
+    );
   });
 });
