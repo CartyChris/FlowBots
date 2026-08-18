@@ -1,19 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { liveModelCatalog } from "./model-catalog.js";
+import { listPiCatalog, type PiCatalogEntry } from "./pi-models.js";
 
-const staticCatalog = [
+type RefreshableCatalog = (options?: {
+  refresh?: boolean;
+  staticCatalog?: PiCatalogEntry[];
+  ollamaBaseUrl?: string | null;
+  xaiApiKey?: string;
+  fetchFn?: typeof fetch;
+}) => PiCatalogEntry[] | Promise<PiCatalogEntry[]>;
+
+const listModelCatalog = listPiCatalog as RefreshableCatalog;
+
+const staticCatalog: PiCatalogEntry[] = [
   {
     provider: "xai",
     providerName: "xAI",
     id: "grok-static",
     label: "Grok Static",
     billing: "Uses your xAI credential.",
-    auth: "api-key" as const,
+    auth: "api-key",
     subscription: false,
   },
 ];
 
-describe("liveModelCatalog", () => {
+describe("refreshable model catalog", () => {
   it("adds every currently installed Ollama tag and reflects a later refresh", async () => {
     let tags = ["qwen3:8b", "llama3.1:8b"];
     const fetchFn = (async (input: string | URL | Request) => {
@@ -24,7 +34,8 @@ describe("liveModelCatalog", () => {
       throw new Error(`unexpected request ${url}`);
     }) as typeof fetch;
 
-    const first = await liveModelCatalog({
+    const first = await listModelCatalog({
+      refresh: true,
       staticCatalog,
       ollamaBaseUrl: "http://127.0.0.1:11434",
       fetchFn,
@@ -35,7 +46,8 @@ describe("liveModelCatalog", () => {
     ]);
 
     tags = ["qwen3:8b", "qwen3.8:9b", "devstral:latest"];
-    const refreshed = await liveModelCatalog({
+    const refreshed = await listModelCatalog({
+      refresh: true,
       staticCatalog,
       ollamaBaseUrl: "http://127.0.0.1:11434",
       fetchFn,
@@ -64,7 +76,8 @@ describe("liveModelCatalog", () => {
       throw new Error(`unexpected request ${url}`);
     }) as typeof fetch;
 
-    const catalog = await liveModelCatalog({
+    const catalog = await listModelCatalog({
+      refresh: true,
       staticCatalog,
       xaiApiKey: "xai-test-secret",
       ollamaBaseUrl: null,
@@ -77,9 +90,12 @@ describe("liveModelCatalog", () => {
         authorization: "Bearer xai-test-secret",
       },
     ]);
-    expect(catalog.some((entry) => entry.provider === "xai" && entry.id === "grok-new-account-model"))
-      .toBe(true);
-    expect(catalog.filter((entry) => entry.provider === "xai" && entry.id === "grok-static")).toHaveLength(1);
+    expect(
+      catalog.some((entry) => entry.provider === "xai" && entry.id === "grok-new-account-model"),
+    ).toBe(true);
+    expect(
+      catalog.filter((entry) => entry.provider === "xai" && entry.id === "grok-static"),
+    ).toHaveLength(1);
   });
 
   it("degrades to the static catalog when optional local or provider discovery is unavailable", async () => {
@@ -87,7 +103,8 @@ describe("liveModelCatalog", () => {
       throw new Error("offline");
     }) as typeof fetch;
     await expect(
-      liveModelCatalog({
+      listModelCatalog({
+        refresh: true,
         staticCatalog,
         ollamaBaseUrl: "http://127.0.0.1:11434",
         xaiApiKey: "xai-test-secret",
