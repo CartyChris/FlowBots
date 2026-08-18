@@ -40,6 +40,12 @@ function migrationsDir() {
   return path.join(repoRoot, "packages/db/prisma/migrations");
 }
 
+function firstCookie(response: Response): string {
+  const setCookie = response.headers.get("set-cookie");
+  expect(setCookie, "local bootstrap must establish a browser session").toBeTruthy();
+  return setCookie!.split(";", 1)[0]!;
+}
+
 describe("embedded Rakazo LocalRuntime", () => {
   test("starts without ambient server configuration, reports Lite topology and hybrid memory, and persists across restart", async () => {
     const start = requiredStart();
@@ -142,6 +148,57 @@ describe("embedded Rakazo LocalRuntime", () => {
       expect(await apiMiss.text()).not.toContain("RAKAZO_LITE_UI");
     } finally {
       await runtime.stop();
+    }
+  }, 60_000);
+
+  test("bootstraps one private local session without manual signup and reuses that identity", async () => {
+    const start = requiredStart();
+    if (!start) return;
+    const dataDir = await mkdtemp(path.join(os.tmpdir(), "flowbots-local-identity-"));
+    temps.push(dataDir);
+
+    let first: Awaited<ReturnType<Start>> | undefined;
+    let second: Awaited<ReturnType<Start>> | undefined;
+    try {
+      first = await start({ dataDir, migrationsDir: migrationsDir(), port: 0 });
+      const bootstrap = await fetch(`${first.origin}/local-bootstrap`, { redirect: "manual" });
+      expect(bootstrap.status).toBe(302);
+      expect(bootstrap.headers.get("location")).toBe("/app");
+      const cookie = firstCookie(bootstrap);
+      const session = await fetch(`${first.origin}/api/auth/get-session`, {
+        headers: { cookie },
+      }).then((response) => response.json());
+      expect(session).toMatchObject({
+        user: { email: "flowbots@local.invalid", name: "FlowBots Local" },
+      });
+
+      const firstUsers = await first.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        'SELECT "id" FROM "user" ORDER BY "createdAt"',
+      );
+      const firstMembers = await first.prisma.$queryRawUnsafe<Array<{ userId: string }>>(
+        'SELECT "userId" FROM "member"',
+      );
+      expect(firstUsers).toHaveLength(1);
+      expect(firstMembers).toEqual([{ userId: firstUsers[0]!.id }]);
+      const userId = firstUsers[0]!.id;
+
+      await first.stop();
+      first = undefined;
+      second = await start({ dataDir, migrationsDir: migrationsDir(), port: 0 });
+      const secondBootstrap = await fetch(`${second.origin}/local-bootstrap`, { redirect: "manual" });
+      expect(secondBootstrap.status).toBe(302);
+      const secondCookie = firstCookie(secondBootstrap);
+      const secondSession = await fetch(`${second.origin}/api/auth/get-session`, {
+        headers: { cookie: secondCookie },
+      }).then((response) => response.json());
+      expect(secondSession).toMatchObject({ user: { id: userId, email: "flowbots@local.invalid" } });
+      const secondUsers = await second.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        'SELECT "id" FROM "user"',
+      );
+      expect(secondUsers).toEqual([{ id: userId }]);
+    } finally {
+      await first?.stop().catch(() => undefined);
+      await second?.stop().catch(() => undefined);
     }
   }, 60_000);
 });
