@@ -185,16 +185,19 @@ describe("embedded Rakazo LocalRuntime", () => {
       await first.stop();
       first = undefined;
       second = await start({ dataDir, migrationsDir: migrationsDir(), port: 0 });
-      const secondBootstrap = await fetch(`${second.origin}/local-bootstrap`, { redirect: "manual" });
+      const secondBootstrap = await fetch(`${second.origin}/local-bootstrap`, {
+        redirect: "manual",
+      });
       expect(secondBootstrap.status).toBe(302);
       const secondCookie = firstCookie(secondBootstrap);
       const secondSession = await fetch(`${second.origin}/api/auth/get-session`, {
         headers: { cookie: secondCookie },
       }).then((response) => response.json());
-      expect(secondSession).toMatchObject({ user: { id: userId, email: "flowbots@local.invalid" } });
-      const secondUsers = await second.prisma.$queryRawUnsafe<Array<{ id: string }>>(
-        'SELECT "id" FROM "user"',
-      );
+      expect(secondSession).toMatchObject({
+        user: { id: userId, email: "flowbots@local.invalid" },
+      });
+      const secondUsers =
+        await second.prisma.$queryRawUnsafe<Array<{ id: string }>>('SELECT "id" FROM "user"');
       expect(secondUsers).toEqual([{ id: userId }]);
     } finally {
       await first?.stop().catch(() => undefined);
