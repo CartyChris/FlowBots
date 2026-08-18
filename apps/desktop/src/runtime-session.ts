@@ -44,7 +44,9 @@ export class DesktopRuntimeSession {
       }
 
       await this.deps.persist(profile);
-      await this.deps.navigate(next.origin);
+      const destination =
+        next.mode === "lite" ? `${next.origin.replace(/\/+$/, "")}/local-bootstrap` : next.origin;
+      await this.deps.navigate(destination);
       this.active = next;
       return { ok: true };
     } catch (error) {
