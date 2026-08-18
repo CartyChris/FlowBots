@@ -1,5 +1,6 @@
 name: FlowBots Task 3 wiring
 
+# One-shot branch wiring workflow. Remove after Task 3 is green.
 on:
   push:
     branches: [feature/flowbots-local-social-vnext]
