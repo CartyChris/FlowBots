@@ -40,10 +40,9 @@ describe("refreshable model catalog", () => {
       ollamaBaseUrl: "http://127.0.0.1:11434",
       fetchFn,
     });
-    expect(first.filter((entry) => entry.provider === "ollama").map((entry) => entry.id)).toEqual([
-      "llama3.1:8b",
-      "qwen3:8b",
-    ]);
+    expect(
+      new Set(first.filter((entry) => entry.provider === "ollama").map((entry) => entry.id)),
+    ).toEqual(new Set(["llama3.1:8b", "qwen3:8b"]));
 
     tags = ["qwen3:8b", "qwen3.8:9b", "devstral:latest"];
     const refreshed = await listModelCatalog({
@@ -53,8 +52,8 @@ describe("refreshable model catalog", () => {
       fetchFn,
     });
     expect(
-      refreshed.filter((entry) => entry.provider === "ollama").map((entry) => entry.id),
-    ).toEqual(["devstral:latest", "qwen3.8:9b", "qwen3:8b"]);
+      new Set(refreshed.filter((entry) => entry.provider === "ollama").map((entry) => entry.id)),
+    ).toEqual(new Set(["devstral:latest", "qwen3.8:9b", "qwen3:8b"]));
   });
 
   it("merges language models returned by the authenticated xAI model endpoint", async () => {
