@@ -149,44 +149,18 @@ jobs:
 
           router = Path('apps/api/src/router.ts')
           text = router.read_text()
-          old = '''        const probe = probes.get(definition.id) ?? { available: false as const };
-          return {
-            id: definition.id,
-            label: definition.label,
-            kind: definition.kind,
-            interactions: definition.interactions,
-            workspacePolicies: definition.workspacePolicies,
-            scheduleable: definition.scheduleable,
-            resident: definition.resident,
-            outerVerificationRequired: definition.outerVerificationRequired,
-            available: probe.available,
-            ...(probe.version ? { version: probe.version } : {}),
-            ...(probe.detail ? { detail: probe.detail } : {}),
-          };'''
-          new = '''        const probe = probes.get(definition.id);
-          return {
-            id: definition.id,
-            label: definition.label,
-            kind: definition.kind,
-            interactions: definition.interactions,
-            workspacePolicies: definition.workspacePolicies,
-            scheduleable: definition.scheduleable,
-            resident: definition.resident,
-            outerVerificationRequired: definition.outerVerificationRequired,
-            available: probe?.available ?? false,
-            ...(probe?.version ? { version: probe.version } : {}),
-            ...(probe?.detail ? { detail: probe.detail } : {}),
-          };'''
+          old = 'const probe = probes.get(definition.id) ?? { available: false as const };'
+          new = 'const probe = probes.get(definition.id) ?? { available: false as const, version: undefined, detail: undefined };'
           if text.count(old) != 1:
-              raise SystemExit('router probe mapper anchor mismatch')
+              raise SystemExit(f'router probe line count was {text.count(old)}')
           router.write_text(text.replace(old, new, 1))
 
           runtime = Path('apps/local-runtime/src/index.ts')
           text = runtime.read_text()
-          old = '  if (!server || !server.listening) return Promise.resolve();'
-          new = '  if (!server?.listening) return Promise.resolve();'
+          old = 'if (!server || !server.listening) return Promise.resolve();'
+          new = 'if (!server?.listening) return Promise.resolve();'
           if text.count(old) != 1:
-              raise SystemExit('local runtime optional-chain anchor mismatch')
+              raise SystemExit(f'local runtime optional-chain line count was {text.count(old)}')
           runtime.write_text(text.replace(old, new, 1))
           Path('docs/superpowers/.task4b-trigger').unlink(missing_ok=True)
           PY
