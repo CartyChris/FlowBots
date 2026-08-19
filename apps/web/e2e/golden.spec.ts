@@ -1,6 +1,22 @@
 import { expect, type Page, test } from "@playwright/test";
 
+const harnessOwner = {
+  email: `harness-owner-${Date.now()}@rakazo.test`,
+  password: "password12",
+  name: "Harness Owner",
+};
+
 test.describe.configure({ mode: "serial" });
+
+test.beforeAll(async ({ browser }) => {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signup(page, harnessOwner.email, harnessOwner.password, harnessOwner.name);
+  } finally {
+    await context.close();
+  }
+});
 
 test("two users are isolated and a bot completes durable work", async ({ browser }) => {
   const a = await browser.newContext();
@@ -78,8 +94,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }) =>
 });
 
 test("Harness Center lists coding agents and probes a custom argv-based CLI", async ({ page }) => {
-  const stamp = Date.now();
-  await signup(page, `harness-${stamp}@rakazo.test`, "password12", "Harness");
+  await signin(page, harnessOwner.email, harnessOwner.password);
   await completeOnboarding(page, ["Coding & repos", "Clear and tight"]);
 
   await page.getByRole("button", { name: "Harnesses" }).click();
@@ -124,10 +139,7 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 30_000 });
 
   await page.context().clearCookies();
-  await page.goto("/sign-in");
-  await page.getByPlaceholder("Your email address").fill(email);
-  await page.getByPlaceholder("Password").fill("password12");
-  await page.getByRole("button", { name: "Continue with email" }).click();
+  await signin(page, email, "password12");
   await page.waitForURL(/\/app/, { timeout: 20_000 });
   await expect(
     page.getByRole("complementary").getByRole("button", { name: /^Chief/ }),
@@ -174,4 +186,11 @@ async function signup(page: Page, email: string, password: string, name: string)
   await page.getByPlaceholder("Your email address").fill(email);
   await page.getByPlaceholder("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
+}
+
+async function signin(page: Page, email: string, password: string) {
+  await page.goto("/sign-in");
+  await page.getByPlaceholder("Your email address").fill(email);
+  await page.getByPlaceholder("Password").fill(password);
+  await page.getByRole("button", { name: "Continue with email" }).click();
 }
