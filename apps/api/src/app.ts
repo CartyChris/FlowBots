@@ -16,8 +16,8 @@ import {
   GraphileJobPublisher,
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
-  listMessageReactions,
   LocalAgentHomeStore,
+  listMessageReactions,
   McpConnector,
   PeerConnector,
   PiAgentRuntime,
@@ -230,7 +230,10 @@ export async function createApp(
     try {
       return c.json(await listMessageReactions(prisma, actor, c.req.param("messageId")));
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : "Reaction lookup failed" }, 404);
+      return c.json(
+        { error: error instanceof Error ? error.message : "Reaction lookup failed" },
+        404,
+      );
     }
   });
   app.post("/api/reactions/:messageId", async (c) => {
@@ -248,7 +251,10 @@ export async function createApp(
         }),
       );
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : "Reaction update failed" }, 400);
+      return c.json(
+        { error: error instanceof Error ? error.message : "Reaction update failed" },
+        400,
+      );
     }
   });
   app.use("/rpc/*", async (c, next) => {
