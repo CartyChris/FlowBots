@@ -106,10 +106,15 @@ export function McpOverlay({ onClose }: { onClose: () => void }) {
               {rows.map((row) => {
                 const config = row.config as Record<string, unknown>;
                 return (
-                  <div key={row.id} className="rounded-[14px] border border-[#26262A] bg-[#101012] p-4">
+                  <div
+                    key={row.id}
+                    className="rounded-[14px] border border-[#26262A] bg-[#101012] p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate text-[15px] font-medium text-[#ECECEE]">{row.name}</div>
+                        <div className="truncate text-[15px] font-medium text-[#ECECEE]">
+                          {row.name}
+                        </div>
                         <div className="mt-1 truncate font-mono text-[11.5px] text-[#6D6D73]">
                           {String(config.transport ?? "mcp")} · {row.source}
                         </div>

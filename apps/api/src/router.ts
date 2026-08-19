@@ -48,6 +48,11 @@ import {
   type PrismaClient,
   type ThreadEvents,
 } from "@rakazo/db";
+import {
+  clearPersistedComposioKey,
+  hasPersistedComposioKey,
+  savePersistedComposioKey,
+} from "./local-connectors.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 
@@ -95,6 +100,7 @@ export interface RouterDeps {
     defaultProvider: string;
     defaultModel: string;
     openRouterKey?: string;
+    composioApiKey?: string;
     ollamaBaseUrl: string;
     hostHarnessesEnabled: boolean;
     webOrigin: string;
@@ -984,8 +990,33 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     connections: {
+      composioStatus: authed.connections.composioStatus.handler(async ({ context }) => {
+        const local = await hasPersistedComposioKey(deps.prisma, context.actor);
+        return {
+          configured: local || Boolean(deps.env.composioApiKey),
+          source: local
+            ? ("local" as const)
+            : deps.env.composioApiKey
+              ? ("environment" as const)
+              : ("none" as const),
+        };
+      }),
+      configureComposio: authed.connections.configureComposio.handler(
+        async ({ context, input }) => {
+          assertHostHarnessAccess(deps, context.actor);
+          await savePersistedComposioKey(deps.prisma, deps.secrets, context.actor, input.apiKey);
+          deps.composio?.setApiKey(input.apiKey);
+          return { configured: true as const };
+        },
+      ),
+      clearComposio: authed.connections.clearComposio.handler(async ({ context }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        await clearPersistedComposioKey(deps.prisma, context.actor);
+        deps.composio?.setApiKey(deps.env.composioApiKey);
+        return { ok: true as const };
+      }),
       catalog: authed.connections.catalog.handler(async ({ context, input }) => {
-        if (!deps.composio) return [];
+        if (!deps.composio?.configured()) return [];
         try {
           return await deps.composio.catalog(context.actor.userId, input.query);
         } catch {
@@ -1006,6 +1037,11 @@ export function createRouter(deps: RouterDeps) {
         }));
       }),
       begin: authed.connections.begin.handler(async ({ context, input }) => {
+        if (!deps.composio?.configured()) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Configure Composio before connecting apps.",
+          });
+        }
         const row = await deps.prisma.connection.create({
           data: {
             workspaceId: context.actor.workspaceId,
@@ -1055,7 +1091,7 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         if (!existing) throw new IsolationError();
-        if (deps.composio) {
+        if (deps.composio?.configured()) {
           const ready = await deps.composio.connectionReady(
             context.actor.userId,
             existing.provider,
@@ -1090,7 +1126,7 @@ export function createRouter(deps: RouterDeps) {
             userId: context.actor.userId,
           },
         });
-        if (row && deps.composio) {
+        if (row && deps.composio?.configured()) {
           await deps.composio.revoke(row.provider, {
             operationId: "connections.revoke",
             traceId: "connections.revoke",

@@ -105,10 +105,7 @@ export async function savePersistedComposioKey(
   }
 }
 
-export async function clearPersistedComposioKey(
-  prisma: PrismaClient,
-  actor: Actor,
-): Promise<void> {
+export async function clearPersistedComposioKey(prisma: PrismaClient, actor: Actor): Promise<void> {
   const installs = await prisma.capabilityInstall.findMany({
     where: {
       workspaceId: actor.workspaceId,

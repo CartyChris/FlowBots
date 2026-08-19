@@ -195,8 +195,8 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
             ) : null}
           </div>
           <p className="mt-2 text-[11.5px] text-[#696970]">
-            Status: {status.configured ? `connected via ${status.source}` : "not configured"}. The key
-            is never returned to this screen after saving.
+            Status: {status.configured ? `connected via ${status.source}` : "not configured"}. The
+            key is never returned to this screen after saving.
           </p>
         </div>
 
@@ -218,10 +218,15 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
             </div>
           ) : null}
           {status.configured && !loading && catalog.length === 0 ? (
-            <p className="text-[#6C6C70]">Connected, but the app catalog is currently unavailable.</p>
+            <p className="text-[#6C6C70]">
+              Connected, but the app catalog is currently unavailable.
+            </p>
           ) : null}
           {visible.map((item) => (
-            <div key={item.slug} className="flex items-center gap-4 rounded-[13px] px-3 py-2.5 hover:bg-[#18181B]">
+            <div
+              key={item.slug}
+              className="flex items-center gap-4 rounded-[13px] px-3 py-2.5 hover:bg-[#18181B]"
+            >
               {item.logo ? (
                 <img
                   src={item.logo}

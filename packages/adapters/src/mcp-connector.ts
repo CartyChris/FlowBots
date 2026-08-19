@@ -69,11 +69,13 @@ export class McpConnector implements ConnectorProvider {
       servers.map(async (server) => {
         try {
           const tools = await this.listTools(server);
-          return tools.map((tool): ConnectorTool => ({
-            name: namespacedTool(server.id, tool.name),
-            description: `[${server.name}] ${tool.description ?? tool.name}`,
-            inputSchema: asSchema(tool.inputSchema),
-          }));
+          return tools.map(
+            (tool): ConnectorTool => ({
+              name: namespacedTool(server.id, tool.name),
+              description: `[${server.name}] ${tool.description ?? tool.name}`,
+              inputSchema: asSchema(tool.inputSchema),
+            }),
+          );
         } catch {
           return [];
         }

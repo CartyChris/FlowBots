@@ -342,10 +342,7 @@ export class CompositeConnector implements ConnectorProvider {
   }
 }
 
-export function createConnectorStack(
-  composio: boolean | string | undefined,
-  mcp?: McpConnector,
-) {
+export function createConnectorStack(composio: boolean | string | undefined, mcp?: McpConnector) {
   const destination = new DestinationEmulator();
   const composioConnector = composio
     ? new ComposioConnector(typeof composio === "string" ? { apiKey: composio } : undefined)
