@@ -107,53 +107,6 @@ jobs:
         run: pnpm --filter @rakazo/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
-  apply-vnext-wiring:
-    name: Apply vNext product wiring
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.head_ref == 'feature/flowbots-local-social-vnext' &&
-      !contains(github.event.pull_request.head.sha, '0000000')
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: feature/flowbots-local-social-vnext
-          fetch-depth: 2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Apply exact migration once
-        run: |
-          if [ ! -f scripts/apply-flowbots-vnext-wiring.py ]; then
-            echo "vNext wiring already applied"
-            exit 0
-          fi
-          python3 scripts/apply-flowbots-vnext-wiring.py
-          rm scripts/apply-flowbots-vnext-wiring.py
-      - name: Format and verify wiring slice
-        run: |
-          pnpm exec biome check --write apps/web/src/pages/Shell.tsx apps/web/e2e/golden.spec.ts packages/adapters/src/executor.ts packages/adapters/src/builtin-tools.ts apps/web/src/pages/HostComputerPrompt.tsx apps/web/src/pages/McpOverlay.tsx packages/ui-web/src/bot-avatar.tsx packages/ui-web/src/styles.css
-          pnpm db:generate
-          pnpm check
-          pnpm exec vitest run packages/adapters/src/index.test.ts packages/adapters/src/cli-agent.test.ts packages/adapters/src/mcp-connector.test.ts packages/core/src/personality.test.ts packages/core/src/social.test.ts
-          git diff --check
-        env:
-          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-      - name: Commit verified wiring
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "feat(flowbots): wire local social agent workspace"
-          git push origin HEAD:feature/flowbots-local-social-vnext
-
   deploy-production:
     if: >-
       github.event_name == 'push' &&
