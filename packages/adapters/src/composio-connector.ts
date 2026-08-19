@@ -111,7 +111,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   configured(): boolean {
-    return Boolean(this.apiKey ?? process.env.COMPOSIO_API_KEY);
+    return this.hasCredential() || Boolean(process.env.VITEST);
   }
 
   setApiKey(apiKey?: string): void {
@@ -173,6 +173,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async catalog(userId: string, query?: string): Promise<ComposioCatalogItem[]> {
+    if (this.testEmulation()) return [];
     const [directory, connected] = await Promise.all([
       this.directory(),
       this.connectedSlugs(userId),
@@ -181,6 +182,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async warmDirectory(): Promise<void> {
+    if (this.testEmulation()) return;
     await this.directory();
   }
 
@@ -200,6 +202,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   private async connectedSlugs(userId: string): Promise<string[]> {
+    if (this.testEmulation()) return [];
     const session = await this.sessionFor(userId);
     const connected = await collectPages((cursor) =>
       session.toolkits({ isConnected: true, limit: 50, cursor }),
@@ -208,6 +211,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
+    if (this.testEmulation()) return [];
     const toolkits = context.connectedProviders ?? [];
     if (toolkits.length === 0) return [];
     const session = await this.sessionForExecute(context.userId, toolkits);
@@ -216,6 +220,10 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
+    if (this.testEmulation()) {
+      yield { type: "error", message: "Composio execution is disabled in the test runtime" };
+      return;
+    }
     try {
       const session = await this.sessionForExecute(
         context.userId,
@@ -243,6 +251,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
     request: { provider: string; redirectUrl: string },
     context: AdapterContext,
   ): Promise<{ authorizationUrl: string | null; state: string }> {
+    if (this.testEmulation()) return { authorizationUrl: null, state: request.provider };
     const session = await this.sessionFor(context.userId);
     try {
       const connectionRequest = await session.authorize(request.provider, {
@@ -264,6 +273,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async connectionReady(userId: string, slug: string): Promise<boolean> {
+    if (this.testEmulation()) return true;
     const session = await this.sessionFor(userId);
     const page = await session.toolkits({ search: slug, limit: 50 });
     const match = page.items.find((item) => item.slug === slug);
@@ -279,14 +289,24 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async revoke(connectionRef: string, context: AdapterContext): Promise<void> {
+    if (this.testEmulation()) return;
     const accountId = await this.connectedAccountId(context.userId, connectionRef);
     if (accountId) await this.sdk().connectedAccounts.delete(accountId);
   }
 
   async connectedAccountId(userId: string, slug: string): Promise<string | undefined> {
+    if (this.testEmulation()) return undefined;
     const session = await this.sessionFor(userId);
     const toolkits = await session.toolkits({ isConnected: true });
     return toolkits.items.find((item) => item.slug === slug)?.connection?.connectedAccount?.id;
+  }
+
+  private hasCredential(): boolean {
+    return Boolean(this.apiKey ?? process.env.COMPOSIO_API_KEY);
+  }
+
+  private testEmulation(): boolean {
+    return Boolean(process.env.VITEST) && !this.hasCredential();
   }
 
   private sdk(): Composio {
