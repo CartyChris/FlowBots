@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { desktopBridge } from "../lib/desktop";
 
 export interface ComposerActionsProps {
-  onSelectedPaths: (input: { kind: "file" | "workspace"; paths: Array<{ name: string; path: string }> }) => void;
+  onSelectedPaths: (input: {
+    kind: "file" | "workspace";
+    paths: Array<{ name: string; path: string }>;
+  }) => void;
   onWebFiles: (files: FileList) => void;
   onComputer: () => void;
   onConnections: () => void;
+  onMcp: () => void;
   onHarnesses: () => void;
   onTeammate: () => void;
 }
@@ -15,6 +19,7 @@ export function ComposerActions({
   onWebFiles,
   onComputer,
   onConnections,
+  onMcp,
   onHarnesses,
   onTeammate,
 }: ComposerActionsProps) {
@@ -83,10 +88,46 @@ export function ComposerActions({
             disabled={!desktopBridge()?.dialog}
             onClick={() => void chooseWorkspace()}
           />
-          <Action label="Computer" icon="▣" onClick={() => { setOpen(false); onComputer(); }} />
-          <Action label="Connections" icon="◫" onClick={() => { setOpen(false); onConnections(); }} />
-          <Action label="Coding harnesses" icon="⌘" onClick={() => { setOpen(false); onHarnesses(); }} />
-          <Action label="Ask a teammate" icon="☺" onClick={() => { setOpen(false); onTeammate(); }} />
+          <Action
+            label="Computer"
+            icon="▣"
+            onClick={() => {
+              setOpen(false);
+              onComputer();
+            }}
+          />
+          <Action
+            label="Connections"
+            icon="◫"
+            onClick={() => {
+              setOpen(false);
+              onConnections();
+            }}
+          />
+          <Action
+            label="MCP servers"
+            icon="↔"
+            onClick={() => {
+              setOpen(false);
+              onMcp();
+            }}
+          />
+          <Action
+            label="Coding harnesses"
+            icon="⌘"
+            onClick={() => {
+              setOpen(false);
+              onHarnesses();
+            }}
+          />
+          <Action
+            label="Ask a teammate"
+            icon="☺"
+            onClick={() => {
+              setOpen(false);
+              onTeammate();
+            }}
+          />
         </div>
       ) : null}
       <button
