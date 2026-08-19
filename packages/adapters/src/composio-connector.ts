@@ -101,8 +101,26 @@ export function executeSessionKey(toolkits: string[]): string {
 
 export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvider {
   private client: Composio | undefined;
+  private apiKey: string | undefined;
   private readonly catalogSessions = new Map<string, string>();
   private readonly executeSessions = new Map<string, { sessionId: string; key: string }>();
+
+  constructor(options: { apiKey?: string } = {}) {
+    this.apiKey = normalizeApiKey(options.apiKey);
+  }
+
+  configured(): boolean {
+    return Boolean(this.apiKey ?? process.env.COMPOSIO_API_KEY);
+  }
+
+  setApiKey(apiKey?: string): void {
+    const normalized = normalizeApiKey(apiKey);
+    if (normalized === this.apiKey) return;
+    this.apiKey = normalized;
+    this.client = undefined;
+    this.catalogSessions.clear();
+    this.executeSessions.clear();
+  }
 
   describe() {
     return {
@@ -271,7 +289,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   private sdk(): Composio {
-    this.client ??= new Composio();
+    this.client ??= this.apiKey ? new Composio({ apiKey: this.apiKey }) : new Composio();
     return this.client;
   }
 }
@@ -307,13 +325,15 @@ export class CompositeConnector implements ConnectorProvider {
   }
 }
 
-export function createConnectorStack(composioEnabled: boolean) {
+export function createConnectorStack(composio: boolean | string | undefined) {
   const destination = new DestinationEmulator();
-  const composio = composioEnabled ? new ComposioConnector() : undefined;
+  const composioConnector = composio
+    ? new ComposioConnector(typeof composio === "string" ? { apiKey: composio } : undefined)
+    : undefined;
   return {
     destination,
-    composio,
-    connector: new CompositeConnector(destination, composio),
+    composio: composioConnector,
+    connector: new CompositeConnector(destination, composioConnector),
   };
 }
 
@@ -372,4 +392,9 @@ function redactConnectorText(value: string): string {
     .replace(/ck_[A-Za-z0-9]+/g, "[redacted]")
     .replace(/sk-or-v1-[A-Za-z0-9]+/g, "[redacted]")
     .replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
+}
+
+function normalizeApiKey(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
 }
