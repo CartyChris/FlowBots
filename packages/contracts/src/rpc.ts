@@ -41,23 +41,21 @@ export const appContract = {
       .output(DeploymentSettingsSchema),
   },
   models: {
-    list: oc
-      .input(z.object({ refresh: z.boolean().optional() }).optional())
-      .output(
-        z.array(
-          z.object({
-            provider: z.string(),
-            providerName: z.string().optional(),
-            id: z.string(),
-            label: z.string(),
-            billing: z.string(),
-            auth: z.enum(["api-key", "oauth", "both"]).optional(),
-            oauthLabel: z.string().optional(),
-            subscription: z.boolean().optional(),
-            signIn: z.enum(["device-code"]).optional(),
-          }),
-        ),
+    list: oc.input(z.object({ refresh: z.boolean().optional() }).optional()).output(
+      z.array(
+        z.object({
+          provider: z.string(),
+          providerName: z.string().optional(),
+          id: z.string(),
+          label: z.string(),
+          billing: z.string(),
+          auth: z.enum(["api-key", "oauth", "both"]).optional(),
+          oauthLabel: z.string().optional(),
+          subscription: z.boolean().optional(),
+          signIn: z.enum(["device-code"]).optional(),
+        }),
       ),
+    ),
     credentials: oc.output(z.array(ModelCredentialSchema)),
     connect: oc
       .input(

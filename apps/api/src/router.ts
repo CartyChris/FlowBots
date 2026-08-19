@@ -19,6 +19,7 @@ import {
   listPiCatalog,
   type PiOAuthLogins,
   resolveAgentHomePath,
+  resolveModelApiKey,
   restoreComputerWorkspace,
   sanitizeComposioError,
   savePushToken,
@@ -91,6 +92,7 @@ export interface RouterDeps {
     defaultProvider: string;
     defaultModel: string;
     openRouterKey?: string;
+    ollamaBaseUrl: string;
     webOrigin: string;
     screenProxySecret: string;
     sandboxProvider: string;
@@ -166,7 +168,50 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     models: {
-      list: authed.models.list.handler(async () => [...listPiCatalog(), scriptedCatalogEntry]),
+      list: authed.models.list.handler(async ({ context, input }) => {
+        const xaiCredential = await deps.prisma.userModelCredential.findFirst({
+          where: {
+            userId: context.actor.userId,
+            workspaceId: context.actor.workspaceId,
+            provider: "xai",
+          },
+          orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+        });
+        let xaiApiKey: string | undefined;
+        if (xaiCredential) {
+          const secret = await deps.prisma.secret.findFirst({
+            where: {
+              id: xaiCredential.secretId,
+              userId: context.actor.userId,
+              workspaceId: context.actor.workspaceId,
+            },
+          });
+          if (secret) {
+            const plaintext = deps.secrets.load(secret.ciphertext);
+            xaiApiKey = await resolveModelApiKey(plaintext, "xai", {
+              persist: async (next) => {
+                const encrypted = await deps.secrets.put(next, {
+                  operationId: `models:list:${context.actor.userId}`,
+                  traceId: `models:list:${context.actor.userId}`,
+                  workspaceId: context.actor.workspaceId,
+                  userId: context.actor.userId,
+                  signal: new AbortController().signal,
+                });
+                await deps.prisma.secret.update({
+                  where: { id: secret.id },
+                  data: { ciphertext: encrypted.ciphertext },
+                });
+              },
+            }).catch(() => undefined);
+          }
+        }
+        return listPiCatalog({
+          refresh: input?.refresh ?? true,
+          staticCatalog: [...listPiCatalog(), scriptedCatalogEntry],
+          ollamaBaseUrl: deps.env.ollamaBaseUrl,
+          xaiApiKey,
+        });
+      }),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
           where: { userId: context.actor.userId, workspaceId: context.actor.workspaceId },

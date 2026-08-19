@@ -114,8 +114,8 @@ describe("models.list refresh", () => {
       },
     });
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(models.some((entry) => entry.provider === "xai" && entry.id === "grok-account-latest")).toBe(
-      true,
-    );
+    expect(
+      models.some((entry) => entry.provider === "xai" && entry.id === "grok-account-latest"),
+    ).toBe(true);
   });
 });
