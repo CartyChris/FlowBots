@@ -4,9 +4,6 @@ on:
     branches: [feature/flowbots-local-social-vnext]
 permissions:
   contents: write
-concurrency:
-  group: task5-local-connectors-green
-  cancel-in-progress: false
 jobs:
   apply:
     if: ${{ !contains(github.event.head_commit.message, '[task5-green]') }}
@@ -27,34 +24,32 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          p = Path('apps/api/src/router.ts')
+          text = p.read_text()
 
-          def replace_once(path, old, new):
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one exact anchor, found {count}")
-              p.write_text(text.replace(old, new, 1))
+          if 'from "./local-connectors.js"' not in text:
+              anchor = 'import { addScreenProxyCapability } from "./screen-proxy.js";'
+              insert = 'import {\n  clearPersistedComposioKey,\n  hasPersistedComposioKey,\n  savePersistedComposioKey,\n} from "./local-connectors.js";\n' + anchor
+              if anchor not in text: raise SystemExit('missing local connector import anchor')
+              text = text.replace(anchor, insert, 1)
 
-          replace_once(
-              'apps/api/src/router.ts',
-              'import { addScreenProxyCapability } from "./screen-proxy.js";',
-              'import {\n  clearPersistedComposioKey,\n  hasPersistedComposioKey,\n  savePersistedComposioKey,\n} from "./local-connectors.js";\nimport { addScreenProxyCapability } from "./screen-proxy.js";',
-          )
-          replace_once(
-              'apps/api/src/router.ts',
-              '    openRouterKey?: string;\n    ollamaBaseUrl: string;',
-              '    openRouterKey?: string;\n    composioApiKey?: string;\n    ollamaBaseUrl: string;',
-          )
-          marker = '''    connections: {
-      catalog: authed.connections.catalog.handler(async ({ context, input }) => {
-        if (!deps.composio) return [];'''
-          replacement = '''    connections: {
+          if 'composioApiKey?: string;' not in text:
+              anchor = '    openRouterKey?: string;\n'
+              if anchor not in text: raise SystemExit('missing RouterDeps key anchor')
+              text = text.replace(anchor, anchor + '    composioApiKey?: string;\n', 1)
+
+          if 'composioStatus: authed.connections.composioStatus' not in text:
+              anchor = '    connections: {\n'
+              block = '''    connections: {
       composioStatus: authed.connections.composioStatus.handler(async ({ context }) => {
         const local = await hasPersistedComposioKey(deps.prisma, context.actor);
         return {
           configured: local || Boolean(deps.env.composioApiKey),
-          source: local ? ("local" as const) : deps.env.composioApiKey ? ("environment" as const) : ("none" as const),
+          source: local
+            ? ("local" as const)
+            : deps.env.composioApiKey
+              ? ("environment" as const)
+              : ("none" as const),
         };
       }),
       configureComposio: authed.connections.configureComposio.handler(async ({ context, input }) => {
@@ -69,43 +64,41 @@ jobs:
         deps.composio?.setApiKey(deps.env.composioApiKey);
         return { ok: true as const };
       }),
-      catalog: authed.connections.catalog.handler(async ({ context, input }) => {
-        if (!deps.composio?.configured()) return [];'''
-          replace_once('apps/api/src/router.ts', marker, replacement)
-          replace_once(
-              'apps/api/src/router.ts',
-              '''      begin: authed.connections.begin.handler(async ({ context, input }) => {
-        const row = await deps.prisma.connection.create({''',
-              '''      begin: authed.connections.begin.handler(async ({ context, input }) => {
-        if (!deps.composio?.configured()) {
-          throw new ORPCError("BAD_REQUEST", { message: "Configure Composio before connecting apps." });
-        }
-        const row = await deps.prisma.connection.create({''',
-          )
-          replace_once(
-              'apps/api/src/router.ts',
-              '''        if (!deps.composio) {
+'''
+              if anchor not in text: raise SystemExit('missing connections block anchor')
+              text = text.replace(anchor, block, 1)
+
+          text = text.replace('if (!deps.composio) return [];', 'if (!deps.composio?.configured()) return [];')
+          if 'Configure Composio before connecting apps.' not in text:
+              anchor = '      begin: authed.connections.begin.handler(async ({ context, input }) => {\n'
+              guard = anchor + '        if (!deps.composio?.configured()) {\n          throw new ORPCError("BAD_REQUEST", { message: "Configure Composio before connecting apps." });\n        }\n'
+              if anchor not in text: raise SystemExit('missing connections.begin anchor')
+              text = text.replace(anchor, guard, 1)
+          text = text.replace('''        if (!deps.composio) {
           return { connectionId: row.id, authorizationUrl: null };
         }
-        try {''',
-              '''        try {''',
-          )
-          replace_once(
-              'apps/api/src/router.ts',
-              '        if (deps.composio) {\n          const ready = await deps.composio.connectionReady(',
-              '        if (deps.composio?.configured()) {\n          const ready = await deps.composio.connectionReady(',
-          )
-          replace_once(
-              'apps/api/src/router.ts',
-              '        if (row && deps.composio) {\n          await deps.composio.revoke(row.provider, {',
-              '        if (row && deps.composio?.configured()) {\n          await deps.composio.revoke(row.provider, {',
-          )
+        try {''', '        try {')
+          text = text.replace('if (deps.composio) {\n          const ready = await deps.composio.connectionReady(', 'if (deps.composio?.configured()) {\n          const ready = await deps.composio.connectionReady(')
+          text = text.replace('if (row && deps.composio) {\n          await deps.composio.revoke(', 'if (row && deps.composio?.configured()) {\n          await deps.composio.revoke(')
+
+          required = [
+              'clearPersistedComposioKey',
+              'composioApiKey?: string;',
+              'composioStatus: authed.connections.composioStatus',
+              'configureComposio: authed.connections.configureComposio',
+              'clearComposio: authed.connections.clearComposio',
+              'if (!deps.composio?.configured()) return [];',
+              'Configure Composio before connecting apps.',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing: raise SystemExit(f'missing Task 5 router postconditions: {missing}')
+          p.write_text(text)
           Path('.github/workflows/task5-local-connectors-green.yml').unlink()
           Path('docs/superpowers/.task5-trigger').unlink(missing_ok=True)
           PY
       - name: Format and verify
         run: |
-          pnpm exec biome check --write apps/api/src/router.ts apps/api/src/app.ts apps/api/src/local-connectors.ts packages/contracts/src/rpc.ts packages/adapters/src/mcp-client.ts packages/adapters/src/mcp-connector.ts packages/adapters/src/composio-connector.ts packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts
+          pnpm exec biome check --write apps/api/src/router.ts apps/api/src/app.ts apps/api/src/local-connectors.ts packages/contracts/src/rpc.ts packages/adapters/src/mcp-client.ts packages/adapters/src/mcp-connector.ts packages/adapters/src/composio-connector.ts packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts apps/web/src/pages/PluginsOverlay.tsx apps/web/src/pages/McpOverlay.tsx
           pnpm db:generate
           pnpm check
           pnpm exec vitest run packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts packages/adapters/src/cli-agent.test.ts
