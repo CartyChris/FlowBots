@@ -25,6 +25,7 @@ export * from "./home.js";
 export * from "./host-aware-sandbox.js";
 export * from "./job-reconciler.js";
 export * from "./mcp-client.js";
+export * from "./mcp-connector.js";
 export * from "./mcp-emulator.js";
 export * from "./model-catalog.js";
 export * from "./ollama-provider.js";
