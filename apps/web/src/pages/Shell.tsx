@@ -25,6 +25,7 @@ import {
   reduceComputerStatus,
   reduceThreadSnapshot,
 } from "../lib/thread-events";
+import { HarnessesOverlay } from "./HarnessesOverlay";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { RoutineSchedule } from "./RoutineSchedule";
@@ -44,6 +45,7 @@ export function ShellPage() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [harnessesOpen, setHarnessesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [booting, setBooting] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -367,6 +369,16 @@ export function ShellPage() {
             </svg>
           </span>
           <span className="text-[14.5px] text-[#C9C9CE]">Plugins</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setHarnessesOpen(true)}
+          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-[#131315]"
+        >
+          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#17171A] text-[14px] text-[#9A9AA0]">
+            ⌘
+          </span>
+          <span className="text-[14.5px] text-[#C9C9CE]">Harnesses</span>
         </button>
         <div className="relative">
           {menuOpen ? (
@@ -753,6 +765,7 @@ export function ShellPage() {
       </aside>
 
       {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}
+      {harnessesOpen ? <HarnessesOverlay onClose={() => setHarnessesOpen(false)} /> : null}
 
       {booting ? (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-[rgba(4,4,5,.96)]">

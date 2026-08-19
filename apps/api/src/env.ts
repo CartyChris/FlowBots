@@ -18,6 +18,7 @@ export interface AppEnv {
   agentRuntime: string;
   openRouterKey: string | undefined;
   ollamaBaseUrl: string;
+  hostHarnessesEnabled: boolean;
   e2bApiKey: string | undefined;
   composioApiKey: string | undefined;
   defaultProvider: string;
@@ -62,6 +63,7 @@ export function loadEnv(
     agentRuntime: overrides.agentRuntime ?? source.AGENT_RUNTIME ?? "pi",
     openRouterKey: overrides.openRouterKey ?? source.OPENROUTER_API_KEY,
     ollamaBaseUrl: overrides.ollamaBaseUrl ?? source.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",
+    hostHarnessesEnabled: overrides.hostHarnessesEnabled ?? source.FLOWBOTS_HOST_HARNESSES === "1",
     e2bApiKey: overrides.e2bApiKey ?? source.E2B_API_KEY,
     composioApiKey: overrides.composioApiKey ?? source.COMPOSIO_API_KEY,
     defaultProvider: overrides.defaultProvider ?? source.PI_DEFAULT_PROVIDER ?? "openrouter",

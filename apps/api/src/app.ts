@@ -179,6 +179,7 @@ export async function createApp(
       defaultModel: env.defaultModel,
       openRouterKey: env.openRouterKey,
       ollamaBaseUrl: env.ollamaBaseUrl,
+      hostHarnessesEnabled: env.hostHarnessesEnabled,
       webOrigin: env.webOrigin,
       screenProxySecret: env.authSecret,
       sandboxProvider: env.sandboxProvider,

@@ -14,13 +14,16 @@ import {
 import {
   type ComposioConnector,
   checkpointAndRecordComputerWorkspace,
+  cliHarnessDefinitions,
   destroyBot,
   type EncryptedSecretStore,
+  HarnessRegistry,
   listPiCatalog,
   type PiOAuthLogins,
   resolveAgentHomePath,
   resolveModelApiKey,
   restoreComputerWorkspace,
+  runCliProcess,
   sanitizeComposioError,
   savePushToken,
   scheduleComputerSleep,
@@ -93,6 +96,7 @@ export interface RouterDeps {
     defaultModel: string;
     openRouterKey?: string;
     ollamaBaseUrl: string;
+    hostHarnessesEnabled: boolean;
     webOrigin: string;
     screenProxySecret: string;
     sandboxProvider: string;
@@ -262,6 +266,58 @@ export function createRouter(deps: RouterDeps) {
           data: { defaultModel: input.modelId, isDefault: true },
         });
         return { ok: true as const };
+      }),
+    },
+    harnesses: {
+      list: authed.harnesses.list.handler(async ({ context }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        const registry = new HarnessRegistry(cliHarnessDefinitions());
+        const definitions = registry.list();
+        const probes = new Map((await registry.probeAll()).map((probe) => [probe.id, probe]));
+        return definitions.map((definition) => {
+          const probe = probes.get(definition.id) ?? {
+            available: false as const,
+            version: undefined,
+            detail: undefined,
+          };
+          return {
+            id: definition.id,
+            label: definition.label,
+            kind: definition.kind,
+            interactions: definition.interactions,
+            workspacePolicies: definition.workspacePolicies,
+            scheduleable: definition.scheduleable,
+            resident: definition.resident,
+            outerVerificationRequired: definition.outerVerificationRequired,
+            available: probe.available,
+            ...(probe.version ? { version: probe.version } : {}),
+            ...(probe.detail ? { detail: probe.detail } : {}),
+          };
+        });
+      }),
+      probeCustom: authed.harnesses.probeCustom.handler(async ({ context, input }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        const result = await runCliProcess({
+          command: input.executable.trim(),
+          args: input.args,
+          cwd: deps.dataDir,
+          timeoutMs: 5_000,
+          maxOutputBytes: 64 * 1024,
+        });
+        const version = firstNonEmptyLine(result.stdout) ?? firstNonEmptyLine(result.stderr);
+        const available = result.code === 0 && !result.timedOut && !result.aborted;
+        return {
+          available,
+          ...(available && version ? { version } : {}),
+          ...(!available
+            ? {
+                detail:
+                  result.stderr.trim() ||
+                  result.stdout.trim() ||
+                  (result.timedOut ? "version probe timed out" : "CLI is unavailable"),
+              }
+            : {}),
+        };
       }),
     },
     bots: {
@@ -1276,6 +1332,21 @@ function computerHostFor(
   if (sandboxProvider !== "docker") return null;
   if (stored === "this-mac" || stored === "docker") return stored;
   return null;
+}
+
+function assertHostHarnessAccess(deps: RouterDeps, actor: Actor): void {
+  if (!deps.env.hostHarnessesEnabled || !actor.isDeploymentOwner) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "Host CLI harnesses are only available in an explicitly enabled local workspace.",
+    });
+  }
+}
+
+function firstNonEmptyLine(value: string): string | undefined {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
 }
 
 async function persistModelCredential(

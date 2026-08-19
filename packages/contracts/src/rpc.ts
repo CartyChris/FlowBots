@@ -96,6 +96,41 @@ export const appContract = {
       .input(z.object({ provider: z.string(), modelId: z.string() }))
       .output(z.object({ ok: z.literal(true) })),
   },
+  harnesses: {
+    list: oc.output(
+      z.array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          kind: z.enum(["cli", "rpc", "acp", "agent-server", "api", "mcp"]),
+          interactions: z.array(z.enum(["chat", "headless", "rpc", "acp", "http", "mcp"])),
+          workspacePolicies: z.array(
+            z.enum(["read-only", "workspace-write", "full-host", "container"]),
+          ),
+          scheduleable: z.boolean(),
+          resident: z.boolean(),
+          outerVerificationRequired: z.boolean(),
+          available: z.boolean(),
+          version: z.string().optional(),
+          detail: z.string().optional(),
+        }),
+      ),
+    ),
+    probeCustom: oc
+      .input(
+        z.object({
+          executable: z.string().trim().min(1).max(512),
+          args: z.array(z.string().max(2048)).max(64).default([]),
+        }),
+      )
+      .output(
+        z.object({
+          available: z.boolean(),
+          version: z.string().optional(),
+          detail: z.string().optional(),
+        }),
+      ),
+  },
   bots: {
     list: oc.output(z.array(BotSchema)),
     get: oc.input(botId).output(BotSchema),

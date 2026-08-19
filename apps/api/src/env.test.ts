@@ -23,6 +23,7 @@ const embeddedEnv: AppEnv = {
   agentRuntime: "pi",
   openRouterKey: undefined,
   ollamaBaseUrl: "http://127.0.0.1:11434",
+  hostHarnessesEnabled: true,
   e2bApiKey: undefined,
   composioApiKey: undefined,
   defaultProvider: "openrouter",
@@ -40,6 +41,7 @@ describe("loadEnv", () => {
     expect(env.agentRuntime).toBe("pi");
     expect(env.sandboxProvider).toBe("docker");
     expect(env.wakeupDriver).toBe("graphile");
+    expect(env.hostHarnessesEnabled).toBe(false);
     expect(env.mnemosyneMode).toBe("auto");
     expect(env.mnemosyneCommand).toBe("mnemosyne");
     expect(env.mnemosyneTimeoutMs).toBe(5000);
@@ -51,10 +53,12 @@ describe("loadEnv", () => {
       AGENT_RUNTIME: "scripted",
       SANDBOX_PROVIDER: "fake",
       WAKEUP_DRIVER: "memory",
+      FLOWBOTS_HOST_HARNESSES: "1",
     });
     expect(env.agentRuntime).toBe("scripted");
     expect(env.sandboxProvider).toBe("fake");
     expect(env.wakeupDriver).toBe("memory");
+    expect(env.hostHarnessesEnabled).toBe(true);
   });
 
   it("loads explicit Mnemosyne configuration", () => {

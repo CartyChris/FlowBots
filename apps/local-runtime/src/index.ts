@@ -113,6 +113,7 @@ export async function startLocalRuntime(
       sandboxProvider: "desktop",
       agentRuntime: "pi",
       openRouterKey: options.openRouterKey,
+      hostHarnessesEnabled: true,
       e2bApiKey: undefined,
       composioApiKey: undefined,
       defaultProvider: options.defaultProvider ?? "openrouter",
@@ -456,7 +457,7 @@ function waitForListening(server: Server): Promise<void> {
 }
 
 function closeHttpServer(server?: Server): Promise<void> {
-  if (!server || !server.listening) return Promise.resolve();
+  if (!server?.listening) return Promise.resolve();
   return new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });

@@ -56,9 +56,7 @@ export function HarnessesOverlay({ onClose }: { onClose: () => void }) {
         .filter(Boolean);
       const result = await rpc.harnesses.probeCustom({ executable: command, args });
       if (result.available) {
-        setCustomResult(
-          `Custom harness available${result.version ? ` · ${result.version}` : ""}`,
-        );
+        setCustomResult(`Custom harness available${result.version ? ` · ${result.version}` : ""}`);
       } else {
         setCustomResult(`Custom harness unavailable${result.detail ? ` · ${result.detail}` : ""}`);
       }
@@ -96,10 +94,7 @@ export function HarnessesOverlay({ onClose }: { onClose: () => void }) {
 
           <div className="grid gap-3 md:grid-cols-2">
             {rows.map((row) => (
-              <div
-                key={row.id}
-                className="rounded-[16px] border border-[#26262A] bg-[#101012] p-4"
-              >
+              <div key={row.id} className="rounded-[16px] border border-[#26262A] bg-[#101012] p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="text-[15.5px] font-medium text-[#ECECEE]">{row.label}</div>
@@ -140,7 +135,9 @@ export function HarnessesOverlay({ onClose }: { onClose: () => void }) {
                 </div>
                 <p className="mt-3 text-[12px] leading-5 text-[#696970]">
                   Uses this CLI's existing login. FlowBots does not copy its OAuth session.
-                  {row.outerVerificationRequired ? " Changes remain subject to outer verification." : ""}
+                  {row.outerVerificationRequired
+                    ? " Changes remain subject to outer verification."
+                    : ""}
                 </p>
                 {!row.available && row.detail ? (
                   <p className="mt-2 line-clamp-2 text-[11.5px] text-[#5F5F65]">{row.detail}</p>
