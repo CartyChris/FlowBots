@@ -2,19 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   applyBotRoleInstructions,
   BOT_ROLE_PRESETS,
+  type BotRolePreset,
   botRoleInstructions,
   botRoleSelection,
-  type BotRolePreset,
 } from "./bot-personality.js";
 
-const roles: BotRolePreset[] = [
-  "Developer",
-  "Researcher",
-  "Employee",
-  "Friend",
-  "Coach",
-  "Custom",
-];
+const roles: BotRolePreset[] = ["Developer", "Researcher", "Employee", "Friend", "Coach", "Custom"];
 
 describe("bot role presets", () => {
   it("exposes the requested stable role set", () => {
@@ -54,7 +47,11 @@ describe("bot role presets", () => {
   });
 
   it("persists custom role context and can read the selection back", () => {
-    const instructions = applyBotRoleInstructions("User-owned context.", "Custom", "Dry humor. No filler.");
+    const instructions = applyBotRoleInstructions(
+      "User-owned context.",
+      "Custom",
+      "Dry humor. No filler.",
+    );
     expect(botRoleSelection(instructions)).toEqual({
       role: "Custom",
       context: "Dry humor. No filler.",
