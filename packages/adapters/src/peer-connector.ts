@@ -8,11 +8,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
-import {
-  createThreadMessage,
-  type PrismaClient,
-  type ThreadEvents,
-} from "@rakazo/db";
+import { createThreadMessage, type PrismaClient, type ThreadEvents } from "@rakazo/db";
 
 export const MAX_PEER_SENDS_PER_RUN = 4;
 export const MAX_PEER_HOPS = 2;
@@ -168,11 +164,14 @@ export class PeerConnector implements ConnectorProvider {
       }
 
       const rawText = call.tool === "delegate_to_bot" ? call.args.task : call.args.message;
-      const text = String(rawText ?? "").trim().slice(0, MAX_PEER_MESSAGE_CHARS);
+      const text = String(rawText ?? "")
+        .trim()
+        .slice(0, MAX_PEER_MESSAGE_CHARS);
       if (!text) {
         yield {
           type: "error",
-          message: call.tool === "delegate_to_bot" ? "Delegated task is empty." : "Peer message is empty.",
+          message:
+            call.tool === "delegate_to_bot" ? "Delegated task is empty." : "Peer message is empty.",
         };
         return;
       }
@@ -259,7 +258,7 @@ export class PeerConnector implements ConnectorProvider {
       throw new Error("Source bot is not available in this workspace.");
     }
     if (!source.thread) throw new Error("Source bot has no thread.");
-    return source;
+    return { ...source, thread: source.thread };
   }
 
   private async targetBot(args: Record<string, unknown>, context: AdapterContext) {
@@ -279,7 +278,7 @@ export class PeerConnector implements ConnectorProvider {
     if (rows.length > 1) throw new Error(`More than one bot is named "${name}"; use bot_id.`);
     const target = rows[0]!;
     if (!target.thread) throw new Error("Target bot has no thread.");
-    return target;
+    return { ...target, thread: target.thread };
   }
 }
 
