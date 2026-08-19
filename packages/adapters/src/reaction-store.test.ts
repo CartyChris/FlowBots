@@ -6,10 +6,10 @@ function prismaHarness() {
   const rows: Array<{ kind: string; actorKey: string }> = [];
   const prisma = {
     $queryRawUnsafe: vi.fn(async (sql: string, ...params: unknown[]) => {
-      if (sql.includes("FROM \"messages\" m")) {
+      if (sql.includes('FROM "messages" m')) {
         return [{ messageId: params[0], workspaceId: "workspace-1", userId: "user-1" }];
       }
-      if (sql.includes("FROM \"message_reactions\"")) return [...rows];
+      if (sql.includes('FROM "message_reactions"')) return [...rows];
       return [];
     }),
     $executeRawUnsafe: vi.fn(async (sql: string, ...params: unknown[]) => {
