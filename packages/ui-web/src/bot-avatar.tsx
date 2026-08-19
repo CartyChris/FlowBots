@@ -55,7 +55,7 @@ export function BotAvatar({
       )}
       data-bot-state={state}
       data-bot-variant={resolvedVariant}
-      role={accessibleLabel ? "img" : undefined}
+      role="img"
       aria-label={accessibleLabel}
       aria-hidden={accessibleLabel ? undefined : true}
       title={accessibleLabel ? `${label} · ${state}` : undefined}
