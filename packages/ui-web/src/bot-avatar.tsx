@@ -17,7 +17,7 @@ export function BotAvatar({
   className,
   state = "idle",
   variant,
-  label = "Bot",
+  label,
 }: {
   color: string;
   size?: number;
@@ -32,6 +32,7 @@ export function BotAvatar({
   const eyeScaleY = state === "happy" ? 0.55 : state === "error" ? 0.72 : 1;
   const pupil = state === "surprised" ? 4.4 : 3.4;
   const expressionClass = state === "working" || state === "thinking" ? "rk-bot-busy" : "";
+  const accessibleLabel = label ? `${label} — ${state}` : undefined;
 
   return (
     <span
@@ -42,9 +43,10 @@ export function BotAvatar({
       )}
       data-bot-state={state}
       data-bot-variant={resolvedVariant}
-      role="img"
-      aria-label={`${label} — ${state}`}
-      title={`${label} · ${state}`}
+      role={accessibleLabel ? "img" : undefined}
+      aria-label={accessibleLabel}
+      aria-hidden={accessibleLabel ? undefined : true}
+      title={accessibleLabel ? `${label} · ${state}` : undefined}
       style={{ width: size, height: size, flex: "none" }}
     >
       <svg
