@@ -16,6 +16,7 @@ import {
   GraphileJobPublisher,
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
+  listMessageReactions,
   LocalAgentHomeStore,
   McpConnector,
   PeerConnector,
@@ -24,6 +25,7 @@ import {
   PostgresRealtimeFanout,
   pushTokenPath,
   ScriptedAgentRuntime,
+  setMessageReaction,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
 import { createDb, createThreadEvents, type PrismaClient, requireMembership } from "@rakazo/db";
@@ -223,6 +225,37 @@ export async function createApp(
       return c.json({ error: "Not available in version 1" }, 404);
     }
     return auth.handler(c.req.raw);
+  });
+  app.get("/api/reactions/:messageId", async (c) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
+    if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+    const actor = await requireMembership(prisma, session.user.id).catch(() => null);
+    if (!actor) return c.json({ error: "Forbidden" }, 403);
+    try {
+      return c.json(
+        await listMessageReactions(prisma, actor, c.req.param("messageId")),
+      );
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : "Reaction lookup failed" }, 404);
+    }
+  });
+  app.post("/api/reactions/:messageId", async (c) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
+    if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+    const actor = await requireMembership(prisma, session.user.id).catch(() => null);
+    if (!actor) return c.json({ error: "Forbidden" }, 403);
+    try {
+      const body = await c.req.json<{ kind?: unknown; active?: unknown }>();
+      return c.json(
+        await setMessageReaction(prisma, actor, {
+          messageId: c.req.param("messageId"),
+          kind: typeof body.kind === "string" ? body.kind : "",
+          active: body.active === true,
+        }),
+      );
+    } catch (error) {
+      return c.json({ error: error instanceof Error ? error.message : "Reaction update failed" }, 400);
+    }
   });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
