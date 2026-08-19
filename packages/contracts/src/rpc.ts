@@ -232,6 +232,16 @@ export const appContract = {
     remove: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
   },
   connections: {
+    composioStatus: oc.output(
+      z.object({
+        configured: z.boolean(),
+        source: z.enum(["local", "environment", "none"]),
+      }),
+    ),
+    configureComposio: oc
+      .input(z.object({ apiKey: z.string().trim().min(8).max(4096) }))
+      .output(z.object({ configured: z.literal(true) })),
+    clearComposio: oc.output(z.object({ ok: z.literal(true) })),
     catalog: oc
       .input(z.object({ query: z.string().optional() }))
       .output(z.array(ConnectionCatalogItemSchema)),
