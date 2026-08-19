@@ -104,11 +104,7 @@ export async function createApp(
       }),
   });
   const peer = new PeerConnector({ prisma, jobs, events });
-  const stack = createConnectorStack(
-    persistedComposioKey ?? env.composioApiKey ?? true,
-    mcp,
-    peer,
-  );
+  const stack = createConnectorStack(persistedComposioKey ?? env.composioApiKey ?? true, mcp, peer);
   const connector = stack.destination;
   await connector.start();
   if (stack.composio?.configured()) void stack.composio.warmDirectory().catch(() => undefined);
@@ -232,9 +228,7 @@ export async function createApp(
     const actor = await requireMembership(prisma, session.user.id).catch(() => null);
     if (!actor) return c.json({ error: "Forbidden" }, 403);
     try {
-      return c.json(
-        await listMessageReactions(prisma, actor, c.req.param("messageId")),
-      );
+      return c.json(await listMessageReactions(prisma, actor, c.req.param("messageId")));
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : "Reaction lookup failed" }, 404);
     }
