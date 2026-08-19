@@ -3,7 +3,19 @@ import { cn } from "./lib/utils.js";
 export type BotAvatarState = "idle" | "thinking" | "working" | "happy" | "error" | "surprised";
 export type BotAvatarVariant = "orb" | "blob" | "cat" | "robot" | "spark";
 
-const BOT_AVATAR_VARIANTS: BotAvatarVariant[] = ["orb", "blob", "cat", "robot", "spark"];
+export const BOT_AVATAR_VARIANTS: BotAvatarVariant[] = ["orb", "blob", "cat", "robot", "spark"];
+
+export const BOT_AVATAR_FACE_CHOICES = [
+  { variant: "orb", label: "Orb", color: "#C1F54B" },
+  { variant: "blob", label: "Blob", color: "#7E3EA1" },
+  { variant: "cat", label: "Cat", color: "#88D6CD" },
+  { variant: "robot", label: "Robot", color: "#68CFD2" },
+  { variant: "spark", label: "Spark", color: "#EBE611" },
+] as const satisfies ReadonlyArray<{
+  variant: BotAvatarVariant;
+  label: string;
+  color: string;
+}>;
 
 export function avatarVariantForColor(color: string): BotAvatarVariant {
   let hash = 0;
