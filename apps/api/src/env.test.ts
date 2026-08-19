@@ -22,6 +22,7 @@ const embeddedEnv: AppEnv = {
   sandboxProvider: "desktop",
   agentRuntime: "pi",
   openRouterKey: undefined,
+  ollamaBaseUrl: "http://127.0.0.1:11434",
   e2bApiKey: undefined,
   composioApiKey: undefined,
   defaultProvider: "openrouter",
