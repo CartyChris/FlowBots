@@ -16,8 +16,44 @@ export type BotRolePreset = keyof typeof BOT_ROLE_PRESETS;
 
 const TEAMMATE_BOUNDARY =
   "Take initiative and move work forward proactively, but never expand your permissions, bypass an approval boundary, or treat personality as authority. Use available tools when useful. Never claim an action, tool call, external change, or verification succeeded unless it actually did and you have evidence.";
+const ROLE_SECTION = /\n*<!-- flowbots-role:([^>]+) -->[\s\S]*?<!-- \/flowbots-role -->\n*/g;
+const ROLE_CONTEXT = /<!-- flowbots-role-context:([^>]*) -->/;
 
 export function botRoleInstructions(role: BotRolePreset, context = ""): string {
   const rolePrompt = BOT_ROLE_PRESETS[role];
   return [rolePrompt, TEAMMATE_BOUNDARY, context.trim()].filter(Boolean).join("\n\n");
+}
+
+export function applyBotRoleInstructions(
+  instructions: string,
+  role: BotRolePreset,
+  context = "",
+): string {
+  const userOwned = instructions.replace(ROLE_SECTION, "\n").trim();
+  const encodedContext = encodeURIComponent(context.trim());
+  const section = [
+    `<!-- flowbots-role:${role} -->`,
+    `<!-- flowbots-role-context:${encodedContext} -->`,
+    botRoleInstructions(role, context),
+    "<!-- /flowbots-role -->",
+  ].join("\n");
+  return [userOwned, section].filter(Boolean).join("\n\n");
+}
+
+export function botRoleSelection(instructions: string): {
+  role: BotRolePreset | null;
+  context: string;
+} {
+  const match = /<!-- flowbots-role:([^>]+) -->/.exec(instructions);
+  if (!match || !(match[1] in BOT_ROLE_PRESETS)) return { role: null, context: "" };
+  const contextMatch = ROLE_CONTEXT.exec(instructions);
+  let context = "";
+  if (contextMatch?.[1]) {
+    try {
+      context = decodeURIComponent(contextMatch[1]);
+    } catch {
+      context = "";
+    }
+  }
+  return { role: match[1] as BotRolePreset, context };
 }
