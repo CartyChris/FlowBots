@@ -77,6 +77,29 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Delete bot" })).toBeVisible();
 });
 
+test("Harness Center lists coding agents and probes a custom argv-based CLI", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `harness-${stamp}@rakazo.test`, "password12", "Harness");
+  await completeOnboarding(page, ["Coding & repos", "Clear and tight"]);
+
+  await page.getByRole("button", { name: "Harnesses" }).click();
+  await expect(page.getByRole("heading", { name: "Harness Center" })).toBeVisible();
+  await expect(page.getByText("Claude Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(page.getByText("Kimi Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("OpenCode", { exact: true })).toBeVisible();
+  await expect(page.getByText("Gemini CLI", { exact: true })).toBeVisible();
+  await expect(page.getByText("Prime Agent", { exact: true })).toBeVisible();
+
+  await page.getByPlaceholder("Executable (for example, gemini)").fill("node");
+  await page.getByPlaceholder("One argument per line").fill("--version");
+  await page.getByRole("button", { name: "Test custom harness" }).click();
+  await expect(page.getByText(/Custom harness available/i)).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Close harness center" }).click();
+  await expect(page.getByRole("heading", { name: "Harness Center" })).toBeHidden();
+});
+
 test("sign-in, spawn, and stop work in the shell", async ({ page }) => {
   const stamp = Date.now();
   const email = `shell-${stamp}@rakazo.test`;
