@@ -107,6 +107,61 @@ jobs:
         run: pnpm --filter @rakazo/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  apply-task5:
+    name: Apply Task 5 GREEN
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref == 'feature/flowbots-local-social-vnext'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/flowbots-local-social-vnext
+          fetch-depth: 2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply stored Task 5 migration
+        shell: bash
+        run: |
+          if [ ! -f .github/workflows/task5-local-connectors-green.yml ]; then
+            echo "Task 5 migration already applied"
+            exit 0
+          fi
+          python3 <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/task5-local-connectors-green.yml').read_text()
+          start = "          python3 <<'PY'\n"
+          end = "\n          PY\n"
+          body = source.split(start, 1)[1].split(end, 1)[0]
+          body = "\n".join(line[10:] if line.startswith("          ") else line for line in body.splitlines())
+          Path('/tmp/task5-green.py').write_text(body + "\n")
+          PY
+          python3 /tmp/task5-green.py
+      - name: Format and verify full connector slice
+        run: |
+          pnpm exec biome check --write apps/api/src/router.ts apps/api/src/app.ts apps/api/src/local-connectors.ts packages/contracts/src/rpc.ts packages/adapters/src/mcp-client.ts packages/adapters/src/mcp-connector.ts packages/adapters/src/composio-connector.ts packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts apps/web/src/pages/PluginsOverlay.tsx apps/web/src/pages/McpOverlay.tsx
+          pnpm db:generate
+          pnpm check
+          pnpm exec vitest run packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts packages/adapters/src/cli-agent.test.ts
+          git diff --check
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Commit verified Task 5
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(local): persist Composio and expose MCP tools [task5-green]"
+          git push origin HEAD:feature/flowbots-local-social-vnext
+
   deploy-production:
     if: >-
       github.event_name == 'push' &&
