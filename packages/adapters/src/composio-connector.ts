@@ -13,6 +13,7 @@ import {
   type ToolkitDirectoryEntry,
 } from "./composio-catalog-cache.js";
 import { DestinationEmulator } from "./destination-emulator.js";
+import type { McpConnector } from "./mcp-connector.js";
 
 type ComposioSession = Awaited<ReturnType<Composio["create"]>>;
 
@@ -298,34 +299,53 @@ export class CompositeConnector implements ConnectorProvider {
   constructor(
     readonly destination: DestinationEmulator,
     readonly composio?: ComposioConnector,
+    readonly mcp?: McpConnector,
   ) {}
 
   describe() {
-    return this.composio?.describe() ?? this.destination.describe();
+    return this.composio?.describe() ?? this.mcp?.describe() ?? this.destination.describe();
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
-    const dest = await this.destination.discoverTools(context);
-    if (!this.composio) return dest;
-    try {
-      const extra = await this.composio.discoverTools(context);
-      const destNames = new Set(dest.map((tool) => tool.name));
-      return [...dest, ...extra.filter((tool) => !destNames.has(tool.name))];
-    } catch {
-      return dest;
+    const tools = await this.destination.discoverTools(context);
+    const names = new Set(tools.map((tool) => tool.name));
+    for (const provider of [this.composio, this.mcp]) {
+      if (!provider) continue;
+      try {
+        const extra = await provider.discoverTools(context);
+        for (const tool of extra) {
+          if (names.has(tool.name)) continue;
+          names.add(tool.name);
+          tools.push(tool);
+        }
+      } catch {
+        // One connector going offline must not hide other local tools.
+      }
     }
+    return tools;
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
-    if (call.tool === "destination.write" || !this.composio) {
+    if (call.tool === "destination.write") {
       yield* this.destination.execute(call, context);
       return;
     }
-    yield* this.composio.execute(call, context);
+    if (call.tool.startsWith("mcp__") && this.mcp) {
+      yield* this.mcp.execute(call, context);
+      return;
+    }
+    if (this.composio) {
+      yield* this.composio.execute(call, context);
+      return;
+    }
+    yield* this.destination.execute(call, context);
   }
 }
 
-export function createConnectorStack(composio: boolean | string | undefined) {
+export function createConnectorStack(
+  composio: boolean | string | undefined,
+  mcp?: McpConnector,
+) {
   const destination = new DestinationEmulator();
   const composioConnector = composio
     ? new ComposioConnector(typeof composio === "string" ? { apiKey: composio } : undefined)
@@ -333,7 +353,8 @@ export function createConnectorStack(composio: boolean | string | undefined) {
   return {
     destination,
     composio: composioConnector,
-    connector: new CompositeConnector(destination, composioConnector),
+    mcp,
+    connector: new CompositeConnector(destination, composioConnector, mcp),
   };
 }
 
