@@ -251,7 +251,13 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
     request: { provider: string; redirectUrl: string },
     context: AdapterContext,
   ): Promise<{ authorizationUrl: string | null; state: string }> {
-    if (this.testEmulation()) return { authorizationUrl: null, state: request.provider };
+    if (this.testEmulation()) {
+      return {
+        authorizationUrl:
+          request.provider === "test-provider" ? "https://example.invalid/authorize" : null,
+        state: request.provider,
+      };
+    }
     const session = await this.sessionFor(context.userId);
     try {
       const connectionRequest = await session.authorize(request.provider, {
