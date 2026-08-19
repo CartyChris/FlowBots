@@ -1,0 +1,122 @@
+name: task5-local-connectors-green
+on:
+  push:
+    branches: [feature/flowbots-local-social-vnext]
+permissions:
+  contents: write
+concurrency:
+  group: task5-local-connectors-green
+  cancel-in-progress: false
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[task5-green]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/flowbots-local-social-vnext
+          fetch-depth: 2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Patch router connector configuration boundaries
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact anchor, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'apps/api/src/router.ts',
+              'import { addScreenProxyCapability } from "./screen-proxy.js";',
+              'import {\n  clearPersistedComposioKey,\n  hasPersistedComposioKey,\n  savePersistedComposioKey,\n} from "./local-connectors.js";\nimport { addScreenProxyCapability } from "./screen-proxy.js";',
+          )
+          replace_once(
+              'apps/api/src/router.ts',
+              '    openRouterKey?: string;\n    ollamaBaseUrl: string;',
+              '    openRouterKey?: string;\n    composioApiKey?: string;\n    ollamaBaseUrl: string;',
+          )
+          marker = '''    connections: {
+      catalog: authed.connections.catalog.handler(async ({ context, input }) => {
+        if (!deps.composio) return [];'''
+          replacement = '''    connections: {
+      composioStatus: authed.connections.composioStatus.handler(async ({ context }) => {
+        const local = await hasPersistedComposioKey(deps.prisma, context.actor);
+        return {
+          configured: local || Boolean(deps.env.composioApiKey),
+          source: local ? ("local" as const) : deps.env.composioApiKey ? ("environment" as const) : ("none" as const),
+        };
+      }),
+      configureComposio: authed.connections.configureComposio.handler(async ({ context, input }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        await savePersistedComposioKey(deps.prisma, deps.secrets, context.actor, input.apiKey);
+        deps.composio?.setApiKey(input.apiKey);
+        return { configured: true as const };
+      }),
+      clearComposio: authed.connections.clearComposio.handler(async ({ context }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        await clearPersistedComposioKey(deps.prisma, context.actor);
+        deps.composio?.setApiKey(deps.env.composioApiKey);
+        return { ok: true as const };
+      }),
+      catalog: authed.connections.catalog.handler(async ({ context, input }) => {
+        if (!deps.composio?.configured()) return [];'''
+          replace_once('apps/api/src/router.ts', marker, replacement)
+          replace_once(
+              'apps/api/src/router.ts',
+              '''      begin: authed.connections.begin.handler(async ({ context, input }) => {
+        const row = await deps.prisma.connection.create({''',
+              '''      begin: authed.connections.begin.handler(async ({ context, input }) => {
+        if (!deps.composio?.configured()) {
+          throw new ORPCError("BAD_REQUEST", { message: "Configure Composio before connecting apps." });
+        }
+        const row = await deps.prisma.connection.create({''',
+          )
+          replace_once(
+              'apps/api/src/router.ts',
+              '''        if (!deps.composio) {
+          return { connectionId: row.id, authorizationUrl: null };
+        }
+        try {''',
+              '''        try {''',
+          )
+          replace_once(
+              'apps/api/src/router.ts',
+              '        if (deps.composio) {\n          const ready = await deps.composio.connectionReady(',
+              '        if (deps.composio?.configured()) {\n          const ready = await deps.composio.connectionReady(',
+          )
+          replace_once(
+              'apps/api/src/router.ts',
+              '        if (row && deps.composio) {\n          await deps.composio.revoke(row.provider, {',
+              '        if (row && deps.composio?.configured()) {\n          await deps.composio.revoke(row.provider, {',
+          )
+          Path('.github/workflows/task5-local-connectors-green.yml').unlink()
+          Path('docs/superpowers/.task5-trigger').unlink(missing_ok=True)
+          PY
+      - name: Format and verify
+        run: |
+          pnpm exec biome check --write apps/api/src/router.ts apps/api/src/app.ts apps/api/src/local-connectors.ts packages/contracts/src/rpc.ts packages/adapters/src/mcp-client.ts packages/adapters/src/mcp-connector.ts packages/adapters/src/composio-connector.ts packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts
+          pnpm db:generate
+          pnpm check
+          pnpm exec vitest run packages/adapters/src/composio-local.test.ts packages/adapters/src/mcp-connector.test.ts packages/adapters/src/cli-agent.test.ts
+          git diff --check
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Commit verified Task 5 backend
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(local): persist Composio and expose MCP tools [task5-green]"
+          git push origin HEAD:feature/flowbots-local-social-vnext
