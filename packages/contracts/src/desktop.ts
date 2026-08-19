@@ -20,6 +20,11 @@ export interface DesktopTerminalActivityEvent {
   data?: unknown;
 }
 
+export interface DesktopChosenPath {
+  name: string;
+  path: string;
+}
+
 export interface RakazoDesktop {
   platform: string;
   window: {
@@ -31,6 +36,10 @@ export interface RakazoDesktop {
   runtime: {
     choose: (profile: DesktopRuntimeProfile) => Promise<unknown>;
     showLauncher: () => Promise<unknown>;
+  };
+  dialog: {
+    chooseFiles: () => Promise<DesktopChosenPath[]>;
+    chooseWorkspace: () => Promise<DesktopChosenPath | null>;
   };
   terminal: {
     create: (input: { cwd?: string; cols: number; rows: number }) => Promise<DesktopTerminalInfo>;
