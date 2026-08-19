@@ -6,7 +6,7 @@ export interface StdioMcpCallInput {
   command: string;
   args: string[];
   cwd: string;
-  tool: string;
+  tool?: string;
   arguments?: Record<string, unknown>;
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
@@ -113,11 +113,12 @@ export async function runStdioMcpCall(input: StdioMcpCallInput): Promise<{
     await request("initialize", {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "rakazo", version: "0.1.0" },
+      clientInfo: { name: "flowbots", version: "0.1.0" },
     });
     sendNotification("notifications/initialized");
     const listed = await request("tools/list", {});
     const tools = Array.isArray(listed?.tools) ? listed.tools : [];
+    if (!input.tool) return { tools, result: undefined };
     const selected = tools.find((tool: any) => tool?.name === input.tool);
     if (!selected) throw new Error(`MCP tool "${input.tool}" is not available`);
     const result = await request("tools/call", {
