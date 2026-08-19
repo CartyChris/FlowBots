@@ -16,8 +16,8 @@ import {
   GraphileJobPublisher,
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
-  isComposioEnabled,
   LocalAgentHomeStore,
+  McpConnector,
   PiAgentRuntime,
   PiOAuthLogins,
   PostgresRealtimeFanout,
@@ -30,6 +30,7 @@ import { HybridMemoryStore, MarkdownMemoryStore, MnemosyneSemanticIndex } from "
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
+import { loadMcpServers, loadPersistedComposioKey } from "./local-connectors.js";
 import { createRouter } from "./router.js";
 
 export interface AppHandles {
@@ -89,10 +90,20 @@ export async function createApp(
       timeoutMs: env.mnemosyneTimeoutMs,
     }),
   );
-  const stack = createConnectorStack(isComposioEnabled(env.composioApiKey));
+  const persistedComposioKey = await loadPersistedComposioKey(prisma, secrets).catch(
+    () => undefined,
+  );
+  const mcp = new McpConnector({
+    loadServers: (context) =>
+      loadMcpServers(prisma, context, {
+        hostEnabled: env.hostHarnessesEnabled,
+        defaultCwd: env.dataDir,
+      }),
+  });
+  const stack = createConnectorStack(persistedComposioKey ?? env.composioApiKey ?? true, mcp);
   const connector = stack.destination;
   await connector.start();
-  void stack.composio?.warmDirectory().catch(() => undefined);
+  if (stack.composio?.configured()) void stack.composio.warmDirectory().catch(() => undefined);
   const runtime =
     env.agentRuntime === "scripted" ? new ScriptedAgentRuntime() : new PiAgentRuntime();
   const notifications = new ExpoPushProvider(env.dataDir);
@@ -138,7 +149,9 @@ export async function createApp(
     memory,
     home,
     connector: stack.connector,
-    secrets: [env.openRouterKey ?? "", env.composioApiKey ?? ""].filter(Boolean),
+    secrets: [env.openRouterKey ?? "", env.composioApiKey ?? "", persistedComposioKey ?? ""].filter(
+      Boolean,
+    ),
     secretStore: secrets,
     deploymentModelKey: env.openRouterKey,
     dataDir: env.dataDir,
@@ -178,6 +191,7 @@ export async function createApp(
       defaultProvider: env.defaultProvider,
       defaultModel: env.defaultModel,
       openRouterKey: env.openRouterKey,
+      composioApiKey: env.composioApiKey,
       ollamaBaseUrl: env.ollamaBaseUrl,
       hostHarnessesEnabled: env.hostHarnessesEnabled,
       webOrigin: env.webOrigin,
@@ -221,7 +235,8 @@ export async function createApp(
       ok: true,
       runtime: env.agentRuntime,
       sandbox: env.sandboxProvider,
-      composio: Boolean(stack.composio),
+      composio: stack.composio?.configured() ?? false,
+      mcp: env.hostHarnessesEnabled,
       jobs: jobKind,
       realtime: realtime.describe().id,
       memory: memory.describe().id,
@@ -263,9 +278,7 @@ function isTrustedOrigin(origin: string, env: AppEnv) {
 
 function sessionHeaders(request: Request) {
   const headers = new Headers(request.headers);
-  const authz = headers.get("authorization");
-  if (authz?.toLowerCase().startsWith("bearer ") && !headers.get("cookie")) {
-    headers.set("cookie", `better-auth.session_token=${authz.slice(7).trim()}`);
-  }
+  const cookie = request.headers.get("cookie");
+  if (cookie) headers.set("cookie", cookie);
   return headers;
 }
