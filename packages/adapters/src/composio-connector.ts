@@ -331,7 +331,12 @@ export class CompositeConnector implements ConnectorProvider {
   ) {}
 
   describe() {
-    return this.composio?.describe() ?? this.mcp?.describe() ?? this.peer?.describe() ?? this.destination.describe();
+    return (
+      this.composio?.describe() ??
+      this.mcp?.describe() ??
+      this.peer?.describe() ??
+      this.destination.describe()
+    );
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
