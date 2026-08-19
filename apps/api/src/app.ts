@@ -18,6 +18,7 @@ import {
   InMemoryRealtimeFanout,
   LocalAgentHomeStore,
   McpConnector,
+  PeerConnector,
   PiAgentRuntime,
   PiOAuthLogins,
   PostgresRealtimeFanout,
@@ -100,7 +101,12 @@ export async function createApp(
         defaultCwd: env.dataDir,
       }),
   });
-  const stack = createConnectorStack(persistedComposioKey ?? env.composioApiKey ?? true, mcp);
+  const peer = new PeerConnector({ prisma, jobs, events });
+  const stack = createConnectorStack(
+    persistedComposioKey ?? env.composioApiKey ?? true,
+    mcp,
+    peer,
+  );
   const connector = stack.destination;
   await connector.start();
   if (stack.composio?.configured()) void stack.composio.warmDirectory().catch(() => undefined);
