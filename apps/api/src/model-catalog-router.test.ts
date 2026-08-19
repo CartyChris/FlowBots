@@ -78,6 +78,7 @@ describe("models.list refresh", () => {
     });
     vi.stubGlobal("fetch", fetchFn);
 
+    const secretLookup = vi.fn(async () => ({ id: "secret-1", ciphertext: "encrypted" }));
     const deps = {
       prisma: {
         userModelCredential: {
@@ -87,7 +88,7 @@ describe("models.list refresh", () => {
           })),
         },
         secret: {
-          findUnique: vi.fn(async () => ({ id: "secret-1", ciphertext: "encrypted" })),
+          findFirst: secretLookup,
         },
       },
       secrets: {
@@ -105,6 +106,13 @@ describe("models.list refresh", () => {
 
     const models = await clientFor(deps).models.list({ refresh: true });
 
+    expect(secretLookup).toHaveBeenCalledWith({
+      where: {
+        id: "secret-1",
+        userId: actor.userId,
+        workspaceId: actor.workspaceId,
+      },
+    });
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(models.some((entry) => entry.provider === "xai" && entry.id === "grok-account-latest")).toBe(
       true,
