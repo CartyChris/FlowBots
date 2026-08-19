@@ -1,4 +1,4 @@
-import { reactionEmoji, REACTION_KINDS, type ReactionKind } from "@rakazo/core";
+import { REACTION_EMOJI, REACTION_KINDS, type ReactionKind } from "@rakazo/core";
 import { useEffect, useState } from "react";
 
 type ReactionSummary = { kind: ReactionKind; count: number; reactedByMe: boolean };
@@ -42,7 +42,7 @@ export function MessageReactions({ messageId }: { messageId: string }) {
     <div className="flex gap-1 px-2 pt-1 opacity-55 transition-opacity hover:opacity-100 focus-within:opacity-100">
       {REACTION_KINDS.map((kind) => {
         const summary = rows.find((row) => row.kind === kind);
-        const emoji = reactionEmoji(kind);
+        const emoji = REACTION_EMOJI[kind];
         return (
           <button
             key={kind}
