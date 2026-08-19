@@ -88,7 +88,15 @@ function harness(options: { effectCount?: number; hop?: number } = {}) {
   const events = {
     append: vi.fn(async () => ({ id: "event-peer" })),
   } as unknown as ThreadEvents;
-  const writeMessage = vi.fn(async () => ({ id: "message-peer" }));
+  const writeMessage = vi.fn(async (_prisma, input) => ({
+    id: "message-peer",
+    threadId: input.threadId,
+    seq: 7,
+    role: input.role,
+    blocks: input.blocks,
+    runId: input.runId ?? null,
+    createdAt: new Date("2026-08-18T20:00:00Z"),
+  }));
   const connector = new PeerConnector({ prisma, jobs, events, writeMessage });
   return { connector, prisma, jobs, events, writeMessage, source, target };
 }
