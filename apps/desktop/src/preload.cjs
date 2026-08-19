@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld("rakazoDesktop", {
     choose: (profile) => ipcRenderer.invoke("desktop.runtime.choose", profile),
     showLauncher: () => ipcRenderer.invoke("desktop.runtime.showLauncher"),
   },
+  dialog: {
+    chooseFiles: () => ipcRenderer.invoke("desktop.dialog.chooseFiles"),
+    chooseWorkspace: () => ipcRenderer.invoke("desktop.dialog.chooseWorkspace"),
+  },
   terminal: {
     create: (input) => ipcRenderer.invoke("desktop.terminal.create", input),
     write: (sessionId, data) => ipcRenderer.invoke("desktop.terminal.write", sessionId, data),
