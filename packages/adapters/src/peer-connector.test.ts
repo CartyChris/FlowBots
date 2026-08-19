@@ -137,7 +137,10 @@ describe("PeerConnector", () => {
         threadId: target.thread.id,
         role: "system",
         blocks: [
-          expect.objectContaining({ kind: "meta", text: expect.stringMatching(/From Chief.*peer/i) }),
+          expect.objectContaining({
+            kind: "meta",
+            text: expect.stringMatching(/From Chief.*peer/i),
+          }),
           { kind: "text", text: "Please check venue availability." },
         ],
       }),
