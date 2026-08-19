@@ -24,6 +24,12 @@ import { ProductEventSchema } from "./events.js";
 import { Id } from "./ids.js";
 
 const botId = z.object({ botId: Id });
+const ReactionKindSchema = z.enum(["fire", "skull", "joy", "eyes"]);
+const ReactionSummarySchema = z.object({
+  kind: ReactionKindSchema,
+  count: z.number().int().nonnegative(),
+  reactedByMe: z.boolean(),
+});
 
 export const appContract = {
   health: oc.output(z.object({ ok: z.literal(true), version: z.string() })),
@@ -162,6 +168,14 @@ export const appContract = {
     answer: oc
       .input(z.object({ botId: Id, runId: Id, answer: z.string().min(1) }))
       .output(z.object({ ok: z.literal(true) })),
+  },
+  reactions: {
+    list: oc
+      .input(z.object({ messageId: Id }))
+      .output(z.array(ReactionSummarySchema)),
+    set: oc
+      .input(z.object({ messageId: Id, kind: ReactionKindSchema, active: z.boolean() }))
+      .output(z.array(ReactionSummarySchema)),
   },
   computer: {
     status: oc.input(botId).output(ComputerStatusSchema),
