@@ -14,6 +14,7 @@ import {
 } from "./composio-catalog-cache.js";
 import { DestinationEmulator } from "./destination-emulator.js";
 import type { McpConnector } from "./mcp-connector.js";
+import { isPeerTool, type PeerConnector } from "./peer-connector.js";
 
 type ComposioSession = Awaited<ReturnType<Composio["create"]>>;
 
@@ -326,16 +327,17 @@ export class CompositeConnector implements ConnectorProvider {
     readonly destination: DestinationEmulator,
     readonly composio?: ComposioConnector,
     readonly mcp?: McpConnector,
+    readonly peer?: PeerConnector,
   ) {}
 
   describe() {
-    return this.composio?.describe() ?? this.mcp?.describe() ?? this.destination.describe();
+    return this.composio?.describe() ?? this.mcp?.describe() ?? this.peer?.describe() ?? this.destination.describe();
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
     const tools = await this.destination.discoverTools(context);
     const names = new Set(tools.map((tool) => tool.name));
-    for (const provider of [this.composio, this.mcp]) {
+    for (const provider of [this.peer, this.composio, this.mcp]) {
       if (!provider) continue;
       try {
         const extra = await provider.discoverTools(context);
@@ -356,6 +358,10 @@ export class CompositeConnector implements ConnectorProvider {
       yield* this.destination.execute(call, context);
       return;
     }
+    if (isPeerTool(call.tool) && this.peer) {
+      yield* this.peer.execute(call, context);
+      return;
+    }
     if (call.tool.startsWith("mcp__") && this.mcp) {
       yield* this.mcp.execute(call, context);
       return;
@@ -368,7 +374,11 @@ export class CompositeConnector implements ConnectorProvider {
   }
 }
 
-export function createConnectorStack(composio: boolean | string | undefined, mcp?: McpConnector) {
+export function createConnectorStack(
+  composio: boolean | string | undefined,
+  mcp?: McpConnector,
+  peer?: PeerConnector,
+) {
   const destination = new DestinationEmulator();
   const composioConnector = composio
     ? new ComposioConnector(typeof composio === "string" ? { apiKey: composio } : undefined)
@@ -377,7 +387,8 @@ export function createConnectorStack(composio: boolean | string | undefined, mcp
     destination,
     composio: composioConnector,
     mcp,
-    connector: new CompositeConnector(destination, composioConnector, mcp),
+    peer,
+    connector: new CompositeConnector(destination, composioConnector, mcp, peer),
   };
 }
 
