@@ -14,7 +14,9 @@ describe("MCP connector", () => {
   it("discovers configured tools with a server namespace and routes execution", async () => {
     const modulePath = "./mcp-connector.js";
     const mod = (await import(modulePath)) as {
-      McpConnector: new (options: Record<string, unknown>) => {
+      McpConnector: new (
+        options: Record<string, unknown>,
+      ) => {
         discoverTools(ctx: AdapterContext): Promise<Array<{ name: string; description: string }>>;
         execute(
           call: { tool: string; args: Record<string, unknown>; executionId: string },
@@ -63,12 +65,16 @@ describe("MCP connector", () => {
       "search",
       { query: "roadmap" },
     );
-    expect(events).toEqual([{ type: "result", data: { content: [{ type: "text", text: "found" }] } }]);
+    expect(events).toEqual([
+      { type: "result", data: { content: [{ type: "text", text: "found" }] } },
+    ]);
   });
 
   it("does not let one MCP server claim another server's tool namespace", async () => {
     const modulePath = "./mcp-connector.js";
-    const mod = (await import(modulePath)) as { McpConnector: new (options: Record<string, unknown>) => any };
+    const mod = (await import(modulePath)) as {
+      McpConnector: new (options: Record<string, unknown>) => any;
+    };
     const connector = new mod.McpConnector({
       loadServers: vi.fn(async () => [
         { id: "alpha", name: "Alpha", transport: "http", url: "https://alpha.example.test" },
