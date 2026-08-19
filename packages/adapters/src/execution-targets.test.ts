@@ -23,9 +23,9 @@ function approvedConfig(config: DockerExecutionTargetConfig): DockerExecutionTar
 }
 
 function startApproved(target: ManagedExecutionTarget) {
-  return (
-    target.start as unknown as (input: { approvalToken: string }) => Promise<void>
-  )({ approvalToken: APPROVAL });
+  return (target.start as unknown as (input: { approvalToken: string }) => Promise<void>)({
+    approvalToken: APPROVAL,
+  });
 }
 
 describe("Docker execution target", () => {
