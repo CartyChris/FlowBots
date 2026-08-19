@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { desktopBridge } from "../lib/desktop";
 import { rpc } from "../lib/rpc";
 
+const DOCKER_HELP_KEY = "flowbots:docker-setup-help";
+
 export function HostComputerPrompt() {
   const desktop = desktopBridge();
   const [open, setOpen] = useState(false);
@@ -35,9 +37,24 @@ export function HostComputerPrompt() {
     }
   }
 
+  async function askBotToBuildDocker() {
+    setPending(true);
+    setError(null);
+    try {
+      // Start on the host so the bot can inspect Docker and guide/install with user approval.
+      await rpc.deployment.update({ computerHost: "this-mac" });
+      window.localStorage.setItem(DOCKER_HELP_KEY, "1");
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start Docker setup help");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="absolute inset-0 z-40 grid place-items-center bg-[#050506]/80 px-6">
-      <div className="w-[440px] rounded-[20px] border border-[#26262A] bg-[#121214] p-6">
+      <div className="w-[460px] rounded-[20px] border border-[#26262A] bg-[#121214] p-6">
         <h2 className="text-[22px] font-medium text-[#F1F1F2]">Where should bots run?</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-[#85858A]">
           Docker is the default: each bot gets an isolated Linux desktop with a browser.
@@ -58,6 +75,14 @@ export function HostComputerPrompt() {
           <button
             type="button"
             disabled={pending}
+            onClick={() => void askBotToBuildDocker()}
+            className="rounded-[11px] border border-[#315B48] bg-[#13251D] px-5 py-2.5 text-[#9AD7B4] disabled:opacity-40"
+          >
+            Have a bot help me set up Docker
+          </button>
+          <button
+            type="button"
+            disabled={pending}
             onClick={() => void choose("this-mac")}
             className="rounded-[11px] border border-[#26262A] px-5 py-2.5 text-[#ECECEE] disabled:opacity-40"
           >
@@ -65,8 +90,9 @@ export function HostComputerPrompt() {
           </button>
         </div>
         <p className="mt-3 text-[12px] leading-relaxed text-[#6C6C70]">
-          {mac ? "This Mac" : "This computer"} runs shell commands with your account, including
-          files in your home folder. Do not turn it on for a shared or public server.
+          The setup-helper option temporarily runs a bot on {hostLabel} so it can inspect Docker and
+          guide the setup. It must ask before installing system software, using administrator
+          privileges, or changing host security settings.
         </p>
       </div>
     </div>
