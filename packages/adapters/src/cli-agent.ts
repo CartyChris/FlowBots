@@ -38,6 +38,17 @@ export const BUILTIN_CLI_AGENTS: CliAgentDefinition[] = [
     outerVerificationRequired: true,
   },
   {
+    id: "gemini-cli",
+    label: "Gemini CLI",
+    executable: "gemini",
+    authOwner: "cli",
+    structuredOutput: true,
+    supportsModel: true,
+    supportsAdditionalDirs: true,
+    writePolicy: "cli-policy",
+    outerVerificationRequired: true,
+  },
+  {
     id: "kimi-code",
     label: "Kimi Code",
     executable: "kimi",
@@ -118,7 +129,7 @@ export function buildCliInvocation(input: CliInvocationInput): CliInvocation {
   if (definition.id === "claude-code") {
     const args = ["-p", prompt, "--output-format", "stream-json", "--permission-mode"];
     // Plan is genuinely read-only. acceptEdits permits workspace editing while leaving
-    // Claude Code's own permission system in place; Rakazo never uses bypassPermissions.
+    // Claude Code's own permission system in place; FlowBots never uses bypassPermissions.
     args.push(input.mode === "analyze" ? "plan" : "acceptEdits");
     if (input.maxTurns && input.maxTurns > 0)
       args.push("--max-turns", String(Math.floor(input.maxTurns)));
@@ -139,9 +150,23 @@ export function buildCliInvocation(input: CliInvocationInput): CliInvocation {
     return { command: definition.executable, args, cwd, outerVerificationRequired: true };
   }
 
+  if (definition.id === "gemini-cli") {
+    const args = [
+      "-p",
+      prompt,
+      "--output-format",
+      "stream-json",
+      "--approval-mode",
+      input.mode === "analyze" ? "plan" : "auto_edit",
+    ];
+    if (input.model) args.push("--model", input.model);
+    for (const dir of input.additionalDirs ?? []) args.push("--include-directories", dir);
+    return { command: definition.executable, args, cwd, outerVerificationRequired: true };
+  }
+
   if (definition.id === "kimi-code") {
     // Kimi print mode owns its permission policy and does not accept --plan alongside -p.
-    // Rakazo therefore treats every Kimi mutation as an untrusted candidate that must pass
+    // FlowBots therefore treats every Kimi mutation as an untrusted candidate that must pass
     // the outer verifier before promotion.
     const args = ["-p", prompt, "--output-format", "stream-json"];
     if (input.model) args.push("--model", input.model);
