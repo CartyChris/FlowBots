@@ -20,6 +20,16 @@ describe("desktop main runtime wiring", () => {
     expect(source).not.toMatch(/loadURL\(WEB_URL\)/);
   });
 
+  test("native file and workspace choosers are authorized in main, not path-driven by renderer", async () => {
+    const source = await readFile(path.join(import.meta.dirname, "main.ts"), "utf8");
+    expect(source).toMatch(/desktop\.dialog\.chooseFiles/);
+    expect(source).toMatch(/desktop\.dialog\.chooseWorkspace/);
+    expect(source).toMatch(/showOpenDialog/);
+    expect(source).toMatch(/assertTrustedTerminalSender\(event\)/);
+    expect(source).toContain('properties: ["openFile", "multiSelections"]');
+    expect(source).toContain('properties: ["openDirectory"]');
+  });
+
   test("host terminal is owned by Electron main and every IPC mutation is re-authorized", async () => {
     const source = await readFile(path.join(import.meta.dirname, "main.ts"), "utf8");
     expect(source).toMatch(/from ["']node-pty["']/);
