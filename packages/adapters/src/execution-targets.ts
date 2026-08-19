@@ -106,7 +106,10 @@ async function probeDocker(
   }
 }
 
-function assertStartApproved(config: DockerExecutionTargetConfig, suppliedToken: string | undefined) {
+function assertStartApproved(
+  config: DockerExecutionTargetConfig,
+  suppliedToken: string | undefined,
+) {
   const expectedToken = config.approvalToken?.trim();
   const supplied = suppliedToken?.trim();
   if (!expectedToken || supplied !== expectedToken) {
