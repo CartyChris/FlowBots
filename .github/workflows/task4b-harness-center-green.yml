@@ -1,0 +1,282 @@
+name: task4b-harness-center-green
+on:
+  push:
+    branches: [feature/flowbots-local-social-vnext]
+permissions:
+  contents: write
+concurrency:
+  group: task4b-harness-center-green
+  cancel-in-progress: false
+jobs:
+  apply-and-verify:
+    if: ${{ !contains(github.event.head_commit.message, '[task4b-green]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/flowbots-local-social-vnext
+          fetch-depth: 2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply exact Task 4B edits
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact anchor, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Explicitly gate host-process probing. Hosted/cloud deployments default to false;
+          # Lite local runtime and the E2E harness opt in deliberately.
+          replace_once(
+              "apps/api/src/env.ts",
+              '  ollamaBaseUrl: string;\n  e2bApiKey: string | undefined;',
+              '  ollamaBaseUrl: string;\n  hostHarnessesEnabled: boolean;\n  e2bApiKey: string | undefined;',
+          )
+          replace_once(
+              "apps/api/src/env.ts",
+              '    ollamaBaseUrl: overrides.ollamaBaseUrl ?? source.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",\n    e2bApiKey:',
+              '    ollamaBaseUrl: overrides.ollamaBaseUrl ?? source.OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",\n    hostHarnessesEnabled:\n      overrides.hostHarnessesEnabled ?? source.FLOWBOTS_HOST_HARNESSES === "1",\n    e2bApiKey:',
+          )
+          replace_once(
+              "apps/api/src/env.test.ts",
+              '  ollamaBaseUrl: "http://127.0.0.1:11434",\n  e2bApiKey:',
+              '  ollamaBaseUrl: "http://127.0.0.1:11434",\n  hostHarnessesEnabled: true,\n  e2bApiKey:',
+          )
+          replace_once(
+              "apps/api/src/env.test.ts",
+              '    expect(env.wakeupDriver).toBe("graphile");\n    expect(env.mnemosyneMode).toBe("auto");',
+              '    expect(env.wakeupDriver).toBe("graphile");\n    expect(env.hostHarnessesEnabled).toBe(false);\n    expect(env.mnemosyneMode).toBe("auto");',
+          )
+          replace_once(
+              "apps/api/src/env.test.ts",
+              '      WAKEUP_DRIVER: "memory",\n    });\n    expect(env.agentRuntime)',
+              '      WAKEUP_DRIVER: "memory",\n      FLOWBOTS_HOST_HARNESSES: "1",\n    });\n    expect(env.agentRuntime)',
+          )
+          replace_once(
+              "apps/api/src/env.test.ts",
+              '    expect(env.wakeupDriver).toBe("memory");\n  });',
+              '    expect(env.wakeupDriver).toBe("memory");\n    expect(env.hostHarnessesEnabled).toBe(true);\n  });',
+          )
+          replace_once(
+              "apps/api/src/app.ts",
+              '      ollamaBaseUrl: env.ollamaBaseUrl,\n      webOrigin:',
+              '      ollamaBaseUrl: env.ollamaBaseUrl,\n      hostHarnessesEnabled: env.hostHarnessesEnabled,\n      webOrigin:',
+          )
+          replace_once(
+              "apps/local-runtime/src/index.ts",
+              '      openRouterKey: options.openRouterKey,\n      e2bApiKey:',
+              '      openRouterKey: options.openRouterKey,\n      hostHarnessesEnabled: true,\n      e2bApiKey:',
+          )
+          replace_once(
+              "packages/testkit/src/cli/harness.ts",
+              '    process.env.AGENT_RUNTIME = "scripted";\n    process.env.BETTER_AUTH_SECRET',
+              '    process.env.AGENT_RUNTIME = "scripted";\n    process.env.FLOWBOTS_HOST_HARNESSES = "1";\n    process.env.BETTER_AUTH_SECRET',
+          )
+
+          # Contract: one shared RPC surface for built-in probes and a shell:false custom probe.
+          contract_block = '''  harnesses: {
+    list: oc.output(
+      z.array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          kind: z.enum(["cli", "rpc", "acp", "agent-server", "api", "mcp"]),
+          interactions: z.array(z.enum(["chat", "headless", "rpc", "acp", "http", "mcp"])),
+          workspacePolicies: z.array(
+            z.enum(["read-only", "workspace-write", "full-host", "container"]),
+          ),
+          scheduleable: z.boolean(),
+          resident: z.boolean(),
+          outerVerificationRequired: z.boolean(),
+          available: z.boolean(),
+          version: z.string().optional(),
+          detail: z.string().optional(),
+        }),
+      ),
+    ),
+    probeCustom: oc
+      .input(
+        z.object({
+          executable: z.string().trim().min(1).max(512),
+          args: z.array(z.string().max(2048)).max(64).default([]),
+        }),
+      )
+      .output(
+        z.object({
+          available: z.boolean(),
+          version: z.string().optional(),
+          detail: z.string().optional(),
+        }),
+      ),
+  },
+'''
+          replace_once(
+              "packages/contracts/src/rpc.ts",
+              '  bots: {\n',
+              contract_block + '  bots: {\n',
+          )
+
+          # API: reuse HarnessRegistry + runCliProcess. No shell and no cloud-by-default host execution.
+          replace_once(
+              "apps/api/src/router.ts",
+              '  type EncryptedSecretStore,\n  listPiCatalog,',
+              '  type EncryptedSecretStore,\n  HarnessRegistry,\n  cliHarnessDefinitions,\n  listPiCatalog,',
+          )
+          replace_once(
+              "apps/api/src/router.ts",
+              '  resolveModelApiKey,\n  restoreComputerWorkspace,',
+              '  resolveModelApiKey,\n  restoreComputerWorkspace,\n  runCliProcess,',
+          )
+          replace_once(
+              "apps/api/src/router.ts",
+              '    ollamaBaseUrl: string;\n    webOrigin:',
+              '    ollamaBaseUrl: string;\n    hostHarnessesEnabled: boolean;\n    webOrigin:',
+          )
+          router_block = '''    harnesses: {
+      list: authed.harnesses.list.handler(async ({ context }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        const registry = new HarnessRegistry(cliHarnessDefinitions());
+        const definitions = registry.list();
+        const probes = new Map((await registry.probeAll()).map((probe) => [probe.id, probe]));
+        return definitions.map((definition) => {
+          const probe = probes.get(definition.id) ?? { available: false as const };
+          return {
+            id: definition.id,
+            label: definition.label,
+            kind: definition.kind,
+            interactions: definition.interactions,
+            workspacePolicies: definition.workspacePolicies,
+            scheduleable: definition.scheduleable,
+            resident: definition.resident,
+            outerVerificationRequired: definition.outerVerificationRequired,
+            available: probe.available,
+            ...(probe.version ? { version: probe.version } : {}),
+            ...(probe.detail ? { detail: probe.detail } : {}),
+          };
+        });
+      }),
+      probeCustom: authed.harnesses.probeCustom.handler(async ({ context, input }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        const result = await runCliProcess({
+          command: input.executable.trim(),
+          args: input.args,
+          cwd: deps.dataDir,
+          timeoutMs: 5_000,
+          maxOutputBytes: 64 * 1024,
+        });
+        const version = firstNonEmptyLine(result.stdout) ?? firstNonEmptyLine(result.stderr);
+        const available = result.code === 0 && !result.timedOut && !result.aborted;
+        return {
+          available,
+          ...(available && version ? { version } : {}),
+          ...(!available
+            ? {
+                detail:
+                  result.stderr.trim() ||
+                  result.stdout.trim() ||
+                  (result.timedOut ? "version probe timed out" : "CLI is unavailable"),
+              }
+            : {}),
+        };
+      }),
+    },
+'''
+          replace_once(
+              "apps/api/src/router.ts",
+              '    bots: {\n',
+              router_block + '    bots: {\n',
+          )
+          # Helpers at module scope keep permission checks centralized.
+          helper_block = '''
+function assertHostHarnessAccess(deps: RouterDeps, actor: Actor): void {
+  if (!deps.env.hostHarnessesEnabled || !actor.isDeploymentOwner) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "Host CLI harnesses are only available in an explicitly enabled local workspace.",
+    });
+  }
+}
+
+function firstNonEmptyLine(value: string): string | undefined {
+  return value
+    .split(/\\r?\\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+}
+'''
+          replace_once(
+              "apps/api/src/router.ts",
+              '\nasync function persistModelCredential(',
+              helper_block + '\nasync function persistModelCredential(',
+          )
+
+          # Product surface: real sidebar button + overlay.
+          replace_once(
+              "apps/web/src/pages/Shell.tsx",
+              'import { HostComputerPrompt } from "./HostComputerPrompt";\nimport { PluginsOverlay }',
+              'import { HarnessesOverlay } from "./HarnessesOverlay";\nimport { HostComputerPrompt } from "./HostComputerPrompt";\nimport { PluginsOverlay }',
+          )
+          replace_once(
+              "apps/web/src/pages/Shell.tsx",
+              '  const [pluginsOpen, setPluginsOpen] = useState(false);\n  const [menuOpen',
+              '  const [pluginsOpen, setPluginsOpen] = useState(false);\n  const [harnessesOpen, setHarnessesOpen] = useState(false);\n  const [menuOpen',
+          )
+          plugins_end = '''          <span className="text-[14.5px] text-[#C9C9CE]">Plugins</span>
+        </button>
+        <div className="relative">'''
+          harness_button = '''          <span className="text-[14.5px] text-[#C9C9CE]">Plugins</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setHarnessesOpen(true)}
+          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-[#131315]"
+        >
+          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#17171A] text-[14px] text-[#9A9AA0]">
+            ⌘
+          </span>
+          <span className="text-[14.5px] text-[#C9C9CE]">Harnesses</span>
+        </button>
+        <div className="relative">'''
+          replace_once("apps/web/src/pages/Shell.tsx", plugins_end, harness_button)
+          replace_once(
+              "apps/web/src/pages/Shell.tsx",
+              '      {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}\n',
+              '      {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}\n      {harnessesOpen ? (\n        <HarnessesOverlay onClose={() => setHarnessesOpen(false)} />\n      ) : null}\n',
+          )
+
+          # Remove this one-shot workflow from the product commit.
+          Path(".github/workflows/task4b-harness-center-green.yml").unlink()
+          PY
+      - name: Format exact touched files
+        run: >-
+          pnpm exec biome check --write
+          apps/api/src/env.ts apps/api/src/env.test.ts apps/api/src/app.ts apps/api/src/router.ts
+          apps/local-runtime/src/index.ts packages/testkit/src/cli/harness.ts
+          packages/contracts/src/rpc.ts apps/web/src/pages/Shell.tsx apps/web/src/pages/HarnessesOverlay.tsx
+      - name: Typecheck and focused tests
+        run: |
+          pnpm db:generate
+          pnpm check
+          pnpm exec vitest run apps/api/src/env.test.ts packages/adapters/src/cli-agent.test.ts packages/adapters/src/cli-agent-invocation.test.ts
+          git diff --check
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Commit verified GREEN implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(local): wire secure Harness Center [task4b-green]"
+          git push origin HEAD:feature/flowbots-local-social-vnext
