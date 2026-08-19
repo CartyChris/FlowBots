@@ -2,8 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 import { probeRuntimeOrigin } from "./runtime-health.js";
 
 describe("desktop runtime health", () => {
-  test("Lite requires Rakazo health and verifies the zero-setup topology", async () => {
-    const fetcher = vi.fn(async (url: string) => ({
+  test("Lite requires FlowBots health and verifies the zero-setup topology", async () => {
+    const fetcher = vi.fn(async (_url: string) => ({
       ok: true,
       status: 200,
       json: async () => ({ ok: true, jobs: "memory", sandbox: "desktop" }),
