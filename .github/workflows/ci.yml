@@ -144,6 +144,52 @@ jobs:
           Path('/tmp/task4b-green.py').write_text(body + "\n")
           PY
           python3 /tmp/task4b-green.py
+          python3 <<'PY'
+          from pathlib import Path
+
+          router = Path('apps/api/src/router.ts')
+          text = router.read_text()
+          old = '''        const probe = probes.get(definition.id) ?? { available: false as const };
+          return {
+            id: definition.id,
+            label: definition.label,
+            kind: definition.kind,
+            interactions: definition.interactions,
+            workspacePolicies: definition.workspacePolicies,
+            scheduleable: definition.scheduleable,
+            resident: definition.resident,
+            outerVerificationRequired: definition.outerVerificationRequired,
+            available: probe.available,
+            ...(probe.version ? { version: probe.version } : {}),
+            ...(probe.detail ? { detail: probe.detail } : {}),
+          };'''
+          new = '''        const probe = probes.get(definition.id);
+          return {
+            id: definition.id,
+            label: definition.label,
+            kind: definition.kind,
+            interactions: definition.interactions,
+            workspacePolicies: definition.workspacePolicies,
+            scheduleable: definition.scheduleable,
+            resident: definition.resident,
+            outerVerificationRequired: definition.outerVerificationRequired,
+            available: probe?.available ?? false,
+            ...(probe?.version ? { version: probe.version } : {}),
+            ...(probe?.detail ? { detail: probe.detail } : {}),
+          };'''
+          if text.count(old) != 1:
+              raise SystemExit('router probe mapper anchor mismatch')
+          router.write_text(text.replace(old, new, 1))
+
+          runtime = Path('apps/local-runtime/src/index.ts')
+          text = runtime.read_text()
+          old = '  if (!server || !server.listening) return Promise.resolve();'
+          new = '  if (!server?.listening) return Promise.resolve();'
+          if text.count(old) != 1:
+              raise SystemExit('local runtime optional-chain anchor mismatch')
+          runtime.write_text(text.replace(old, new, 1))
+          Path('docs/superpowers/.task4b-trigger').unlink(missing_ok=True)
+          PY
       - name: Format and verify migrated tree
         run: |
           pnpm exec biome check --write apps/api/src/env.ts apps/api/src/env.test.ts apps/api/src/app.ts apps/api/src/router.ts apps/local-runtime/src/index.ts packages/testkit/src/cli/harness.ts packages/contracts/src/rpc.ts apps/web/src/pages/Shell.tsx apps/web/src/pages/HarnessesOverlay.tsx
