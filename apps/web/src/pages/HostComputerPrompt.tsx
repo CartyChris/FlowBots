@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { desktopBridge } from "../lib/desktop";
+import { DOCKER_SETUP_STORAGE_KEY, dockerSetupPrompt } from "../lib/docker-setup";
 import { rpc } from "../lib/rpc";
-
-const DOCKER_HELP_KEY = "flowbots:docker-setup-help";
 
 export function HostComputerPrompt() {
   const desktop = desktopBridge();
+  const { botId } = useParams();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,12 +39,19 @@ export function HostComputerPrompt() {
   }
 
   async function askBotToBuildDocker() {
+    if (!botId) {
+      setError("Open a bot first, then ask it to help set up Docker.");
+      return;
+    }
     setPending(true);
     setError(null);
+    window.localStorage.setItem(DOCKER_SETUP_STORAGE_KEY, "1");
     try {
-      // Start on the host so the bot can inspect Docker and guide/install with user approval.
+      // Run this task on the host so the bot can inspect Docker. The task itself requires
+      // explicit user approval before privileged or security-sensitive changes.
       await rpc.deployment.update({ computerHost: "this-mac" });
-      window.localStorage.setItem(DOCKER_HELP_KEY, "1");
+      await rpc.threads.send({ botId, text: dockerSetupPrompt() });
+      window.localStorage.removeItem(DOCKER_SETUP_STORAGE_KEY);
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start Docker setup help");
