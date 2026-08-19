@@ -3,41 +3,100 @@
 @source "./**/*.{ts,tsx}";
 
 @keyframes rkBotFloat {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  45% { transform: translateY(-1.6px) rotate(-1deg); }
-  70% { transform: translateY(-0.5px) rotate(0.8deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  45% {
+    transform: translateY(-1.6px) rotate(-1deg);
+  }
+  70% {
+    transform: translateY(-0.5px) rotate(0.8deg);
+  }
 }
 
 @keyframes rkBotLook {
-  0%, 12%, 100% { transform: translate(0, 0); }
-  20%, 34% { transform: translate(2.4px, -0.8px); }
-  42%, 58% { transform: translate(-2px, 1px); }
-  67%, 79% { transform: translate(1px, 1.6px); }
-  86%, 94% { transform: translate(-1px, -1px); }
+  0%,
+  12%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20%,
+  34% {
+    transform: translate(2.4px, -0.8px);
+  }
+  42%,
+  58% {
+    transform: translate(-2px, 1px);
+  }
+  67%,
+  79% {
+    transform: translate(1px, 1.6px);
+  }
+  86%,
+  94% {
+    transform: translate(-1px, -1px);
+  }
 }
 
 @keyframes rkBotBlink {
-  0%, 43%, 47%, 78%, 82%, 100% { transform: scaleY(1); }
-  45%, 80% { transform: scaleY(0.08); }
+  0%,
+  43%,
+  47%,
+  78%,
+  82%,
+  100% {
+    transform: scaleY(1);
+  }
+  45%,
+  80% {
+    transform: scaleY(0.08);
+  }
 }
 
 @keyframes rkBotBusy {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  20% { transform: scale(1.035) rotate(-1.5deg); }
-  40% { transform: scale(.99) rotate(1.2deg); }
-  60% { transform: scale(1.045) rotate(.4deg); }
-  80% { transform: scale(1.01) rotate(-.6deg); }
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  20% {
+    transform: scale(1.035) rotate(-1.5deg);
+  }
+  40% {
+    transform: scale(0.99) rotate(1.2deg);
+  }
+  60% {
+    transform: scale(1.045) rotate(0.4deg);
+  }
+  80% {
+    transform: scale(1.01) rotate(-0.6deg);
+  }
 }
 
 @keyframes rkBotSpark {
-  0%, 100% { opacity: .2; transform: scale(.65); }
-  35% { opacity: 1; transform: scale(1.15); }
-  60% { opacity: .65; transform: scale(.9); }
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.65);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  60% {
+    opacity: 0.65;
+    transform: scale(0.9);
+  }
 }
 
 @keyframes rkBotPresence {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(121,227,156,.4); }
-  50% { box-shadow: 0 0 0 4px rgba(121,227,156,0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(121, 227, 156, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(121, 227, 156, 0);
+  }
 }
 
 .rk-bot-avatar > svg {
@@ -47,7 +106,7 @@
 }
 
 .rk-bot-avatar .rk-bot-gaze {
-  animation: rkBotLook 6.7s cubic-bezier(.3,.7,.25,1) infinite;
+  animation: rkBotLook 6.7s cubic-bezier(0.3, 0.7, 0.25, 1) infinite;
   transform-origin: 50px 47px;
   will-change: transform;
 }
@@ -59,7 +118,7 @@
 }
 
 .rk-bot-avatar.rk-bot-busy > svg {
-  animation: rkBotBusy .72s ease-in-out infinite;
+  animation: rkBotBusy 0.72s ease-in-out infinite;
 }
 
 .rk-bot-avatar[data-bot-state="thinking"] .rk-bot-gaze {
@@ -67,11 +126,11 @@
 }
 
 .rk-bot-avatar[data-bot-state="working"] .rk-bot-gaze {
-  animation-duration: .95s;
+  animation-duration: 0.95s;
 }
 
 .rk-bot-avatar[data-bot-state="error"] .rk-bot-shell {
-  filter: saturate(.8) brightness(.88);
+  filter: saturate(0.8) brightness(0.88);
 }
 
 .rk-bot-avatar[data-bot-variant="blob"] .rk-bot-shell {
@@ -79,7 +138,7 @@
 }
 
 .rk-bot-avatar .rk-bot-work-sparks {
-  animation: rkBotSpark .7s ease-in-out infinite alternate;
+  animation: rkBotSpark 0.7s ease-in-out infinite alternate;
   transform-origin: 85px 23px;
 }
 
@@ -93,7 +152,7 @@
   .rk-bot-avatar .rk-bot-eyes,
   .rk-bot-avatar .rk-bot-work-sparks,
   .rk-bot-avatar .rk-bot-presence {
-    animation: none !important;
-    transform: none !important;
+    animation: none;
+    transform: none;
   }
 }
