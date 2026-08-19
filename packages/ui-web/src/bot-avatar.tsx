@@ -3,12 +3,20 @@ import { cn } from "./lib/utils.js";
 export type BotAvatarState = "idle" | "thinking" | "working" | "happy" | "error" | "surprised";
 export type BotAvatarVariant = "orb" | "blob" | "cat" | "robot" | "spark";
 
+const BOT_AVATAR_VARIANTS: BotAvatarVariant[] = ["orb", "blob", "cat", "robot", "spark"];
+
+export function avatarVariantForColor(color: string): BotAvatarVariant {
+  let hash = 0;
+  for (const char of color) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return BOT_AVATAR_VARIANTS[hash % BOT_AVATAR_VARIANTS.length] ?? "orb";
+}
+
 export function BotAvatar({
   color,
   size = 38,
   className,
   state = "idle",
-  variant = "orb",
+  variant,
   label = "Bot",
 }: {
   color: string;
@@ -18,7 +26,8 @@ export function BotAvatar({
   variant?: BotAvatarVariant;
   label?: string;
 }) {
-  const shape = avatarShape(variant);
+  const resolvedVariant = variant ?? avatarVariantForColor(color);
+  const shape = avatarShape(resolvedVariant);
   const eyeY = state === "happy" ? 48 : state === "surprised" ? 44 : 46;
   const eyeScaleY = state === "happy" ? 0.55 : state === "error" ? 0.72 : 1;
   const pupil = state === "surprised" ? 4.4 : 3.4;
@@ -26,9 +35,13 @@ export function BotAvatar({
 
   return (
     <span
-      className={cn("rk-bot-avatar relative inline-grid shrink-0 place-items-center", expressionClass, className)}
+      className={cn(
+        "rk-bot-avatar relative inline-grid shrink-0 place-items-center",
+        expressionClass,
+        className,
+      )}
       data-bot-state={state}
-      data-bot-variant={variant}
+      data-bot-variant={resolvedVariant}
       role="img"
       aria-label={`${label} — ${state}`}
       title={`${label} · ${state}`}
@@ -41,13 +54,13 @@ export function BotAvatar({
         aria-hidden="true"
         className="overflow-visible"
       >
-        {variant === "cat" ? (
+        {resolvedVariant === "cat" ? (
           <g fill={color} className="rk-bot-ears">
             <path d="M18 31 22 7 40 22Z" />
             <path d="m82 31-4-24-18 15Z" />
           </g>
         ) : null}
-        {variant === "spark" ? (
+        {resolvedVariant === "spark" ? (
           <path
             d="M50 2 61 31 92 28 69 50 91 73 61 69 50 98 39 69 9 73 31 50 8 28 39 31Z"
             fill={color}
@@ -62,7 +75,7 @@ export function BotAvatar({
           y="30"
           width="62"
           height="38"
-          rx={variant === "robot" ? 10 : 19}
+          rx={resolvedVariant === "robot" ? 10 : 19}
           fill="rgba(9,9,12,.78)"
           className="rk-bot-visor"
         />
@@ -126,8 +139,10 @@ export function BotAvatar({
 }
 
 function avatarShape(variant: BotAvatarVariant): string {
-  if (variant === "blob") return "M51 5C72 5 91 21 93 43c2 22-7 46-30 51-22 5-47-1-55-23C0 50 6 24 26 12 34 7 42 5 51 5Z";
-  if (variant === "robot") return "M25 9h50c10 0 18 8 18 18v48c0 10-8 18-18 18H25C15 93 7 85 7 75V27C7 17 15 9 25 9Z";
+  if (variant === "blob")
+    return "M51 5C72 5 91 21 93 43c2 22-7 46-30 51-22 5-47-1-55-23C0 50 6 24 26 12 34 7 42 5 51 5Z";
+  if (variant === "robot")
+    return "M25 9h50c10 0 18 8 18 18v48c0 10-8 18-18 18H25C15 93 7 85 7 75V27C7 17 15 9 25 9Z";
   return "M50 5a45 45 0 1 1 0 90 45 45 0 0 1 0-90Z";
 }
 
