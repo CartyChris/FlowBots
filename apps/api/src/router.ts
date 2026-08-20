@@ -124,7 +124,12 @@ export function createRouter(deps: RouterDeps) {
       const actor = context.actor;
       const user = await deps.prisma.user.findUniqueOrThrow({ where: { id: actor.userId } });
       const cred = await deps.prisma.userModelCredential.findFirst({
-        where: { userId: actor.userId, isDefault: true },
+        where: {
+          userId: actor.userId,
+          workspaceId: actor.workspaceId,
+          isDefault: true,
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       });
       const settings = await deps.prisma.deploymentSettings.findUnique({
         where: { id: "default" },
@@ -267,9 +272,31 @@ export function createRouter(deps: RouterDeps) {
         return { status: "connected" as const, credential };
       }),
       setDefault: authed.models.setDefault.handler(async ({ context, input }) => {
-        await deps.prisma.userModelCredential.updateMany({
-          where: { userId: context.actor.userId, provider: input.provider },
-          data: { defaultModel: input.modelId, isDefault: true },
+        const selected = await deps.prisma.userModelCredential.findFirst({
+          where: {
+            userId: context.actor.userId,
+            workspaceId: context.actor.workspaceId,
+            provider: input.provider,
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        });
+        if (!selected) {
+          throw new ORPCError("NOT_FOUND", {
+            message: `No ${input.provider} credential is connected in this workspace.`,
+          });
+        }
+        await deps.prisma.$transaction(async (tx) => {
+          await tx.userModelCredential.updateMany({
+            where: {
+              userId: context.actor.userId,
+              workspaceId: context.actor.workspaceId,
+            },
+            data: { isDefault: false },
+          });
+          await tx.userModelCredential.update({
+            where: { id: selected.id },
+            data: { defaultModel: input.modelId, isDefault: true },
+          });
         });
         return { ok: true as const };
       }),
@@ -1406,20 +1433,22 @@ async function persistModelCredential(
       ciphertext: stored.ciphertext,
     },
   });
-  await deps.prisma.userModelCredential.updateMany({
-    where: { userId: actor.userId },
-    data: { isDefault: false },
-  });
-  const cred = await deps.prisma.userModelCredential.create({
-    data: {
-      userId: actor.userId,
-      workspaceId: actor.workspaceId,
-      provider: input.provider,
-      label: input.label ?? input.provider,
-      secretId: secret.id,
-      isDefault: true,
-      defaultModel: input.modelId ?? deps.env.defaultModel,
-    },
+  const cred = await deps.prisma.$transaction(async (tx) => {
+    await tx.userModelCredential.updateMany({
+      where: { userId: actor.userId, workspaceId: actor.workspaceId },
+      data: { isDefault: false },
+    });
+    return tx.userModelCredential.create({
+      data: {
+        userId: actor.userId,
+        workspaceId: actor.workspaceId,
+        provider: input.provider,
+        label: input.label ?? input.provider,
+        secretId: secret.id,
+        isDefault: true,
+        defaultModel: input.modelId ?? deps.env.defaultModel,
+      },
+    });
   });
   return {
     id: cred.id,
