@@ -79,9 +79,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
 
   const providerModels = catalog.filter((entry) => entry.provider === provider);
   const selected = providerModels.find((entry) => entry.id === modelId) ?? providerModels[0];
-  const providerCredential = credentials.find(
-    (row) => row.provider === provider && row.hasKey,
-  );
+  const providerCredential = credentials.find((row) => row.provider === provider && row.hasKey);
   const providerName =
     selected?.providerName ?? providers.find((row) => row.id === provider)?.name ?? provider;
 
