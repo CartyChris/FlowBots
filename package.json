@@ -1,5 +1,6 @@
 {
   "name": "rakazo",
+  "description": "FlowBots — a customized local-first fork of Rakazo with no account sign-up required in Lite desktop mode.",
   "private": true,
   "type": "module",
   "version": "0.1.0",
