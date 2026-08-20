@@ -48,8 +48,16 @@ replace_once(
 )
 replace_once(
     'import { HostComputerPrompt } from "./HostComputerPrompt";\n',
-    'import { HostComputerPrompt } from "./HostComputerPrompt";\nimport { MessageReactions } from "./MessageReactions";\n',
-    "reaction import",
+    'import { HostComputerPrompt } from "./HostComputerPrompt";\nimport { McpOverlay } from "./McpOverlay";\nimport { MessageReactions } from "./MessageReactions";\n',
+    "mcp/reaction imports",
+)
+replace_once(
+    '''  const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [harnessesOpen, setHarnessesOpen] = useState(false);''',
+    '''  const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [mcpOpen, setMcpOpen] = useState(false);
+  const [harnessesOpen, setHarnessesOpen] = useState(false);''',
+    "mcp overlay state",
 )
 
 replace_once(
@@ -110,6 +118,7 @@ replace_once(
               onWebFiles={(files) => void addWebFilesToDraft(files)}
               onComputer={() => setPanel("computer")}
               onConnections={() => setPluginsOpen(true)}
+              onMcp={() => setMcpOpen(true)}
               onHarnesses={() => setHarnessesOpen(true)}
               onTeammate={() =>
                 setDraft((current) =>
@@ -119,6 +128,15 @@ replace_once(
             />
             <input''',
     "composer actions",
+)
+
+replace_once(
+    '''      {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}
+      {harnessesOpen ? <HarnessesOverlay onClose={() => setHarnessesOpen(false)} /> : null}''',
+    '''      {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}
+      {mcpOpen ? <McpOverlay onClose={() => setMcpOpen(false)} /> : null}
+      {harnessesOpen ? <HarnessesOverlay onClose={() => setHarnessesOpen(false)} /> : null}''',
+    "mcp overlay render",
 )
 
 replace_once(
@@ -273,7 +291,7 @@ g = golden.read_text()
 anchor = 'test("sign-in, spawn, and stop work in the shell", async ({ page }) => {'
 if g.count(anchor) != 1:
     raise SystemExit(f"golden social anchor count={g.count(anchor)}")
-social = r'''test("roles, faces, composer actions, and reactions work in the shell", async ({ page }) => {
+social = r'''test("roles, faces, composer actions, MCP, and reactions work in the shell", async ({ page }) => {
   const stamp = Date.now();
   await signup(page, `social-${stamp}@rakazo.test`, "password12", "Social");
   await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
@@ -296,6 +314,11 @@ social = r'''test("roles, faces, composer actions, and reactions work in the she
   const composer = page.getByPlaceholder(/Message/);
   await page.getByRole("button", { name: "Add" }).click();
   await expect(page.getByRole("menu", { name: "Add context" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "MCP servers" }).click();
+  await expect(page.getByRole("heading", { name: /MCP/i })).toBeVisible();
+  await page.getByRole("button", { name: /Close MCP/i }).click();
+
+  await page.getByRole("button", { name: "Add" }).click();
   await page.getByRole("menuitem", { name: "Ask a teammate" }).click();
   await expect(composer).toHaveValue(/Ask a teammate bot to/);
 
