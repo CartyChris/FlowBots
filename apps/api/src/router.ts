@@ -235,7 +235,7 @@ export function createRouter(deps: RouterDeps) {
           id: row.id,
           provider: row.provider,
           label: row.label,
-          hasKey: true,
+          hasKey: Boolean(row.secretId),
           isDefault: row.isDefault,
         }));
       }),
