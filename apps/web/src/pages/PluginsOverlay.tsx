@@ -14,8 +14,11 @@ type ComposioStatus = {
   source: "local" | "environment" | "none";
 };
 
+type CatalogView = "all" | "connected";
+
 export function PluginsOverlay({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<CatalogView>("all");
   const [catalog, setCatalog] = useState<ConnectionCatalogItem[]>(cachedCatalog);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,13 +50,14 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
   }, []);
 
   const visible = useMemo(() => {
+    const scoped = view === "connected" ? catalog.filter((item) => item.connected) : catalog;
     const needle = query.trim().toLowerCase();
-    if (!needle) return catalog;
-    return catalog.filter(
+    if (!needle) return scoped;
+    return scoped.filter(
       (item) =>
         item.name.toLowerCase().includes(needle) || item.slug.toLowerCase().includes(needle),
     );
-  }, [catalog, query]);
+  }, [catalog, query, view]);
 
   function setItemConnected(slug: string, connected: boolean) {
     cachedCatalog = markConnected(cachedCatalog, slug, connected);
@@ -201,6 +205,22 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="px-8 pt-4">
+          <div role="tablist" aria-label="Connection catalog view" className="mb-3 flex gap-2">
+            {(["all", "connected"] as CatalogView[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="tab"
+                aria-selected={view === option}
+                onClick={() => setView(option)}
+                className={`rounded-full px-3.5 py-1.5 text-[13px] ${
+                  view === option ? "bg-[#ECECEE] text-[#17171A]" : "bg-[#202023] text-[#A8A8AD]"
+                }`}
+              >
+                {option === "all" ? "All" : "Connected"}
+              </button>
+            ))}
+          </div>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -220,6 +240,11 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
           {status.configured && !loading && catalog.length === 0 ? (
             <p className="text-[#6C6C70]">
               Connected, but the app catalog is currently unavailable.
+            </p>
+          ) : null}
+          {status.configured && !loading && catalog.length > 0 && visible.length === 0 ? (
+            <p className="text-[#6C6C70]">
+              {view === "connected" ? "No connected apps yet." : "No apps match this search."}
             </p>
           ) : null}
           {visible.map((item) => (
