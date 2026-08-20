@@ -53,11 +53,18 @@ describe("credentialless local model defaults", () => {
     }
 
     const userModelCredential = {
-      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
-        rows.find((row) => matches(row, where)) ?? null,
+      findFirst: vi.fn(
+        async ({ where }: { where: Record<string, unknown> }) =>
+          rows.find((row) => matches(row, where)) ?? null,
       ),
       updateMany: vi.fn(
-        async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        async ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }) => {
           let count = 0;
           for (const row of rows) {
             if (!matches(row, where)) continue;
