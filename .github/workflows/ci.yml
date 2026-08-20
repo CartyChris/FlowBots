@@ -62,62 +62,20 @@ jobs:
         run: xvfb-run --auto-servernum pnpm --filter @rakazo/desktop exec playwright test --config e2e/playwright.config.ts
 
   test:
-    name: Task 13 Fable judge exact-head fix
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 7 && github.event.pull_request.head.ref == 'feature/flowbots-local-social-vnext' }}
-    permissions:
-      contents: write
+    name: Unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Refuse stale branch state
-        run: |
-          START_SHA="${{ github.event.pull_request.head.sha }}"
-          git fetch origin feature/flowbots-local-social-vnext
-          test "$(git rev-parse HEAD)" = "$START_SHA"
-          test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
-      - name: Apply staged Fable judge fixes
-        run: python3 scripts/migrations/apply-task13-judge-v2.py
-      - name: Format and verify transformed tree
-        run: |
-          pnpm exec biome check --write packages/db/prisma/schema.prisma apps/api/src/router.ts apps/api/src/local-model-default.test.ts packages/adapters/src/executor.ts packages/adapters/src/reaction-store.ts packages/adapters/src/peer-connector.ts packages/adapters/src/peer-reaction.test.ts apps/web/src/pages/ModelSettingsOverlay.tsx
-          pnpm db:generate
-          pnpm check
-          pnpm test
-          pnpm test:integration
-          pnpm build
-          git diff --check
+      - run: pnpm db:generate
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-          BETTER_AUTH_SECRET: ci-build-auth-secret-at-least-32-characters
-          ENCRYPTION_KEY: ci-build-encryption-key-at-least-32-characters
-      - name: Restore canonical CI and remove migration scripts
-        run: |
-          git fetch origin main --depth=1
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm scripts/migrations/apply-task13-judge.py scripts/migrations/apply-task13-judge-v2.py
-      - name: Commit only on unchanged PR head
-        run: |
-          START_SHA="${{ github.event.pull_request.head.sha }}"
-          git fetch origin feature/flowbots-local-social-vnext
-          test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "fix: close Fable judge local-model and reaction gaps"
-          git fetch origin feature/flowbots-local-social-vnext
-          test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
-          git push origin HEAD:feature/flowbots-local-social-vnext
+      - run: pnpm test
 
   test-integration:
     name: Postgres journeys

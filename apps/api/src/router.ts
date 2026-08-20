@@ -193,7 +193,7 @@ export function createRouter(deps: RouterDeps) {
           orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
         });
         let xaiApiKey: string | undefined;
-        if (xaiCredential) {
+        if (xaiCredential?.secretId) {
           const secret = await deps.prisma.secret.findFirst({
             where: {
               id: xaiCredential.secretId,
@@ -280,7 +280,7 @@ export function createRouter(deps: RouterDeps) {
           },
           orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         });
-        if (!selected) {
+        if (!selected && input.provider !== "ollama") {
           throw new ORPCError("NOT_FOUND", {
             message: `No ${input.provider} credential is connected in this workspace.`,
           });
@@ -293,10 +293,24 @@ export function createRouter(deps: RouterDeps) {
             },
             data: { isDefault: false },
           });
-          await tx.userModelCredential.update({
-            where: { id: selected.id },
-            data: { defaultModel: input.modelId, isDefault: true },
-          });
+          if (selected) {
+            await tx.userModelCredential.update({
+              where: { id: selected.id },
+              data: { defaultModel: input.modelId, isDefault: true },
+            });
+          } else {
+            await tx.userModelCredential.create({
+              data: {
+                userId: context.actor.userId,
+                workspaceId: context.actor.workspaceId,
+                provider: "ollama",
+                label: "Ollama",
+                secretId: null,
+                isDefault: true,
+                defaultModel: input.modelId,
+              },
+            });
+          }
         });
         return { ok: true as const };
       }),

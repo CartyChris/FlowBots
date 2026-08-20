@@ -8,13 +8,21 @@ import type {
 } from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
+import { isReactionKind } from "@rakazo/core";
 import { createThreadMessage, type PrismaClient, type ThreadEvents } from "@rakazo/db";
+import { setMessageReaction } from "./reaction-store.js";
 
 export const MAX_PEER_SENDS_PER_RUN = 4;
+export const MAX_PEER_REACTIONS_PER_RUN = 4;
 export const MAX_PEER_HOPS = 2;
 const MAX_PEER_MESSAGE_CHARS = 20_000;
 const PEER_EFFECT_KINDS = ["message_bot", "delegate_to_bot"] as const;
-const PEER_TOOL_NAMES = new Set(["message_bot", "delegate_to_bot", "read_bot_updates"]);
+const PEER_TOOL_NAMES = new Set([
+  "message_bot",
+  "delegate_to_bot",
+  "read_bot_updates",
+  "react_to_message",
+]);
 
 type WriteMessage = typeof createThreadMessage;
 
@@ -85,7 +93,7 @@ export class PeerConnector implements ConnectorProvider {
       {
         name: "read_bot_updates",
         description:
-          "Read recent thread updates from another persistent bot without waking it or starting another run.",
+          "Read recent thread updates from another persistent bot without waking it or starting another run. Returned messages include messageId so you can react explicitly.",
         inputSchema: {
           type: "object",
           properties: {
@@ -93,6 +101,20 @@ export class PeerConnector implements ConnectorProvider {
             name: { type: "string" },
             limit: { type: "integer", minimum: 1, maximum: 20 },
           },
+        },
+      },
+      {
+        name: "react_to_message",
+        description:
+          "Add or remove one lightweight reaction on a message as this bot. Reactions are bounded per run and never wake another bot.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            message_id: { type: "string" },
+            kind: { type: "string", enum: ["fire", "skull", "joy", "eyes"] },
+            active: { type: "boolean" },
+          },
+          required: ["message_id", "kind"],
         },
       },
     ];
@@ -105,6 +127,48 @@ export class PeerConnector implements ConnectorProvider {
     }
     try {
       const source = await this.sourceBot(context);
+      if (call.tool === "react_to_message") {
+        if (!context.runId) {
+          yield { type: "error", message: "Bot reactions require an active source run." };
+          return;
+        }
+        const used = await this.deps.prisma.externalEffect.count({
+          where: { runId: context.runId, kind: "react_to_message" },
+        });
+        if (used > MAX_PEER_REACTIONS_PER_RUN) {
+          yield {
+            type: "error",
+            message: `Reaction budget exhausted for this run (${MAX_PEER_REACTIONS_PER_RUN} reactions maximum).`,
+          };
+          return;
+        }
+        const messageId = String(call.args.message_id ?? call.args.messageId ?? "").trim();
+        const kind = String(call.args.kind ?? "").trim();
+        if (!messageId) {
+          yield { type: "error", message: "Reaction message id is required." };
+          return;
+        }
+        if (!isReactionKind(kind)) {
+          yield { type: "error", message: `Unsupported reaction: ${kind}` };
+          return;
+        }
+        const active = call.args.active !== false;
+        const reactions = await setMessageReaction(
+          this.deps.prisma,
+          {
+            workspaceId: context.workspaceId,
+            userId: context.userId,
+            actorKey: `bot:${source.id}`,
+          },
+          { messageId, kind, active },
+        );
+        yield {
+          type: "result",
+          data: { ok: true, messageId, kind, active, reactions },
+        };
+        return;
+      }
+
       const target = await this.targetBot(call.args, context);
       if (target.id === source.id) {
         yield { type: "error", message: "A bot cannot send a peer task to itself." };
@@ -117,7 +181,7 @@ export class PeerConnector implements ConnectorProvider {
           where: { threadId: target.thread.id },
           orderBy: { seq: "desc" },
           take: limit,
-          select: { role: true, blocks: true, createdAt: true },
+          select: { id: true, role: true, blocks: true, createdAt: true },
         });
         yield {
           type: "result",
@@ -126,6 +190,7 @@ export class PeerConnector implements ConnectorProvider {
             botId: target.id,
             name: target.name,
             messages: rows.reverse().map((row) => ({
+              messageId: row.id,
               role: row.role,
               text: blocksToText(row.blocks as MessageBlock[]),
               createdAt: row.createdAt.toISOString(),

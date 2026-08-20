@@ -5,6 +5,7 @@ import type { PrismaClient } from "@rakazo/db";
 export interface ReactionActor {
   workspaceId: string;
   userId: string;
+  actorKey?: string;
 }
 
 export interface ReactionSummary {
@@ -22,7 +23,7 @@ export async function setMessageReaction(
   if (!messageId) throw new Error("Reaction message id is required.");
   if (!isReactionKind(input.kind)) throw new Error(`Unsupported reaction: ${input.kind}`);
   await assertMessageAccess(prisma, actor, messageId);
-  const actorKey = `user:${actor.userId}`;
+  const actorKey = actor.actorKey ?? `user:${actor.userId}`;
 
   if (input.active) {
     await prisma.$executeRawUnsafe(
@@ -89,7 +90,7 @@ async function reactionSummary(
     messageId,
     actor.workspaceId,
   );
-  const mine = `user:${actor.userId}`;
+  const mine = actor.actorKey ?? `user:${actor.userId}`;
   const grouped = new Map<ReactionKind, ReactionSummary>();
   for (const row of rows) {
     if (!isReactionKind(row.kind)) continue;

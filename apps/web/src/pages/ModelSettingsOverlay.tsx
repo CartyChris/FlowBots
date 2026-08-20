@@ -106,7 +106,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
   }
 
   async function makeDefault() {
-    if (!selected || !providerCredential) return;
+    if (!selected || (!providerCredential && selected.provider !== "ollama")) return;
     setPending(true);
     setError(null);
     setNotice(null);
@@ -278,11 +278,23 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                     ) : null}
                   </div>
                 ) : selected.provider === "ollama" ? (
-                  <p className="text-[13.5px] leading-6 text-[#8C8C92]">
-                    Ollama runs locally and does not need an API key. Refresh discovers the tags
-                    installed on this computer. A credential-backed remote default remains the
-                    runtime fallback until local model preference storage is added.
-                  </p>
+                  <div>
+                    <p className="text-[13.5px] leading-6 text-[#8C8C92]">
+                      Ollama runs locally and does not need an API key. Refresh discovers the tags
+                      installed on this computer, and the selected local model is stored as this
+                      workspace's default without creating a secret.
+                    </p>
+                    <Button
+                      type="button"
+                      className="mt-3"
+                      disabled={pending}
+                      onClick={() => void makeDefault()}
+                    >
+                      {current.provider === "ollama" && current.model === selected.id
+                        ? "Default"
+                        : "Set default"}
+                    </Button>
+                  </div>
                 ) : (
                   <div>
                     <label className="block text-[13px] text-[#85858A]">

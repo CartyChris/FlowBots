@@ -158,7 +158,7 @@ model UserModelCredential {
   workspaceId  String
   provider     String
   label        String
-  secretId     String
+  secretId     String?
   isDefault    Boolean  @default(false)
   defaultModel String?
   createdAt    DateTime @default(now())
