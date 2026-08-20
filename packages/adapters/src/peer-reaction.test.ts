@@ -117,11 +117,7 @@ function harness(effectCount = 1) {
   };
 }
 
-async function execute(
-  connector: PeerConnector,
-  tool: string,
-  args: Record<string, unknown>,
-) {
+async function execute(connector: PeerConnector, tool: string, args: Record<string, unknown>) {
   const rows = [];
   for await (const event of connector.execute(
     { tool, args, executionId: `${tool}-execution` },
@@ -191,7 +187,10 @@ describe("bot social reactions", () => {
       active: true,
     });
     expect(result).toEqual([
-      expect.objectContaining({ type: "error", message: expect.stringMatching(/reaction budget/i) }),
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringMatching(/reaction budget/i),
+      }),
     ]);
     expect(reactionRows).toEqual([]);
     expect(jobs.enqueue).not.toHaveBeenCalled();
