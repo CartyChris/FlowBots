@@ -1,6 +1,7 @@
 {
   "name": "@rakazo/desktop",
   "version": "0.1.0",
+  "description": "FlowBots desktop — a customized local-first Rakazo fork with automatic local workspace setup in Lite mode.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/main.js",
