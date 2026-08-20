@@ -57,9 +57,8 @@ describe("credentialless local model defaults", () => {
         async ({ where }: { where: Record<string, unknown> }) =>
           rows.find((row) => matches(row, where)) ?? null,
       ),
-      findMany: vi.fn(
-        async ({ where }: { where: Record<string, unknown> }) =>
-          rows.filter((row) => matches(row, where)),
+      findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        rows.filter((row) => matches(row, where)),
       ),
       updateMany: vi.fn(
         async ({
