@@ -132,7 +132,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$START_SHA"
           test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
       - name: Apply staged Fable judge fixes
-        run: python3 scripts/migrations/apply-task13-judge.py
+        run: python3 scripts/migrations/apply-task13-judge-v2.py
       - name: Format and verify transformed tree
         run: |
           pnpm exec biome check --write packages/db/prisma/schema.prisma apps/api/src/router.ts apps/api/src/local-model-default.test.ts packages/adapters/src/executor.ts packages/adapters/src/reaction-store.ts packages/adapters/src/peer-connector.ts packages/adapters/src/peer-reaction.test.ts apps/web/src/pages/ModelSettingsOverlay.tsx
@@ -146,11 +146,11 @@ jobs:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
           BETTER_AUTH_SECRET: ci-build-auth-secret-at-least-32-characters
           ENCRYPTION_KEY: ci-build-encryption-key-at-least-32-characters
-      - name: Restore canonical CI and remove migration script
+      - name: Restore canonical CI and remove migration scripts
         run: |
           git fetch origin main --depth=1
           git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm scripts/migrations/apply-task13-judge.py
+          rm scripts/migrations/apply-task13-judge.py scripts/migrations/apply-task13-judge-v2.py
       - name: Commit only on unchanged PR head
         run: |
           START_SHA="${{ github.event.pull_request.head.sha }}"
