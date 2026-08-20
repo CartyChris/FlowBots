@@ -17,6 +17,10 @@ function desktop(platform: string): RakazoDesktop {
       choose: async () => undefined,
       showLauncher: async () => undefined,
     },
+    dialog: {
+      chooseFiles: async () => [],
+      chooseWorkspace: async () => null,
+    },
     terminal: {
       create: async () => ({ id: "terminal-test", pid: 1, cwd: "/tmp" }),
       write: async () => undefined,
