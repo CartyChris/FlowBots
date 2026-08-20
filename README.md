@@ -1,10 +1,14 @@
-# Rakazo
+# FlowBots
 
-![Rakazo — AI teammates you actually own](./docs/readme-hero.png)
+> **FlowBots is a modified and customized version of [Rakazo](https://github.com/elie222/rakazo), created by [Elie Steinbock (@elie222)](https://github.com/elie222). Huge thanks to Elie and the Rakazo contributors for open-sourcing the original project and giving this fork such a strong foundation.**
 
-Open-source Grok Bot alternative, built with Cursor and Grok 4.6.
+![Rakazo upstream — AI teammates you actually own](./docs/readme-hero.png)
 
-Web, desktop, and mobile. Bring your own AI and sandbox. The product is still early (beta).
+**FlowBots** is a local-first, open-source Grok Bots-style agent workspace built on Rakazo, expanded with per-bot computers, local AI/model support, bounded bot-to-bot collaboration and reactions, optional Mnemosyne recall, and a self-contained macOS Lite runtime.
+
+**No account sign-up is required for the recommended FlowBots Lite desktop mode.** Lite automatically creates and signs into a local-only workspace identity on your Mac. You only connect or select the AI model(s) you want to use.
+
+Web, desktop, and mobile are still supported. Bring your own AI and sandbox. This fork remains early/beta software.
 
 Each bot has one thread, one computer, memory, routines, and history. A bot can also spawn more bots — each a regular peer with its own thread and computer — or run short-lived subagents inside the current turn. This repository is the complete core product — it runs without a Rakazo-operated control plane.
 
@@ -71,7 +75,7 @@ pnpm dev
 
 `pnpm dev` starts the API (`:3100`), Graphile Worker, Vite web app (`:5173`), and sandbox supervisor (`:7091`).
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). Sign up, pick a model from the Pi catalog (paste an API key, sign in with ChatGPT / Copilot / SuperGrok, or Skip if the deployment key is set), create a bot, send a message. The computer pane is a live Linux desktop. The model can observe and control the screen, use browsers and other graphical applications, run terminal commands, and work with files. You can interact with the same desktop while it runs; taking control makes the viewer editable but does not impose an exclusive agent/user lock. Ask a bot to spawn another bot, or to run a subagent for work that should stay inside this turn.
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The full web/server mode retains Rakazo's normal account authentication; for the no-sign-up local experience, use the packaged FlowBots desktop app in **Lite** mode, which provisions the local-only workspace identity automatically. In web/server mode, sign up, pick a model from the Pi catalog (paste an API key, sign in with ChatGPT / Copilot / SuperGrok, or Skip if the deployment key is set), create a bot, and send a message. The computer pane is a live Linux desktop. The model can observe and control the screen, use browsers and other graphical applications, run terminal commands, and work with files. You can interact with the same desktop while it runs; taking control makes the viewer editable but does not impose an exclusive agent/user lock. Ask a bot to spawn another bot, or to run a subagent for work that should stay inside this turn.
 
 ### Venice AI and G0DM0D3 research routing
 
@@ -141,7 +145,7 @@ The universal macOS DMG includes the built web UI and embedded Lite runtime reso
 ```bash
 pnpm test              # unit, property, and in-process contract tests
 pnpm test:integration  # Postgres journeys, Graphile jobs, LISTEN/NOTIFY
-pnpm test:e2e          # Playwright against the emulated stack
+pnpm test:e2e           # Playwright against the emulated stack
 pnpm test:topology     # local Docker + Graphile worker recovery (needs Docker)
 pnpm test:canary       # live OpenRouter / E2B canaries
 # explicit real vision-model + real E2B desktop acceptance test:
@@ -165,6 +169,12 @@ infra/compose sandboxes
 ## Self-host and Cloud
 
 See `docs/self-host.md`. Cloud and self-hosted editions share the same application and contracts. There is no separate Rakazo-hosted control plane in this repo yet — a public Cloud deploy is a VPS (or E2B) plus the marketing site, not a serverless push of the chat app.
+
+## Credits and upstream
+
+FlowBots is an independently modified/customized fork of [Rakazo](https://github.com/elie222/rakazo) by [Elie Steinbock (@elie222)](https://github.com/elie222). **Thank you to Elie and all upstream Rakazo contributors** for releasing the original project as open source and making this work possible.
+
+FlowBots preserves the upstream Apache-2.0 license and intentionally keeps some internal `@rakazo/*` package names for compatibility, while the end-user desktop product and this customized fork are branded **FlowBots**.
 
 ---
 
