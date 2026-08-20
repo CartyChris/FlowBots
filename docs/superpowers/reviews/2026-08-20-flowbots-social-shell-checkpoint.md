@@ -9,5 +9,7 @@ Verified before this checkpoint commit:
 - Task 11 replaces the static composer plus button with file/workspace, computer, Connections, MCP, harness, and teammate actions.
 - The exact-head migration verifier passed typecheck and focused tests before committing the Shell integration.
 - Temporary migration scripts/workflow writers were removed and `.github/workflows/ci.yml` was restored from canonical `main`.
+- Task 13 Fable judge GREEN passed DB generation, strict typecheck, all unit tests, Postgres integration journeys, production build, and `git diff --check` on the transformed tree.
+- Task 13 cleanup restored the exact canonical `ci.yml` blob from `main` and removed the temporary migration scripts before pushing the cleaned product tree.
 
-This commit exists to run ordinary PR CI against the cleaned feature head, including the new social Web E2E journey.
+This checkpoint triggers ordinary canonical PR CI against the cleaned feature head, including unit tests, Postgres integration, Web E2E, production build, and Electron smoke.
