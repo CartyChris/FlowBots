@@ -52,8 +52,21 @@ updated = '''  if (credential?.provider === "ollama" && !credential.secretId) {
     throw new Error(`Missing encrypted credential for ${credential.provider}.`);
   }
   if (credential && deps.secretStore) {
-    return withModelCredentialLock(credential.secretId, async () => {
-      const row = await deps.prisma.secret.findUnique({ where: { id: credential.secretId } });'''
+    const secretId = credential.secretId;
+    return withModelCredentialLock(secretId, async () => {
+      const row = await deps.prisma.secret.findUnique({ where: { id: secretId } });'''
 if executor.count(current) != 1:
     raise SystemExit(f"current model-key body anchor count={executor.count(current)}")
-executor_path.write_text(executor.replace(current, updated, 1))
+executor = executor.replace(current, updated, 1)
+
+nested_current = '''              await withModelCredentialLock(credential.secretId, async () => {
+                const currentRow = await deps.prisma.secret.findUnique({
+                  where: { id: credential.secretId },
+                });'''
+nested_updated = '''              await withModelCredentialLock(secretId, async () => {
+                const currentRow = await deps.prisma.secret.findUnique({
+                  where: { id: secretId },
+                });'''
+if executor.count(nested_current) != 1:
+    raise SystemExit(f"nested model-key body anchor count={executor.count(nested_current)}")
+executor_path.write_text(executor.replace(nested_current, nested_updated, 1))
