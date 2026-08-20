@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildDockerComposeInvocation,
   createDockerExecutionTarget,
+  type DockerExecutionTargetConfig,
   type ExecutionCommandRunner,
+  type ManagedExecutionTarget,
 } from "./execution-targets.js";
+
+const APPROVAL = "user-approved-docker-start";
 
 const ok = (stdout = "") => ({
   code: 0,
@@ -13,6 +17,16 @@ const ok = (stdout = "") => ({
   aborted: false,
   outputTruncated: false,
 });
+
+function approvedConfig(config: DockerExecutionTargetConfig): DockerExecutionTargetConfig {
+  return { ...config, approvalToken: APPROVAL } as DockerExecutionTargetConfig;
+}
+
+function startApproved(target: ManagedExecutionTarget) {
+  return (target.start as unknown as (input: { approvalToken: string }) => Promise<void>)({
+    approvalToken: APPROVAL,
+  });
+}
 
 describe("Docker execution target", () => {
   it("builds direct argv for selected compose files/services without shell interpolation", () => {
@@ -62,7 +76,7 @@ describe("Docker execution target", () => {
       input.args[0] === "info" ? { ...ok(), code: 127, stderr: "docker: command not found" } : ok(),
     );
     const target = createDockerExecutionTarget(
-      { id: "docker", name: "Docker", cwd: "/work" },
+      approvedConfig({ id: "docker", name: "Docker", cwd: "/work" }),
       runner,
     );
     await expect(target.probe()).resolves.toEqual({
@@ -71,38 +85,66 @@ describe("Docker execution target", () => {
     });
   });
 
-  it("starts and stops only the user-selected workload", async () => {
+  it("refuses to start before the exact user approval token is supplied", async () => {
     const runner: ExecutionCommandRunner = vi.fn(async () => ok());
     const target = createDockerExecutionTarget(
-      {
+      approvedConfig({ id: "agents", name: "Agent services", cwd: "/work" }),
+      runner,
+    );
+
+    await expect(target.start()).rejects.toThrow(/approval/i);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("starts, verifies readiness, and stops only the user-selected workload", async () => {
+    const runner: ExecutionCommandRunner = vi.fn(async (input) =>
+      input.args[0] === "info" ? ok('"27.5.1"') : ok(),
+    );
+    const target = createDockerExecutionTarget(
+      approvedConfig({
         id: "agents",
         name: "Agent services",
         cwd: "/work",
         projectName: "rakazo-agents",
         services: ["openhands", "paperclip"],
-      },
+      }),
       runner,
     );
 
-    await target.start();
+    await startApproved(target);
     await target.stop();
     const calls = vi.mocked(runner).mock.calls.map(([input]) => [input.command, input.args]);
     expect(calls).toEqual([
       ["docker", ["compose", "-p", "rakazo-agents", "up", "-d", "openhands", "paperclip"]],
+      ["docker", ["info", "--format", "{{json .ServerVersion}}"]],
       ["docker", ["compose", "-p", "rakazo-agents", "stop", "openhands", "paperclip"]],
     ]);
   });
 
-  it("returns actionable command failures instead of pretending a target started", async () => {
-    const runner: ExecutionCommandRunner = vi.fn(async () => ({
-      ...ok(),
-      code: 1,
-      stderr: "Cannot connect to the Docker daemon",
-    }));
+  it("fails start when compose succeeds but the post-start readiness probe fails", async () => {
+    const runner: ExecutionCommandRunner = vi.fn(async (input) =>
+      input.args[0] === "info"
+        ? { ...ok(), code: 1, stderr: "Cannot connect to the Docker daemon" }
+        : ok(),
+    );
     const target = createDockerExecutionTarget(
-      { id: "docker", name: "Docker", cwd: "/work" },
+      approvedConfig({ id: "docker", name: "Docker", cwd: "/work" }),
       runner,
     );
-    await expect(target.start()).rejects.toThrow(/Docker.*Cannot connect/i);
+
+    await expect(startApproved(target)).rejects.toThrow(/readiness|Docker.*unavailable|daemon/i);
+  });
+
+  it("returns actionable command failures instead of pretending a target started", async () => {
+    const runner: ExecutionCommandRunner = vi.fn(async (input) =>
+      input.args[0] === "compose"
+        ? { ...ok(), code: 1, stderr: "Cannot connect to the Docker daemon" }
+        : ok(),
+    );
+    const target = createDockerExecutionTarget(
+      approvedConfig({ id: "docker", name: "Docker", cwd: "/work" }),
+      runner,
+    );
+    await expect(startApproved(target)).rejects.toThrow(/Docker.*Cannot connect/i);
   });
 });

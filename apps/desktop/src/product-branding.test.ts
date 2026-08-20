@@ -9,6 +9,10 @@ async function text(relativePath: string) {
   return readFile(path.join(repoRoot, relativePath), "utf8");
 }
 
+function electronBuilderVariable(name: string) {
+  return `${String.fromCharCode(36)}{${name}}`;
+}
+
 describe("FlowBots product branding", () => {
   test("macOS package and artifacts are named FlowBots while internal workspace namespaces remain stable", async () => {
     const pkg = JSON.parse(await text("apps/desktop/package.json")) as {
@@ -17,7 +21,9 @@ describe("FlowBots product branding", () => {
     };
     expect(pkg.name).toBe("@rakazo/desktop");
     expect(pkg.build?.productName).toBe("FlowBots");
-    expect(pkg.build?.artifactName).toBe("FlowBots-${version}-${arch}.${ext}");
+    expect(pkg.build?.artifactName).toBe(
+      `FlowBots-${electronBuilderVariable("version")}-${electronBuilderVariable("arch")}.${electronBuilderVariable("ext")}`,
+    );
   });
 
   test("desktop runtime launcher and host-boundary errors present FlowBots to the user", async () => {

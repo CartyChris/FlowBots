@@ -1,6 +1,7 @@
 export * from "./activity.js";
 export * from "./ai-os-kernel.js";
 export * from "./async.js";
+export * from "./bot-personality.js";
 export * from "./cron.js";
 export * from "./events.js";
 export * from "./message-pages.js";

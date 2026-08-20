@@ -1,6 +1,22 @@
 import { expect, type Page, test } from "@playwright/test";
 
+const harnessOwner = {
+  email: `harness-owner-${Date.now()}@rakazo.test`,
+  password: "password12",
+  name: "Harness Owner",
+};
+
 test.describe.configure({ mode: "serial" });
+
+test.beforeAll(async ({ browser }) => {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signup(page, harnessOwner.email, harnessOwner.password, harnessOwner.name);
+  } finally {
+    await context.close();
+  }
+});
 
 test("two users are isolated and a bot completes durable work", async ({ browser }) => {
   const a = await browser.newContext();
@@ -77,6 +93,67 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Delete bot" })).toBeVisible();
 });
 
+test("Harness Center lists coding agents and probes a custom argv-based CLI", async ({ page }) => {
+  await signin(page, harnessOwner.email, harnessOwner.password);
+  await completeOnboarding(page, ["Coding & repos", "Clear and tight"]);
+
+  await page.getByRole("button", { name: "Harnesses" }).click();
+  await expect(page.getByRole("heading", { name: "Harness Center" })).toBeVisible();
+  await expect(page.getByText("Claude Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("Codex", { exact: true })).toBeVisible();
+  await expect(page.getByText("Kimi Code", { exact: true })).toBeVisible();
+  await expect(page.getByText("OpenCode", { exact: true })).toBeVisible();
+  await expect(page.getByText("Gemini CLI", { exact: true })).toBeVisible();
+  await expect(page.getByText("Prime Agent", { exact: true })).toBeVisible();
+
+  await page.getByPlaceholder("Executable (for example, gemini)").fill("node");
+  await page.getByPlaceholder("One argument per line").fill("--version");
+  await page.getByRole("button", { name: "Test custom harness" }).click();
+  await expect(page.getByText(/Custom harness available/i)).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Close harness center" }).click();
+  await expect(page.getByRole("heading", { name: "Harness Center" })).toBeHidden();
+});
+
+test("roles, faces, composer actions, MCP, and reactions work in the shell", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `social-${stamp}@rakazo.test`, "password12", "Social");
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
+
+  await page.getByText("Chief").first().click();
+  const gear = page.locator("button:has-text('⚙')");
+  if (!(await gear.isVisible().catch(() => false))) {
+    await page.getByTitle("Agent computer").click();
+  }
+  await gear.click();
+  await page.getByLabel("Bot role").selectOption("Developer");
+  await page.getByRole("button", { name: "Use Cat face" }).click();
+  await page.getByRole("button", { name: "Save bot settings" }).click();
+  await expect(page.getByLabel("Bot role")).toHaveValue("Developer");
+  await expect(page.getByRole("button", { name: "Use Cat face" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  const composer = page.getByPlaceholder(/Message/);
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("menu", { name: "Add context" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "MCP servers" }).click();
+  await expect(page.getByRole("heading", { name: "MCP servers", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close MCP servers", exact: true }).click();
+
+  await page.getByRole("button", { name: "Add" }).click();
+  await page.getByRole("menuitem", { name: "Ask a teammate" }).click();
+  await expect(composer).toHaveValue(/Ask a teammate bot to/);
+
+  await composer.fill("Reply with hello in one short sentence.");
+  await page.keyboard.press("Enter");
+  const fire = page.getByRole("button", { name: "React 🔥" }).last();
+  await expect(fire).toBeVisible({ timeout: 30_000 });
+  await fire.click();
+  await expect(fire).toHaveAttribute("aria-pressed", "true");
+});
+
 test("sign-in, spawn, and stop work in the shell", async ({ page }) => {
   const stamp = Date.now();
   const email = `shell-${stamp}@rakazo.test`;
@@ -101,10 +178,7 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 30_000 });
 
   await page.context().clearCookies();
-  await page.goto("/sign-in");
-  await page.getByPlaceholder("Your email address").fill(email);
-  await page.getByPlaceholder("Password").fill("password12");
-  await page.getByRole("button", { name: "Continue with email" }).click();
+  await signin(page, email, "password12");
   await page.waitForURL(/\/app/, { timeout: 20_000 });
   await expect(
     page.getByRole("complementary").getByRole("button", { name: /^Chief/ }),
@@ -151,4 +225,11 @@ async function signup(page: Page, email: string, password: string, name: string)
   await page.getByPlaceholder("Your email address").fill(email);
   await page.getByPlaceholder("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
+}
+
+async function signin(page: Page, email: string, password: string) {
+  await page.goto("/sign-in");
+  await page.getByPlaceholder("Your email address").fill(email);
+  await page.getByPlaceholder("Password").fill(password);
+  await page.getByRole("button", { name: "Continue with email" }).click();
 }

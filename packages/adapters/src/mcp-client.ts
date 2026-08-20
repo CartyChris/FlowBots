@@ -6,7 +6,7 @@ export interface StdioMcpCallInput {
   command: string;
   args: string[];
   cwd: string;
-  tool: string;
+  tool?: string;
   arguments?: Record<string, unknown>;
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
@@ -33,19 +33,6 @@ export async function runStdioMcpCall(input: StdioMcpCallInput): Promise<{
     { resolve: (value: any) => void; reject: (error: Error) => void }
   >();
   const timeoutMs = Math.max(250, input.timeoutMs ?? 20_000);
-
-  const cleanup = () => {
-    if (done) return;
-    done = true;
-    for (const waiter of pending.values())
-      waiter.reject(new Error("MCP process closed before replying"));
-    pending.clear();
-    try {
-      child.kill("SIGTERM");
-    } catch {
-      // already gone
-    }
-  };
 
   const failAll = (message: string) => {
     for (const waiter of pending.values()) waiter.reject(new Error(message));
@@ -126,11 +113,12 @@ export async function runStdioMcpCall(input: StdioMcpCallInput): Promise<{
     await request("initialize", {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "rakazo", version: "0.1.0" },
+      clientInfo: { name: "flowbots", version: "0.1.0" },
     });
     sendNotification("notifications/initialized");
     const listed = await request("tools/list", {});
     const tools = Array.isArray(listed?.tools) ? listed.tools : [];
+    if (!input.tool) return { tools, result: undefined };
     const selected = tools.find((tool: any) => tool?.name === input.tool);
     if (!selected) throw new Error(`MCP tool "${input.tool}" is not available`);
     const result = await request("tools/call", {

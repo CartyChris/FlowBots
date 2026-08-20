@@ -6,6 +6,7 @@ import type {
   ConnectorProvider,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
+import { safeWebFetch } from "./web-fetch.js";
 
 export interface DestinationRecord {
   id: string;
@@ -79,10 +80,48 @@ export class DestinationEmulator implements ConnectorProvider {
           },
         },
       },
+      {
+        name: "web_fetch",
+        description:
+          "Fetch a public web page or text/JSON URL directly from the internet. Use this for current public information and page reading when interactive browser control is unnecessary. Private, loopback, link-local, and credentialed URLs are blocked.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "Public http(s) URL to retrieve." },
+            max_chars: {
+              type: "number",
+              description:
+                "Optional maximum readable characters to return (default 80000, max 200000).",
+            },
+          },
+          required: ["url"],
+        },
+      },
     ];
   }
 
-  async *execute(call: ConnectorCall, _context: AdapterContext): AsyncIterable<ConnectorEvent> {
+  async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
+    if (call.tool === "web_fetch") {
+      try {
+        yield {
+          type: "result",
+          data: await safeWebFetch(
+            {
+              url: String(call.args.url ?? ""),
+              maxChars: typeof call.args.max_chars === "number" ? call.args.max_chars : undefined,
+            },
+            { signal: context.signal },
+          ),
+        };
+      } catch (error) {
+        yield {
+          type: "error",
+          message: error instanceof Error ? error.message : "web_fetch failed",
+        };
+      }
+      return;
+    }
+
     if (call.tool !== "destination.write") {
       yield { type: "error", message: `unknown tool ${call.tool}` };
       return;

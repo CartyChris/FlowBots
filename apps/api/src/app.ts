@@ -16,13 +16,16 @@ import {
   GraphileJobPublisher,
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
-  isComposioEnabled,
   LocalAgentHomeStore,
+  listMessageReactions,
+  McpConnector,
+  PeerConnector,
   PiAgentRuntime,
   PiOAuthLogins,
   PostgresRealtimeFanout,
   pushTokenPath,
   ScriptedAgentRuntime,
+  setMessageReaction,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
 import { createDb, createThreadEvents, type PrismaClient, requireMembership } from "@rakazo/db";
@@ -30,6 +33,7 @@ import { HybridMemoryStore, MarkdownMemoryStore, MnemosyneSemanticIndex } from "
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
+import { loadMcpServers, loadPersistedComposioKey } from "./local-connectors.js";
 import { createRouter } from "./router.js";
 
 export interface AppHandles {
@@ -89,10 +93,21 @@ export async function createApp(
       timeoutMs: env.mnemosyneTimeoutMs,
     }),
   );
-  const stack = createConnectorStack(isComposioEnabled(env.composioApiKey));
+  const persistedComposioKey = await loadPersistedComposioKey(prisma, secrets).catch(
+    () => undefined,
+  );
+  const mcp = new McpConnector({
+    loadServers: (context) =>
+      loadMcpServers(prisma, context, {
+        hostEnabled: env.hostHarnessesEnabled,
+        defaultCwd: env.dataDir,
+      }),
+  });
+  const peer = new PeerConnector({ prisma, jobs, events });
+  const stack = createConnectorStack(persistedComposioKey ?? env.composioApiKey ?? true, mcp, peer);
   const connector = stack.destination;
   await connector.start();
-  void stack.composio?.warmDirectory().catch(() => undefined);
+  if (stack.composio?.configured()) void stack.composio.warmDirectory().catch(() => undefined);
   const runtime =
     env.agentRuntime === "scripted" ? new ScriptedAgentRuntime() : new PiAgentRuntime();
   const notifications = new ExpoPushProvider(env.dataDir);
@@ -138,7 +153,9 @@ export async function createApp(
     memory,
     home,
     connector: stack.connector,
-    secrets: [env.openRouterKey ?? "", env.composioApiKey ?? ""].filter(Boolean),
+    secrets: [env.openRouterKey ?? "", env.composioApiKey ?? "", persistedComposioKey ?? ""].filter(
+      Boolean,
+    ),
     secretStore: secrets,
     deploymentModelKey: env.openRouterKey,
     dataDir: env.dataDir,
@@ -178,6 +195,9 @@ export async function createApp(
       defaultProvider: env.defaultProvider,
       defaultModel: env.defaultModel,
       openRouterKey: env.openRouterKey,
+      composioApiKey: env.composioApiKey,
+      ollamaBaseUrl: env.ollamaBaseUrl,
+      hostHarnessesEnabled: env.hostHarnessesEnabled,
       webOrigin: env.webOrigin,
       screenProxySecret: env.authSecret,
       sandboxProvider: env.sandboxProvider,
@@ -202,6 +222,41 @@ export async function createApp(
     }
     return auth.handler(c.req.raw);
   });
+  app.get("/api/reactions/:messageId", async (c) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
+    if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+    const actor = await requireMembership(prisma, session.user.id).catch(() => null);
+    if (!actor) return c.json({ error: "Forbidden" }, 403);
+    try {
+      return c.json(await listMessageReactions(prisma, actor, c.req.param("messageId")));
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : "Reaction lookup failed" },
+        404,
+      );
+    }
+  });
+  app.post("/api/reactions/:messageId", async (c) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
+    if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+    const actor = await requireMembership(prisma, session.user.id).catch(() => null);
+    if (!actor) return c.json({ error: "Forbidden" }, 403);
+    try {
+      const body = await c.req.json<{ kind?: unknown; active?: unknown }>();
+      return c.json(
+        await setMessageReaction(prisma, actor, {
+          messageId: c.req.param("messageId"),
+          kind: typeof body.kind === "string" ? body.kind : "",
+          active: body.active === true,
+        }),
+      );
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : "Reaction update failed" },
+        400,
+      );
+    }
+  });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
     const actor = session?.user
@@ -219,7 +274,8 @@ export async function createApp(
       ok: true,
       runtime: env.agentRuntime,
       sandbox: env.sandboxProvider,
-      composio: Boolean(stack.composio),
+      composio: stack.composio?.configured() ?? false,
+      mcp: env.hostHarnessesEnabled,
       jobs: jobKind,
       realtime: realtime.describe().id,
       memory: memory.describe().id,
@@ -261,9 +317,7 @@ function isTrustedOrigin(origin: string, env: AppEnv) {
 
 function sessionHeaders(request: Request) {
   const headers = new Headers(request.headers);
-  const authz = headers.get("authorization");
-  if (authz?.toLowerCase().startsWith("bearer ") && !headers.get("cookie")) {
-    headers.set("cookie", `better-auth.session_token=${authz.slice(7).trim()}`);
-  }
+  const cookie = request.headers.get("cookie");
+  if (cookie) headers.set("cookie", cookie);
   return headers;
 }

@@ -1,5 +1,6 @@
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { externalCatalogEntries } from "./external-models.js";
+import { liveModelCatalog } from "./model-catalog.js";
 import { DEVICE_CODE_PROVIDERS, DEVICE_CODE_SIGN_IN, isDeviceCodeProvider } from "./pi-oauth.js";
 
 export type PiCatalogAuth = "api-key" | "oauth" | "both";
@@ -17,12 +18,37 @@ export type PiCatalogEntry = {
   signIn?: PiCatalogSignIn;
 };
 
-export function listPiCatalog(): PiCatalogEntry[] {
-  cachedCatalog ??= [...buildPiCatalog(), ...externalCatalogEntries()];
-  return cachedCatalog;
+export interface PiCatalogListOptions {
+  refresh?: boolean;
+  staticCatalog?: PiCatalogEntry[];
+  ollamaBaseUrl?: string | null;
+  xaiApiKey?: string;
+  fetchFn?: typeof fetch;
+  signal?: AbortSignal;
+}
+
+export function listPiCatalog(): PiCatalogEntry[];
+export function listPiCatalog(options: PiCatalogListOptions): Promise<PiCatalogEntry[]>;
+export function listPiCatalog(
+  options?: PiCatalogListOptions,
+): PiCatalogEntry[] | Promise<PiCatalogEntry[]> {
+  const staticCatalog = options?.staticCatalog ?? basePiCatalog();
+  if (!options) return staticCatalog;
+  return liveModelCatalog({
+    staticCatalog,
+    ollamaBaseUrl: options.ollamaBaseUrl,
+    xaiApiKey: options.xaiApiKey,
+    fetchFn: options.fetchFn,
+    signal: options.signal,
+  });
 }
 
 let cachedCatalog: PiCatalogEntry[] | undefined;
+
+function basePiCatalog(): PiCatalogEntry[] {
+  cachedCatalog ??= [...buildPiCatalog(), ...externalCatalogEntries()];
+  return cachedCatalog;
+}
 
 function buildPiCatalog(): PiCatalogEntry[] {
   const models = builtinModels();

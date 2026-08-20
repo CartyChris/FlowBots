@@ -34,6 +34,7 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
         bridgeKeys: desktop ? Object.keys(desktop).sort() : [],
         windowKeys: desktop ? Object.keys(desktop.window).sort() : [],
         runtimeKeys: desktop ? Object.keys(desktop.runtime).sort() : [],
+        dialogKeys: desktop ? Object.keys(desktop.dialog).sort() : [],
         terminalKeys: desktop ? Object.keys(desktop.terminal).sort() : [],
         terminalError,
         platform: desktop?.platform,
@@ -46,9 +47,10 @@ test("launches the runtime chooser with a narrow privileged bridge and isolated 
       };
     });
 
-    expect(renderer.bridgeKeys).toEqual(["platform", "runtime", "terminal", "window"]);
+    expect(renderer.bridgeKeys).toEqual(["dialog", "platform", "runtime", "terminal", "window"]);
     expect(renderer.windowKeys).toEqual(["close", "minimize", "state", "toggleMaximize"]);
     expect(renderer.runtimeKeys).toEqual(["choose", "showLauncher"]);
+    expect(renderer.dialogKeys).toEqual(["chooseFiles", "chooseWorkspace"]);
     expect(renderer.terminalKeys).toEqual([
       "close",
       "create",

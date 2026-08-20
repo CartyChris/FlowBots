@@ -1150,16 +1150,26 @@ async function resolveModelKey(
   deps: ExecutorDeps,
   userId: string,
   workspaceId: string,
-  credential: { secretId: string; provider: string } | null,
+  credential: { secretId: string | null; provider: string } | null,
 ): Promise<{
   apiKey?: string;
   oauth?: AgentModelOAuthCredential;
   persistOAuth?: (credential: AgentModelOAuthCredential) => Promise<void>;
   redact: string[];
 }> {
+  if (credential?.provider === "ollama" && !credential.secretId) {
+    return { apiKey: undefined, redact: [] };
+  }
+  if (credential && !credential.secretId) {
+    throw new Error(`Missing encrypted credential for ${credential.provider}.`);
+  }
   if (credential && deps.secretStore) {
-    return withModelCredentialLock(credential.secretId, async () => {
-      const row = await deps.prisma.secret.findUnique({ where: { id: credential.secretId } });
+    const secretId = credential.secretId;
+    if (!secretId) {
+      throw new Error(`Missing encrypted credential for ${credential.provider}.`);
+    }
+    return withModelCredentialLock(secretId, async () => {
+      const row = await deps.prisma.secret.findUnique({ where: { id: secretId } });
       if (!row) return { apiKey: deps.deploymentModelKey, redact: [] };
       const plaintext = deps.secretStore!.load(row.ciphertext);
       const persist = async (next: string) => {
@@ -1184,9 +1194,9 @@ async function resolveModelKey(
         oauth,
         persistOAuth: oauth
           ? async (next) => {
-              await withModelCredentialLock(credential.secretId, async () => {
+              await withModelCredentialLock(secretId, async () => {
                 const currentRow = await deps.prisma.secret.findUnique({
-                  where: { id: credential.secretId },
+                  where: { id: secretId },
                 });
                 if (!currentRow) return;
                 const current = parseModelSecret(deps.secretStore!.load(currentRow.ciphertext));

@@ -1,6 +1,11 @@
 import type { ConnectorTool } from "@rakazo/adapter-kit";
 
-export const DELEGATION_TOOL_NAMES = new Set(["run_subagent", "spawn_bot", "delete_bot"]);
+export const DELEGATION_TOOL_NAMES = new Set([
+  "run_subagent",
+  "spawn_bot",
+  "delegate_to_bot",
+  "delete_bot",
+]);
 
 export const builtinAgentTools: ConnectorTool[] = [
   {
@@ -172,7 +177,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "spawn_bot",
     description:
-      "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
+      "Create a full, regular teammate bot with its own thread, computer, and memory. Give it a prompt when you want it to start a durable task immediately. Use this to build a team, not run_subagent.",
     inputSchema: {
       type: "object",
       properties: {
@@ -185,6 +190,33 @@ export const builtinAgentTools: ConnectorTool[] = [
         },
       },
       required: ["name"],
+    },
+  },
+  {
+    name: "delegate_to_bot",
+    description:
+      "Assign a durable task to another existing bot in this user's FlowBots workspace. The teammate works in its own thread/computer while you continue. Identify it by bot_id or exact name.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bot_id: { type: "string", description: "Optional target bot id." },
+        name: { type: "string", description: "Optional exact target bot name." },
+        task: { type: "string", description: "Concrete work for the teammate to complete." },
+      },
+      required: ["task"],
+    },
+  },
+  {
+    name: "read_bot_updates",
+    description:
+      "Read recent messages from another bot in this user's FlowBots workspace so you can coordinate, review its progress, and synthesize team results.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bot_id: { type: "string", description: "Optional target bot id." },
+        name: { type: "string", description: "Optional exact target bot name." },
+        limit: { type: "number", description: "Recent messages to return, 1-20." },
+      },
     },
   },
   {

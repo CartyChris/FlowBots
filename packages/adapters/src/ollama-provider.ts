@@ -61,6 +61,7 @@ export async function ollamaModelIds(
 ): Promise<string[]> {
   const fetcher = opts?.fetchFn ?? fetch;
   const response = await fetcher(`${baseUrl.replace(/\/+$/, "")}/api/tags`, {
+    method: "GET",
     signal: opts?.signal ?? AbortSignal.timeout(3000),
     headers: { accept: "application/json" },
   });

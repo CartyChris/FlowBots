@@ -4,7 +4,7 @@ import vm from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 describe("desktop preload bridge", () => {
-  it("exposes narrow runtime and terminal operations without shell selection", async () => {
+  it("exposes narrow runtime, chooser, and terminal operations without shell selection", async () => {
     const invoke = vi.fn(async (channel: string, ...payload: unknown[]) => ({ channel, payload }));
     const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
     const on = vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
@@ -36,6 +36,10 @@ describe("desktop preload bridge", () => {
         platform: string;
         window: Record<string, () => Promise<unknown>>;
         runtime: { choose(profile: unknown): Promise<unknown>; showLauncher(): Promise<unknown> };
+        dialog: {
+          chooseFiles(): Promise<unknown>;
+          chooseWorkspace(): Promise<unknown>;
+        };
         terminal: {
           create(input: { cwd?: string; cols: number; rows: number }): Promise<unknown>;
           write(sessionId: string, data: string): Promise<unknown>;
@@ -56,6 +60,7 @@ describe("desktop preload bridge", () => {
       "toggleMaximize",
     ]);
     expect(Object.keys(bridge.runtime).sort()).toEqual(["choose", "showLauncher"]);
+    expect(Object.keys(bridge.dialog).sort()).toEqual(["chooseFiles", "chooseWorkspace"]);
     expect(Object.keys(bridge.terminal).sort()).toEqual([
       "close",
       "create",
@@ -84,12 +89,16 @@ describe("desktop preload bridge", () => {
     offActivity();
     expect(removeListener).toHaveBeenCalledTimes(2);
 
+    await bridge.dialog.chooseFiles();
+    await bridge.dialog.chooseWorkspace();
     await bridge.terminal.create({ cwd: "/tmp", cols: 80, rows: 24 });
     await bridge.terminal.write("terminal-1", "pwd\r");
     await bridge.terminal.resize("terminal-1", 100, 30);
     await bridge.terminal.interrupt("terminal-1");
     await bridge.terminal.close("terminal-1");
-    expect(invoke.mock.calls.slice(-5)).toEqual([
+    expect(invoke.mock.calls.slice(-7)).toEqual([
+      ["desktop.dialog.chooseFiles"],
+      ["desktop.dialog.chooseWorkspace"],
       ["desktop.terminal.create", { cwd: "/tmp", cols: 80, rows: 24 }],
       ["desktop.terminal.write", "terminal-1", "pwd\r"],
       ["desktop.terminal.resize", "terminal-1", 100, 30],

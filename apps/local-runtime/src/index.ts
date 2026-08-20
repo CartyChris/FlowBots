@@ -35,6 +35,11 @@ interface LocalSecrets {
   supervisorToken: string;
 }
 
+const LOCAL_USER = {
+  email: "flowbots@local.invalid",
+  name: "FlowBots Local",
+} as const;
+
 export async function startLocalRuntime(
   options: StartLocalRuntimeOptions,
 ): Promise<LocalRuntimeHandle> {
@@ -108,6 +113,7 @@ export async function startLocalRuntime(
       sandboxProvider: "desktop",
       agentRuntime: "pi",
       openRouterKey: options.openRouterKey,
+      hostHarnessesEnabled: true,
       e2bApiKey: undefined,
       composioApiKey: undefined,
       defaultProvider: options.defaultProvider ?? "openrouter",
@@ -120,7 +126,8 @@ export async function startLocalRuntime(
     });
 
     const apiFetch = handles.app.fetch.bind(handles.app);
-    const runtimeFetch = webDir ? createWebFallback(apiFetch, webDir) : apiFetch;
+    const webFetch = webDir ? createWebFallback(apiFetch, webDir) : apiFetch;
+    const runtimeFetch = createLocalDesktopFetch(apiFetch, webFetch, origin, secrets.authSecret);
     httpServer = serve({
       fetch: runtimeFetch,
       hostname: "127.0.0.1",
@@ -197,6 +204,93 @@ export async function applyLiteMigrations(db: PGlite, migrationsDir: string): Pr
       throw new Error(`Lite migration ${entry.name} failed`, { cause: error });
     }
   }
+}
+
+function createLocalDesktopFetch(
+  apiFetch: (request: Request) => Response | Promise<Response>,
+  appFetch: (request: Request) => Response | Promise<Response>,
+  origin: string,
+  authSecret: string,
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/local-bootstrap") {
+      return bootstrapLocalSession(apiFetch, origin, authSecret);
+    }
+    return appFetch(request);
+  };
+}
+
+async function bootstrapLocalSession(
+  apiFetch: (request: Request) => Response | Promise<Response>,
+  origin: string,
+  authSecret: string,
+): Promise<Response> {
+  const password = localAccountPassword(authSecret);
+  let authResponse = await localAuthRequest(apiFetch, origin, "/api/auth/sign-in/email", {
+    email: LOCAL_USER.email,
+    password,
+  });
+  if (!authResponse.ok) {
+    const signup = await localAuthRequest(apiFetch, origin, "/api/auth/sign-up/email", {
+      email: LOCAL_USER.email,
+      password,
+      name: LOCAL_USER.name,
+    });
+    authResponse = signup.ok
+      ? signup
+      : await localAuthRequest(apiFetch, origin, "/api/auth/sign-in/email", {
+          email: LOCAL_USER.email,
+          password,
+        });
+  }
+  if (!authResponse.ok) {
+    return new Response("Could not establish the local FlowBots workspace.", {
+      status: 503,
+      headers: { "cache-control": "no-store", "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const headers = new Headers({
+    "cache-control": "no-store",
+    location: "/app",
+  });
+  for (const cookie of responseCookies(authResponse.headers)) headers.append("set-cookie", cookie);
+  return new Response(null, { status: 302, headers });
+}
+
+function localAuthRequest(
+  apiFetch: (request: Request) => Response | Promise<Response>,
+  origin: string,
+  pathName: string,
+  body: Record<string, string>,
+): Promise<Response> {
+  return Promise.resolve(
+    apiFetch(
+      new Request(`${origin}${pathName}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+        },
+        body: JSON.stringify(body),
+      }),
+    ),
+  );
+}
+
+function responseCookies(headers: Headers): string[] {
+  const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  if (typeof getSetCookie === "function") return getSetCookie.call(headers);
+  const fallback = headers.get("set-cookie");
+  return fallback ? [fallback] : [];
+}
+
+function localAccountPassword(authSecret: string): string {
+  return createHash("sha256")
+    .update("flowbots-local-account\0")
+    .update(authSecret)
+    .digest("base64url");
 }
 
 function createWebFallback(
@@ -363,7 +457,7 @@ function waitForListening(server: Server): Promise<void> {
 }
 
 function closeHttpServer(server?: Server): Promise<void> {
-  if (!server || !server.listening) return Promise.resolve();
+  if (!server?.listening) return Promise.resolve();
   return new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });

@@ -53,6 +53,7 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<"loading" | "model" | "bot" | "questions">("loading");
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [refreshingModels, setRefreshingModels] = useState(false);
   const [query, setQuery] = useState("");
   const [provider, setProvider] = useState("openrouter");
   const [modelId, setModelId] = useState("deepseek/deepseek-v4-flash-0731");
@@ -69,7 +70,7 @@ export function OnboardingPage() {
   const [oauthPending, setOauthPending] = useState(false);
 
   useEffect(() => {
-    void Promise.all([rpc.me(), rpc.models.list().catch(() => [])])
+    void Promise.all([rpc.me(), rpc.models.list({ refresh: true }).catch(() => [])])
       .then(([me, models]) => {
         setCatalog(models);
         const preferred =
@@ -119,6 +120,26 @@ export function OnboardingPage() {
   const deviceSignIn = selected?.signIn === "device-code";
   const acceptsKey = selected?.auth !== "oauth";
   const signInLabel = selected?.oauthLabel ?? "Sign in";
+
+  async function refreshModelCatalog() {
+    setRefreshingModels(true);
+    setError(null);
+    try {
+      const models = await rpc.models.list({ refresh: true });
+      setCatalog(models);
+      if (!models.some((entry) => entry.provider === provider && entry.id === modelId)) {
+        const first = models.find((entry) => entry.provider === provider) ?? models[0];
+        if (first) {
+          setProvider(first.provider);
+          setModelId(first.id);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not refresh models");
+    } finally {
+      setRefreshingModels(false);
+    }
+  }
 
   async function saveModel() {
     setError(null);
@@ -201,8 +222,8 @@ export function OnboardingPage() {
           <div>
             <h1 className="text-[32px] font-medium text-[#F1F1F2]">Connect a model</h1>
             <p className="mt-2 text-[#85858A]">
-              Rakazo does not pay for model usage. Paste an API key, sign in with ChatGPT, Copilot,
-              or SuperGrok, or skip if this deployment already has a key.
+              FlowBots can use local Ollama models, your API keys, or supported provider sign-ins.
+              Refresh the catalog whenever you install or gain access to a new model.
             </p>
             <input
               value={query}
@@ -210,6 +231,14 @@ export function OnboardingPage() {
               placeholder="Search providers and models"
               className="mt-8 w-full rounded-[11px] border border-[#26262A] bg-transparent px-3.5 py-3 text-[#ECECEE]"
             />
+            <button
+              type="button"
+              onClick={() => void refreshModelCatalog()}
+              disabled={refreshingModels}
+              className="mt-2 rounded-[10px] border border-[#343438] px-3.5 py-2 text-sm text-[#D8D8DB] hover:bg-[#19191C] disabled:opacity-40"
+            >
+              {refreshingModels ? "Refreshing…" : "Refresh models"}
+            </button>
             <div className="mt-3 max-h-48 overflow-y-auto rounded-[11px] border border-[#26262A]">
               {filteredProviders.map((entry) => (
                 <button
@@ -248,6 +277,18 @@ export function OnboardingPage() {
               </select>
             </label>
             <p className="mt-2 text-[13px] text-[#85858A]">{selected?.billing}</p>
+            <label className="mt-4 block text-sm text-[#85858A]">
+              Model ID override
+              <input
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                placeholder="Type any provider-supported model ID"
+                className="mt-2 w-full rounded-[11px] border border-[#26262A] bg-transparent px-3.5 py-3 font-mono text-[13px] text-[#ECECEE]"
+              />
+              <span className="mt-1.5 block text-[12px] text-[#66666C]">
+                Preview or newly released model IDs work even before a static catalog update.
+              </span>
+            </label>
             {deviceSignIn ? (
               <div className="mt-4">
                 {oauth ? (

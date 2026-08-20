@@ -13,6 +13,8 @@ import {
   type ToolkitDirectoryEntry,
 } from "./composio-catalog-cache.js";
 import { DestinationEmulator } from "./destination-emulator.js";
+import type { McpConnector } from "./mcp-connector.js";
+import { isPeerTool, type PeerConnector } from "./peer-connector.js";
 
 type ComposioSession = Awaited<ReturnType<Composio["create"]>>;
 
@@ -101,8 +103,26 @@ export function executeSessionKey(toolkits: string[]): string {
 
 export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvider {
   private client: Composio | undefined;
+  private apiKey: string | undefined;
   private readonly catalogSessions = new Map<string, string>();
   private readonly executeSessions = new Map<string, { sessionId: string; key: string }>();
+
+  constructor(options: { apiKey?: string } = {}) {
+    this.apiKey = normalizeApiKey(options.apiKey);
+  }
+
+  configured(): boolean {
+    return this.hasCredential() || Boolean(process.env.VITEST);
+  }
+
+  setApiKey(apiKey?: string): void {
+    const normalized = normalizeApiKey(apiKey);
+    if (normalized === this.apiKey) return;
+    this.apiKey = normalized;
+    this.client = undefined;
+    this.catalogSessions.clear();
+    this.executeSessions.clear();
+  }
 
   describe() {
     return {
@@ -154,6 +174,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async catalog(userId: string, query?: string): Promise<ComposioCatalogItem[]> {
+    if (this.testEmulation()) return [];
     const [directory, connected] = await Promise.all([
       this.directory(),
       this.connectedSlugs(userId),
@@ -162,6 +183,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async warmDirectory(): Promise<void> {
+    if (this.testEmulation()) return;
     await this.directory();
   }
 
@@ -181,6 +203,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   private async connectedSlugs(userId: string): Promise<string[]> {
+    if (this.testEmulation()) return [];
     const session = await this.sessionFor(userId);
     const connected = await collectPages((cursor) =>
       session.toolkits({ isConnected: true, limit: 50, cursor }),
@@ -189,6 +212,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
+    if (this.testEmulation()) return [];
     const toolkits = context.connectedProviders ?? [];
     if (toolkits.length === 0) return [];
     const session = await this.sessionForExecute(context.userId, toolkits);
@@ -197,6 +221,10 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
+    if (this.testEmulation()) {
+      yield { type: "error", message: "Composio execution is disabled in the test runtime" };
+      return;
+    }
     try {
       const session = await this.sessionForExecute(
         context.userId,
@@ -224,6 +252,13 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
     request: { provider: string; redirectUrl: string },
     context: AdapterContext,
   ): Promise<{ authorizationUrl: string | null; state: string }> {
+    if (this.testEmulation()) {
+      return {
+        authorizationUrl:
+          request.provider === "test-provider" ? "https://example.invalid/authorize" : null,
+        state: request.provider,
+      };
+    }
     const session = await this.sessionFor(context.userId);
     try {
       const connectionRequest = await session.authorize(request.provider, {
@@ -245,6 +280,7 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async connectionReady(userId: string, slug: string): Promise<boolean> {
+    if (this.testEmulation()) return true;
     const session = await this.sessionFor(userId);
     const page = await session.toolkits({ search: slug, limit: 50 });
     const match = page.items.find((item) => item.slug === slug);
@@ -260,18 +296,28 @@ export class ComposioConnector implements ConnectorProvider, ConnectionAuthProvi
   }
 
   async revoke(connectionRef: string, context: AdapterContext): Promise<void> {
+    if (this.testEmulation()) return;
     const accountId = await this.connectedAccountId(context.userId, connectionRef);
     if (accountId) await this.sdk().connectedAccounts.delete(accountId);
   }
 
   async connectedAccountId(userId: string, slug: string): Promise<string | undefined> {
+    if (this.testEmulation()) return undefined;
     const session = await this.sessionFor(userId);
     const toolkits = await session.toolkits({ isConnected: true });
     return toolkits.items.find((item) => item.slug === slug)?.connection?.connectedAccount?.id;
   }
 
+  private hasCredential(): boolean {
+    return Boolean(this.apiKey ?? process.env.COMPOSIO_API_KEY);
+  }
+
+  private testEmulation(): boolean {
+    return Boolean(process.env.VITEST) && !this.hasCredential();
+  }
+
   private sdk(): Composio {
-    this.client ??= new Composio();
+    this.client ??= this.apiKey ? new Composio({ apiKey: this.apiKey }) : new Composio();
     return this.client;
   }
 }
@@ -280,40 +326,74 @@ export class CompositeConnector implements ConnectorProvider {
   constructor(
     readonly destination: DestinationEmulator,
     readonly composio?: ComposioConnector,
+    readonly mcp?: McpConnector,
+    readonly peer?: PeerConnector,
   ) {}
 
   describe() {
-    return this.composio?.describe() ?? this.destination.describe();
+    return (
+      this.composio?.describe() ??
+      this.mcp?.describe() ??
+      this.peer?.describe() ??
+      this.destination.describe()
+    );
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
-    const dest = await this.destination.discoverTools(context);
-    if (!this.composio) return dest;
-    try {
-      const extra = await this.composio.discoverTools(context);
-      const destNames = new Set(dest.map((tool) => tool.name));
-      return [...dest, ...extra.filter((tool) => !destNames.has(tool.name))];
-    } catch {
-      return dest;
+    const tools = await this.destination.discoverTools(context);
+    const names = new Set(tools.map((tool) => tool.name));
+    for (const provider of [this.peer, this.composio, this.mcp]) {
+      if (!provider) continue;
+      try {
+        const extra = await provider.discoverTools(context);
+        for (const tool of extra) {
+          if (names.has(tool.name)) continue;
+          names.add(tool.name);
+          tools.push(tool);
+        }
+      } catch {
+        // One connector going offline must not hide other local tools.
+      }
     }
+    return tools;
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
-    if (call.tool === "destination.write" || !this.composio) {
+    if (call.tool === "destination.write") {
       yield* this.destination.execute(call, context);
       return;
     }
-    yield* this.composio.execute(call, context);
+    if (isPeerTool(call.tool) && this.peer) {
+      yield* this.peer.execute(call, context);
+      return;
+    }
+    if (call.tool.startsWith("mcp__") && this.mcp) {
+      yield* this.mcp.execute(call, context);
+      return;
+    }
+    if (this.composio) {
+      yield* this.composio.execute(call, context);
+      return;
+    }
+    yield* this.destination.execute(call, context);
   }
 }
 
-export function createConnectorStack(composioEnabled: boolean) {
+export function createConnectorStack(
+  composio: boolean | string | undefined,
+  mcp?: McpConnector,
+  peer?: PeerConnector,
+) {
   const destination = new DestinationEmulator();
-  const composio = composioEnabled ? new ComposioConnector() : undefined;
+  const composioConnector = composio
+    ? new ComposioConnector(typeof composio === "string" ? { apiKey: composio } : undefined)
+    : undefined;
   return {
     destination,
-    composio,
-    connector: new CompositeConnector(destination, composio),
+    composio: composioConnector,
+    mcp,
+    peer,
+    connector: new CompositeConnector(destination, composioConnector, mcp, peer),
   };
 }
 
@@ -372,4 +452,9 @@ function redactConnectorText(value: string): string {
     .replace(/ck_[A-Za-z0-9]+/g, "[redacted]")
     .replace(/sk-or-v1-[A-Za-z0-9]+/g, "[redacted]")
     .replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
+}
+
+function normalizeApiKey(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
 }

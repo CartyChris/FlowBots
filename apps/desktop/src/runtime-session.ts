@@ -22,7 +22,7 @@ export class DesktopRuntimeSession {
 
   constructor(private readonly deps: DesktopRuntimeSessionDeps) {}
 
-  async start(profile: RuntimeProfile | null): Promise<RuntimeSelectionResult | void> {
+  async start(profile: RuntimeProfile | null): Promise<RuntimeSelectionResult | undefined> {
     if (!profile) {
       await this.deps.showLauncher("");
       return;
@@ -44,7 +44,9 @@ export class DesktopRuntimeSession {
       }
 
       await this.deps.persist(profile);
-      await this.deps.navigate(next.origin);
+      const destination =
+        next.mode === "lite" ? `${next.origin.replace(/\/+$/, "")}/local-bootstrap` : next.origin;
+      await this.deps.navigate(destination);
       this.active = next;
       return { ok: true };
     } catch (error) {
@@ -73,5 +75,5 @@ export class DesktopRuntimeSession {
 
 function runtimeErrorMessage(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error || "unknown error");
-  return `Could not load the selected Rakazo runtime: ${detail}`;
+  return `Could not load the selected FlowBots runtime: ${detail}`;
 }

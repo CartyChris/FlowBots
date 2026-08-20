@@ -14,12 +14,16 @@ import {
 import {
   type ComposioConnector,
   checkpointAndRecordComputerWorkspace,
+  cliHarnessDefinitions,
   destroyBot,
   type EncryptedSecretStore,
+  HarnessRegistry,
   listPiCatalog,
   type PiOAuthLogins,
   resolveAgentHomePath,
+  resolveModelApiKey,
   restoreComputerWorkspace,
+  runCliProcess,
   sanitizeComposioError,
   savePushToken,
   scheduleComputerSleep,
@@ -44,6 +48,11 @@ import {
   type PrismaClient,
   type ThreadEvents,
 } from "@rakazo/db";
+import {
+  clearPersistedComposioKey,
+  hasPersistedComposioKey,
+  savePersistedComposioKey,
+} from "./local-connectors.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 
@@ -91,6 +100,9 @@ export interface RouterDeps {
     defaultProvider: string;
     defaultModel: string;
     openRouterKey?: string;
+    composioApiKey?: string;
+    ollamaBaseUrl: string;
+    hostHarnessesEnabled: boolean;
     webOrigin: string;
     screenProxySecret: string;
     sandboxProvider: string;
@@ -112,7 +124,12 @@ export function createRouter(deps: RouterDeps) {
       const actor = context.actor;
       const user = await deps.prisma.user.findUniqueOrThrow({ where: { id: actor.userId } });
       const cred = await deps.prisma.userModelCredential.findFirst({
-        where: { userId: actor.userId, isDefault: true },
+        where: {
+          userId: actor.userId,
+          workspaceId: actor.workspaceId,
+          isDefault: true,
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       });
       const settings = await deps.prisma.deploymentSettings.findUnique({
         where: { id: "default" },
@@ -166,7 +183,50 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     models: {
-      list: authed.models.list.handler(async () => [...listPiCatalog(), scriptedCatalogEntry]),
+      list: authed.models.list.handler(async ({ context, input }) => {
+        const xaiCredential = await deps.prisma.userModelCredential.findFirst({
+          where: {
+            userId: context.actor.userId,
+            workspaceId: context.actor.workspaceId,
+            provider: "xai",
+          },
+          orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+        });
+        let xaiApiKey: string | undefined;
+        if (xaiCredential?.secretId) {
+          const secret = await deps.prisma.secret.findFirst({
+            where: {
+              id: xaiCredential.secretId,
+              userId: context.actor.userId,
+              workspaceId: context.actor.workspaceId,
+            },
+          });
+          if (secret) {
+            const plaintext = deps.secrets.load(secret.ciphertext);
+            xaiApiKey = await resolveModelApiKey(plaintext, "xai", {
+              persist: async (next) => {
+                const encrypted = await deps.secrets.put(next, {
+                  operationId: `models:list:${context.actor.userId}`,
+                  traceId: `models:list:${context.actor.userId}`,
+                  workspaceId: context.actor.workspaceId,
+                  userId: context.actor.userId,
+                  signal: new AbortController().signal,
+                });
+                await deps.prisma.secret.update({
+                  where: { id: secret.id },
+                  data: { ciphertext: encrypted.ciphertext },
+                });
+              },
+            }).catch(() => undefined);
+          }
+        }
+        return listPiCatalog({
+          refresh: input?.refresh ?? true,
+          staticCatalog: [...listPiCatalog(), scriptedCatalogEntry],
+          ollamaBaseUrl: deps.env.ollamaBaseUrl,
+          xaiApiKey,
+        });
+      }),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
           where: { userId: context.actor.userId, workspaceId: context.actor.workspaceId },
@@ -175,7 +235,7 @@ export function createRouter(deps: RouterDeps) {
           id: row.id,
           provider: row.provider,
           label: row.label,
-          hasKey: true,
+          hasKey: Boolean(row.secretId),
           isDefault: row.isDefault,
         }));
       }),
@@ -212,11 +272,99 @@ export function createRouter(deps: RouterDeps) {
         return { status: "connected" as const, credential };
       }),
       setDefault: authed.models.setDefault.handler(async ({ context, input }) => {
-        await deps.prisma.userModelCredential.updateMany({
-          where: { userId: context.actor.userId, provider: input.provider },
-          data: { defaultModel: input.modelId, isDefault: true },
+        const selected = await deps.prisma.userModelCredential.findFirst({
+          where: {
+            userId: context.actor.userId,
+            workspaceId: context.actor.workspaceId,
+            provider: input.provider,
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        });
+        if (!selected && input.provider !== "ollama") {
+          throw new ORPCError("NOT_FOUND", {
+            message: `No ${input.provider} credential is connected in this workspace.`,
+          });
+        }
+        await deps.prisma.$transaction(async (tx) => {
+          await tx.userModelCredential.updateMany({
+            where: {
+              userId: context.actor.userId,
+              workspaceId: context.actor.workspaceId,
+            },
+            data: { isDefault: false },
+          });
+          if (selected) {
+            await tx.userModelCredential.update({
+              where: { id: selected.id },
+              data: { defaultModel: input.modelId, isDefault: true },
+            });
+          } else {
+            await tx.userModelCredential.create({
+              data: {
+                userId: context.actor.userId,
+                workspaceId: context.actor.workspaceId,
+                provider: "ollama",
+                label: "Ollama",
+                secretId: null,
+                isDefault: true,
+                defaultModel: input.modelId,
+              },
+            });
+          }
         });
         return { ok: true as const };
+      }),
+    },
+    harnesses: {
+      list: authed.harnesses.list.handler(async ({ context }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        const registry = new HarnessRegistry(cliHarnessDefinitions());
+        const definitions = registry.list();
+        const probes = new Map((await registry.probeAll()).map((probe) => [probe.id, probe]));
+        return definitions.map((definition) => {
+          const probe = probes.get(definition.id) ?? {
+            available: false as const,
+            version: undefined,
+            detail: undefined,
+          };
+          return {
+            id: definition.id,
+            label: definition.label,
+            kind: definition.kind,
+            interactions: definition.interactions,
+            workspacePolicies: definition.workspacePolicies,
+            scheduleable: definition.scheduleable,
+            resident: definition.resident,
+            outerVerificationRequired: definition.outerVerificationRequired,
+            available: probe.available,
+            ...(probe.version ? { version: probe.version } : {}),
+            ...(probe.detail ? { detail: probe.detail } : {}),
+          };
+        });
+      }),
+      probeCustom: authed.harnesses.probeCustom.handler(async ({ context, input }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        const result = await runCliProcess({
+          command: input.executable.trim(),
+          args: input.args,
+          cwd: deps.dataDir,
+          timeoutMs: 5_000,
+          maxOutputBytes: 64 * 1024,
+        });
+        const version = firstNonEmptyLine(result.stdout) ?? firstNonEmptyLine(result.stderr);
+        const available = result.code === 0 && !result.timedOut && !result.aborted;
+        return {
+          available,
+          ...(available && version ? { version } : {}),
+          ...(!available
+            ? {
+                detail:
+                  result.stderr.trim() ||
+                  result.stdout.trim() ||
+                  (result.timedOut ? "version probe timed out" : "CLI is unavailable"),
+              }
+            : {}),
+        };
       }),
     },
     bots: {
@@ -883,8 +1031,33 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     connections: {
+      composioStatus: authed.connections.composioStatus.handler(async ({ context }) => {
+        const local = await hasPersistedComposioKey(deps.prisma, context.actor);
+        return {
+          configured: local || Boolean(deps.env.composioApiKey),
+          source: local
+            ? ("local" as const)
+            : deps.env.composioApiKey
+              ? ("environment" as const)
+              : ("none" as const),
+        };
+      }),
+      configureComposio: authed.connections.configureComposio.handler(
+        async ({ context, input }) => {
+          assertHostHarnessAccess(deps, context.actor);
+          await savePersistedComposioKey(deps.prisma, deps.secrets, context.actor, input.apiKey);
+          deps.composio?.setApiKey(input.apiKey);
+          return { configured: true as const };
+        },
+      ),
+      clearComposio: authed.connections.clearComposio.handler(async ({ context }) => {
+        assertHostHarnessAccess(deps, context.actor);
+        await clearPersistedComposioKey(deps.prisma, context.actor);
+        deps.composio?.setApiKey(deps.env.composioApiKey);
+        return { ok: true as const };
+      }),
       catalog: authed.connections.catalog.handler(async ({ context, input }) => {
-        if (!deps.composio) return [];
+        if (!deps.composio?.configured()) return [];
         try {
           return await deps.composio.catalog(context.actor.userId, input.query);
         } catch {
@@ -905,6 +1078,11 @@ export function createRouter(deps: RouterDeps) {
         }));
       }),
       begin: authed.connections.begin.handler(async ({ context, input }) => {
+        if (!deps.composio?.configured()) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Configure Composio before connecting apps.",
+          });
+        }
         const row = await deps.prisma.connection.create({
           data: {
             workspaceId: context.actor.workspaceId,
@@ -954,7 +1132,7 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         if (!existing) throw new IsolationError();
-        if (deps.composio) {
+        if (deps.composio?.configured()) {
           const ready = await deps.composio.connectionReady(
             context.actor.userId,
             existing.provider,
@@ -989,7 +1167,7 @@ export function createRouter(deps: RouterDeps) {
             userId: context.actor.userId,
           },
         });
-        if (row && deps.composio) {
+        if (row && deps.composio?.configured()) {
           await deps.composio.revoke(row.provider, {
             operationId: "connections.revoke",
             traceId: "connections.revoke",
@@ -1233,6 +1411,21 @@ function computerHostFor(
   return null;
 }
 
+function assertHostHarnessAccess(deps: RouterDeps, actor: Actor): void {
+  if (!deps.env.hostHarnessesEnabled || !actor.isDeploymentOwner) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "Host CLI harnesses are only available in an explicitly enabled local workspace.",
+    });
+  }
+}
+
+function firstNonEmptyLine(value: string): string | undefined {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+}
+
 async function persistModelCredential(
   deps: RouterDeps,
   actor: Actor,
@@ -1254,20 +1447,22 @@ async function persistModelCredential(
       ciphertext: stored.ciphertext,
     },
   });
-  await deps.prisma.userModelCredential.updateMany({
-    where: { userId: actor.userId },
-    data: { isDefault: false },
-  });
-  const cred = await deps.prisma.userModelCredential.create({
-    data: {
-      userId: actor.userId,
-      workspaceId: actor.workspaceId,
-      provider: input.provider,
-      label: input.label ?? input.provider,
-      secretId: secret.id,
-      isDefault: true,
-      defaultModel: input.modelId ?? deps.env.defaultModel,
-    },
+  const cred = await deps.prisma.$transaction(async (tx) => {
+    await tx.userModelCredential.updateMany({
+      where: { userId: actor.userId, workspaceId: actor.workspaceId },
+      data: { isDefault: false },
+    });
+    return tx.userModelCredential.create({
+      data: {
+        userId: actor.userId,
+        workspaceId: actor.workspaceId,
+        provider: input.provider,
+        label: input.label ?? input.provider,
+        secretId: secret.id,
+        isDefault: true,
+        defaultModel: input.modelId ?? deps.env.defaultModel,
+      },
+    });
   });
   return {
     id: cred.id,

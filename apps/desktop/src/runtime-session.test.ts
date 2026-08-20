@@ -26,7 +26,7 @@ describe("desktop runtime session", () => {
     expect(h.navigate).not.toHaveBeenCalled();
   });
 
-  test("Lite activates, verifies, persists, then navigates in that order", async () => {
+  test("Lite activates, verifies, persists, then navigates through local bootstrap in that order", async () => {
     const h = harness();
     const order: string[] = [];
     h.activate.mockImplementation(async () => {
@@ -47,6 +47,7 @@ describe("desktop runtime session", () => {
     await expect(h.session.choose({ mode: "lite" })).resolves.toEqual({ ok: true });
     expect(order).toEqual(["activate", "probe", "persist", "navigate"]);
     expect(h.probe).toHaveBeenCalledWith({ mode: "lite", origin: "http://127.0.0.1:43117" });
+    expect(h.navigate).toHaveBeenCalledWith("http://127.0.0.1:43117/local-bootstrap");
   });
 
   test("Full Local and Remote never inherit or silently start Lite", async () => {

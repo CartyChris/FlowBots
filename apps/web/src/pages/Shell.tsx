@@ -9,12 +9,16 @@ import type {
 } from "@rakazo/contracts";
 import {
   abortableDelay,
+  applyBotRoleInstructions,
+  BOT_ROLE_PRESETS,
+  type BotRolePreset,
+  botRoleSelection,
   cronFromPreset,
   defaultCronPreset,
   formatCron,
   presetFromCron,
 } from "@rakazo/core";
-import { BotAvatar, Button } from "@rakazo/ui-web";
+import { BOT_AVATAR_FACE_CHOICES, BotAvatar, type BotAvatarState, Button } from "@rakazo/ui-web";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
@@ -25,7 +29,12 @@ import {
   reduceComputerStatus,
   reduceThreadSnapshot,
 } from "../lib/thread-events";
+import { ComposerActions } from "./ComposerActions";
+import { HarnessesOverlay } from "./HarnessesOverlay";
 import { HostComputerPrompt } from "./HostComputerPrompt";
+import { McpOverlay } from "./McpOverlay";
+import { MessageReactions } from "./MessageReactions";
+import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { RoutineSchedule } from "./RoutineSchedule";
 import { WindowChrome } from "./WindowChrome";
@@ -42,8 +51,12 @@ export function ShellPage() {
   const [draft, setDraft] = useState("");
   const [panel, setPanel] = useState<Panel>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [routinesBotId, setRoutinesBotId] = useState<string | null>(null);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const [mcpOpen, setMcpOpen] = useState(false);
+  const [harnessesOpen, setHarnessesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [booting, setBooting] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -52,6 +65,9 @@ export function ShellPage() {
     prompt: "",
     schedule: defaultCronPreset(),
   });
+  const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
+  const [deleteRoutineTarget, setDeleteRoutineTarget] = useState<Routine | null>(null);
+  const [savingRoutine, setSavingRoutine] = useState(false);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const [computerOpen, setComputerOpen] = useState(false);
   const [usage, setUsage] = useState<{
@@ -64,6 +80,9 @@ export function ShellPage() {
   const messageScroll = useRef<HTMLDivElement>(null);
 
   const active = bots.find((b) => b.id === botId) ?? bots[0];
+  const activeBotIdRef = useRef<string | undefined>(active?.id);
+  activeBotIdRef.current = active?.id;
+  const activeRoutines = routinesBotId === active?.id ? routines : [];
 
   async function refreshBots() {
     const list = await rpc.bots.list();
@@ -82,16 +101,20 @@ export function ShellPage() {
     const stickToEnd =
       !scrollElement ||
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 80;
-    const snap = await rpc.threads.get({ botId: id });
+    const [snap, nextRoutines] = await Promise.all([
+      rpc.threads.get({ botId: id }),
+      rpc.routines.list({ botId: id }),
+    ]);
+    if (activeBotIdRef.current !== id) return snap;
     setSnapshot((prev) =>
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
     setComputer(snap.computer);
-    const routines = await rpc.routines.list({ botId: id });
-    setRoutines(routines);
+    setRoutines(nextRoutines);
+    setRoutinesBotId(id);
     if (panel === "computer" || computerOpen) {
       const screen = await rpc.computer.screenUrl({ botId: id }).catch(() => ({ url: null }));
-      setScreenUrl(screen.url);
+      if (activeBotIdRef.current === id) setScreenUrl(screen.url);
     }
     if (stickToEnd) {
       window.requestAnimationFrame(() => {
@@ -249,6 +272,9 @@ export function ShellPage() {
 
   useEffect(() => {
     setComputerOpen(false);
+    setEditingRoutine(null);
+    setDeleteRoutineTarget(null);
+    setPanel((current) => (current === "routine" ? null : current));
   }, [active?.id]);
 
   useEffect(() => {
@@ -287,6 +313,24 @@ export function ShellPage() {
   }
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl);
+
+  async function addWebFilesToDraft(files: FileList) {
+    const contexts = await Promise.all(
+      Array.from(files)
+        .slice(0, 6)
+        .map(async (file) => {
+          const textLike =
+            file.type.startsWith("text/") ||
+            /\.(md|txt|json|ya?ml|toml|csv|ts|tsx|js|jsx|py|rs|go|java|c|cpp|h|html|css)$/i.test(
+              file.name,
+            );
+          if (!textLike) return `File: ${file.name} (${file.size} bytes; binary)`;
+          const body = (await file.text()).slice(0, 50_000);
+          return `File: ${file.name}\n${body}`;
+        }),
+    );
+    setDraft((current) => [current.trim(), ...contexts].filter(Boolean).join("\n\n"));
+  }
 
   const userName = session.data?.user.name ?? "You";
   const initials = userName
@@ -331,7 +375,12 @@ export function ShellPage() {
                 background: active?.id === bot.id ? "#161618" : "transparent",
               }}
             >
-              <BotAvatar color={bot.color} size={38} />
+              <BotAvatar
+                color={bot.color}
+                size={38}
+                state={avatarStateFor(bot.status)}
+                label={bot.name}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[15px] font-medium text-[#ECECEE]">{bot.name}</span>
@@ -368,9 +417,41 @@ export function ShellPage() {
           </span>
           <span className="text-[14.5px] text-[#C9C9CE]">Plugins</span>
         </button>
+        <button
+          type="button"
+          aria-label="Models"
+          onClick={() => setModelsOpen(true)}
+          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-[#131315]"
+        >
+          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#17171A] text-[14px] text-[#9A9AA0]">
+            ◉
+          </span>
+          <span className="text-[14.5px] text-[#C9C9CE]">Models</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setHarnessesOpen(true)}
+          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-[#131315]"
+        >
+          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#17171A] text-[14px] text-[#9A9AA0]">
+            ⌘
+          </span>
+          <span className="text-[14.5px] text-[#C9C9CE]">Harnesses</span>
+        </button>
         <div className="relative">
           {menuOpen ? (
             <div className="absolute bottom-14 left-3 right-3 rounded-2xl border border-[#2A2A2F] bg-[#1A1A1D] p-2 shadow-[0_22px_50px_rgba(0,0,0,.55)]">
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-[11px] px-3 py-2.5 hover:bg-[#232327]"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setModelsOpen(true);
+                }}
+              >
+                <span className="text-[#9A9AA0]">◉</span>
+                <span className="flex-1 text-left text-[14.5px] text-[#ECECEE]">Models</span>
+              </button>
               <button
                 type="button"
                 className="flex w-full items-center gap-3 rounded-[11px] px-3 py-2.5 hover:bg-[#232327]"
@@ -416,7 +497,14 @@ export function ShellPage() {
             onClick={() => setPanel("settings")}
             className="flex min-w-0 items-center gap-3"
           >
-            {active ? <BotAvatar color={active.color} size={26} /> : null}
+            {active ? (
+              <BotAvatar
+                color={active.color}
+                size={26}
+                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                label={active.name}
+              />
+            ) : null}
             <span className="min-w-0">
               <span className="block truncate text-[16px] font-medium text-[#ECECEE]">
                 {active?.name ?? "Select a bot"}
@@ -481,9 +569,23 @@ export function ShellPage() {
         </div>
         <div className="px-6 pb-6 pt-3">
           <div className="flex items-center gap-3.5 rounded-full border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3">
-            <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0]">
-              +
-            </span>
+            <ComposerActions
+              onSelectedPaths={({ kind, paths }) => {
+                const label = kind === "workspace" ? "Workspace" : "Files";
+                const context = `${label}: ${paths.map((item) => `${item.name} (${item.path})`).join(", ")}`;
+                setDraft((current) => [current.trim(), context].filter(Boolean).join("\n\n"));
+              }}
+              onWebFiles={(files) => void addWebFilesToDraft(files)}
+              onComputer={() => setPanel("computer")}
+              onConnections={() => setPluginsOpen(true)}
+              onMcp={() => setMcpOpen(true)}
+              onHarnesses={() => setHarnessesOpen(true)}
+              onTeammate={() =>
+                setDraft((current) =>
+                  [current.trim(), "Ask a teammate bot to "].filter(Boolean).join("\n\n"),
+                )
+              }
+            />
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -606,7 +708,7 @@ export function ShellPage() {
                   )}
                 </div>
                 <div className="mt-[30px] mb-3 text-[14px] text-[#85858A]">Routines</div>
-                {routines.map((routine) => (
+                {activeRoutines.map((routine) => (
                   <button
                     key={routine.id}
                     type="button"
@@ -616,6 +718,8 @@ export function ShellPage() {
                         prompt: routine.prompt,
                         schedule: presetFromCron(routine.cron),
                       });
+                      setEditingRoutine(routine);
+                      setDeleteRoutineTarget(null);
                       setPanel("routine");
                     }}
                     className="flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 hover:bg-[#121214]"
@@ -630,12 +734,14 @@ export function ShellPage() {
                 <button
                   type="button"
                   onClick={async () => {
-                    const first = routines[0];
+                    const first = activeRoutines[0];
                     if (first) {
                       await rpc.routines.testRun({ routineId: first.id });
                       await refreshThread(active.id);
                     } else {
                       setRoutineDraft({ name: "", prompt: "", schedule: defaultCronPreset() });
+                      setEditingRoutine(null);
+                      setDeleteRoutineTarget(null);
                       setPanel("routine");
                     }
                   }}
@@ -647,6 +753,8 @@ export function ShellPage() {
                   type="button"
                   onClick={() => {
                     setRoutineDraft({ name: "", prompt: "", schedule: defaultCronPreset() });
+                    setEditingRoutine(null);
+                    setDeleteRoutineTarget(null);
                     setPanel("routine");
                   }}
                   className="mt-1 flex items-center gap-2.5 px-2.5 py-2.5 text-[14.5px] text-[#7A7A80]"
@@ -727,25 +835,98 @@ export function ShellPage() {
                     onChange={(schedule) => setRoutineDraft((s) => ({ ...s, schedule }))}
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await rpc.routines.create({
-                      botId: active.id,
-                      name: routineDraft.name || "Routine",
-                      prompt: routineDraft.prompt || "Check in.",
-                      cron: cronFromPreset(routineDraft.schedule),
-                      timezone: "UTC",
-                      active: true,
-                      notify: true,
-                    });
-                    await refreshThread(active.id);
-                    setPanel("computer");
-                  }}
-                  className="mt-5 rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A]"
-                >
-                  Save
-                </button>
+                <div className="mt-5 flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={savingRoutine}
+                    onClick={async () => {
+                      const activeId = active.id;
+                      const editing = editingRoutine;
+                      if (editing && editing.botId !== activeId) return;
+                      setSavingRoutine(true);
+                      try {
+                        if (editing) {
+                          await rpc.routines.update({
+                            routineId: editing.id,
+                            name: routineDraft.name || "Routine",
+                            prompt: routineDraft.prompt || "Check in.",
+                            cron: cronFromPreset(routineDraft.schedule),
+                            timezone: editing.timezone,
+                            active: editing.active,
+                            notify: editing.notify,
+                          });
+                        } else {
+                          await rpc.routines.create({
+                            botId: activeId,
+                            name: routineDraft.name || "Routine",
+                            prompt: routineDraft.prompt || "Check in.",
+                            cron: cronFromPreset(routineDraft.schedule),
+                            timezone: "UTC",
+                            active: true,
+                            notify: true,
+                          });
+                        }
+                        if (activeBotIdRef.current !== activeId) return;
+                        await refreshThread(activeId);
+                        setEditingRoutine(null);
+                        setDeleteRoutineTarget(null);
+                        setPanel("computer");
+                      } finally {
+                        setSavingRoutine(false);
+                      }
+                    }}
+                    className="rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A] disabled:opacity-50"
+                  >
+                    {savingRoutine ? "Saving…" : "Save"}
+                  </button>
+                  {editingRoutine ? (
+                    <button
+                      type="button"
+                      disabled={savingRoutine}
+                      onClick={() => setDeleteRoutineTarget(editingRoutine)}
+                      className="text-[14px] text-[#E65707] disabled:opacity-50"
+                    >
+                      Delete routine
+                    </button>
+                  ) : null}
+                </div>
+                {deleteRoutineTarget ? (
+                  <div
+                    role="alertdialog"
+                    aria-label={`Delete ${deleteRoutineTarget.name}?`}
+                    className="mt-4 rounded-[12px] border border-[#3A1F14] bg-[#1A100C] p-4"
+                  >
+                    <p className="text-[13.5px] text-[#C9C9CE]">
+                      Delete {deleteRoutineTarget.name}? This removes the schedule permanently.
+                    </p>
+                    <div className="mt-3 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteRoutineTarget(null)}
+                        className="text-[14px] text-[#85858A]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const target = deleteRoutineTarget;
+                          const activeId = active.id;
+                          if (!target || target.botId !== activeId) return;
+                          await rpc.routines.remove({ routineId: target.id });
+                          if (activeBotIdRef.current !== activeId) return;
+                          await refreshThread(activeId);
+                          setEditingRoutine(null);
+                          setDeleteRoutineTarget(null);
+                          setPanel("computer");
+                        }}
+                        className="rounded-[9px] bg-[#E65707] px-3 py-1.5 text-[14px] text-white"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -753,6 +934,9 @@ export function ShellPage() {
       </aside>
 
       {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}
+      {modelsOpen ? <ModelSettingsOverlay onClose={() => setModelsOpen(false)} /> : null}
+      {mcpOpen ? <McpOverlay onClose={() => setMcpOpen(false)} /> : null}
+      {harnessesOpen ? <HarnessesOverlay onClose={() => setHarnessesOpen(false)} /> : null}
 
       {booting ? (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-[rgba(4,4,5,.96)]">
@@ -767,7 +951,12 @@ export function ShellPage() {
         <div className="absolute inset-0 z-30 flex flex-col bg-[#050506]">
           <div className="flex items-center justify-between gap-4 border-b border-[#171719] px-[18px] py-3.5">
             <div className="flex min-w-0 items-center gap-3">
-              <BotAvatar color={active.color} size={28} />
+              <BotAvatar
+                color={active.color}
+                size={28}
+                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                label={active.name}
+              />
               <span className="truncate text-[15.5px] font-medium text-[#ECECEE]">
                 {active.name}’s computer
               </span>
@@ -832,6 +1021,17 @@ export function ShellPage() {
       ) : null}
     </div>
   );
+}
+
+function avatarStateFor(status: string | undefined): BotAvatarState {
+  const normalized = status?.toLowerCase();
+  if (normalized === "running" || normalized === "working") return "working";
+  if (normalized === "queued" || normalized === "leased" || normalized === "booting") {
+    return "thinking";
+  }
+  if (normalized === "failed" || normalized === "error") return "error";
+  if (normalized === "completed") return "happy";
+  return "idle";
 }
 
 function applyThreadEvent(
@@ -1035,6 +1235,7 @@ function MessageView({
         }
         return null;
       })}
+      {message.role === "bot" ? <MessageReactions messageId={message.id} /> : null}
     </>
   );
 }
@@ -1110,6 +1311,7 @@ function BotSettings({
     title?: string;
     description?: string;
     instructions?: string;
+    color?: string;
   }) => Promise<void>;
   onExport: () => Promise<void>;
   onDelete: () => Promise<void>;
@@ -1117,6 +1319,10 @@ function BotSettings({
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
+  const storedRole = botRoleSelection(bot.instructions);
+  const [role, setRole] = useState<BotRolePreset>(storedRole.role ?? "Employee");
+  const [roleContext, setRoleContext] = useState(storedRole.context);
+  const [color, setColor] = useState(bot.color);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1124,8 +1330,55 @@ function BotSettings({
   return (
     <div>
       <div className="flex justify-center">
-        <BotAvatar color={bot.color} size={64} />
+        <BotAvatar color={color} size={64} state="happy" label={bot.name} />
       </div>
+      <div className="mt-5">
+        <div className="mb-2 text-[14px] text-[#85858A]">Face</div>
+        <div className="grid grid-cols-5 gap-2">
+          {BOT_AVATAR_FACE_CHOICES.map((choice) => (
+            <button
+              key={choice.variant}
+              type="button"
+              aria-label={`Use ${choice.label} face`}
+              aria-pressed={color === choice.color}
+              onClick={() => setColor(choice.color)}
+              className={`grid place-items-center rounded-[12px] border py-2 ${
+                color === choice.color ? "border-[#A8A8AD] bg-[#1D1D20]" : "border-[#26262A]"
+              }`}
+            >
+              <BotAvatar color={choice.color} variant={choice.variant} state="happy" size={36} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="mt-5 block text-[14px] text-[#85858A]">
+        Bot role
+        <select
+          value={role}
+          onChange={(event) => setRole(event.target.value as BotRolePreset)}
+          className="mt-2 w-full rounded-[11px] border border-[#26262A] bg-[#111113] px-3.5 py-3 text-[#ECECEE]"
+        >
+          {(Object.keys(BOT_ROLE_PRESETS) as BotRolePreset[]).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="mt-4 block text-[14px] text-[#85858A]">
+        Role context
+        <textarea
+          value={roleContext}
+          onChange={(event) => setRoleContext(event.target.value)}
+          placeholder={
+            role === "Custom"
+              ? "Describe this bot's personality and working style"
+              : "Optional extra guidance for this role"
+          }
+          rows={3}
+          className="mt-2 w-full rounded-[11px] border border-[#26262A] bg-transparent px-3.5 py-3 text-[#ECECEE]"
+        />
+      </label>
       <label className="mt-6 block text-[14px] text-[#85858A]">
         Name
         <input
@@ -1154,7 +1407,16 @@ function BotSettings({
       <div className="mt-5 flex flex-col items-start gap-3">
         <button
           type="button"
-          onClick={() => void onSave({ name, title, description, instructions: description })}
+          aria-label="Save bot settings"
+          onClick={() =>
+            void onSave({
+              name,
+              title,
+              description,
+              color,
+              instructions: applyBotRoleInstructions(bot.instructions, role, roleContext),
+            })
+          }
           className="rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A]"
         >
           Save

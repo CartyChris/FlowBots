@@ -26,6 +26,7 @@ async function main() {
     process.env.WAKEUP_DRIVER = "memory";
     process.env.SANDBOX_PROVIDER = "fake";
     process.env.AGENT_RUNTIME = "scripted";
+    process.env.FLOWBOTS_HOST_HARNESSES = "1";
     process.env.BETTER_AUTH_SECRET = "test-secret-test-secret-32chars!";
     process.env.ENCRYPTION_KEY = "test-encryption-key-test-encryption-key";
     process.env.BETTER_AUTH_URL = webOrigin;

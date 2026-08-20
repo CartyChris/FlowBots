@@ -18,7 +18,7 @@ export interface ManagedExecutionTarget {
   kind: "docker";
   name: string;
   probe(): Promise<ExecutionTargetProbe>;
-  start(): Promise<void>;
+  start(input?: { approvalToken?: string }): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -30,6 +30,7 @@ export interface DockerExecutionTargetConfig {
   projectName?: string;
   services?: string[];
   timeoutMs?: number;
+  approvalToken?: string;
 }
 
 export function buildDockerComposeInvocation(
@@ -61,33 +62,59 @@ export function createDockerExecutionTarget(
     kind: "docker",
     name: config.name,
     async probe() {
-      try {
-        const result = await runner({
-          command: "docker",
-          args: ["info", "--format", "{{json .ServerVersion}}"],
-          cwd,
-          timeoutMs: Math.min(timeoutMs, 10_000),
-          maxOutputBytes: 64 * 1024,
-        });
-        if (result.code === 0 && !result.timedOut && !result.aborted) {
-          const detail = result.stdout.trim();
-          return detail ? { available: true, detail } : { available: true };
-        }
-        return { available: false, detail: commandDetail(result, "Docker is unavailable") };
-      } catch (error) {
-        return {
-          available: false,
-          detail: error instanceof Error ? error.message : "Docker is unavailable",
-        };
-      }
+      return probeDocker(runner, cwd, timeoutMs);
     },
-    async start() {
+    async start(input) {
+      assertStartApproved(config, input?.approvalToken);
       await runDockerAction("start", config, runner, timeoutMs);
+      const readiness = await probeDocker(runner, cwd, timeoutMs);
+      if (!readiness.available) {
+        throw new Error(
+          `Docker readiness probe failed after ${config.name} started: ${readiness.detail ?? "Docker is unavailable"}`,
+        );
+      }
     },
     async stop() {
       await runDockerAction("stop", config, runner, timeoutMs);
     },
   };
+}
+
+async function probeDocker(
+  runner: ExecutionCommandRunner,
+  cwd: string,
+  timeoutMs: number,
+): Promise<ExecutionTargetProbe> {
+  try {
+    const result = await runner({
+      command: "docker",
+      args: ["info", "--format", "{{json .ServerVersion}}"],
+      cwd,
+      timeoutMs: Math.min(timeoutMs, 10_000),
+      maxOutputBytes: 64 * 1024,
+    });
+    if (result.code === 0 && !result.timedOut && !result.aborted) {
+      const detail = result.stdout.trim();
+      return detail ? { available: true, detail } : { available: true };
+    }
+    return { available: false, detail: commandDetail(result, "Docker is unavailable") };
+  } catch (error) {
+    return {
+      available: false,
+      detail: error instanceof Error ? error.message : "Docker is unavailable",
+    };
+  }
+}
+
+function assertStartApproved(
+  config: DockerExecutionTargetConfig,
+  suppliedToken: string | undefined,
+) {
+  const expectedToken = config.approvalToken?.trim();
+  const supplied = suppliedToken?.trim();
+  if (!expectedToken || supplied !== expectedToken) {
+    throw new Error(`${config.name} start requires explicit user approval.`);
+  }
 }
 
 async function runDockerAction(
