@@ -139,6 +139,7 @@ jobs:
           pnpm db:generate
           pnpm check
           pnpm test
+          pnpm --filter @rakazo/web exec playwright install --with-deps chromium
           pnpm test:e2e
           git diff --check
         env:
