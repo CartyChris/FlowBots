@@ -16,7 +16,6 @@ test("model management stays reachable after onboarding", async ({ page }) => {
   await signup(page, `models-parity-${stamp}@rakazo.test`, "password12", name);
   await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
 
-  await page.getByRole("button", { name: new RegExp(`${name}$`) }).click();
   const models = page.getByRole("button", { name: "Models", exact: true });
   await expect(models).toBeVisible({ timeout: 5_000 });
   await models.click();
