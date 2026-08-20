@@ -68,7 +68,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
     for (const entry of catalog) {
       if (seen.has(entry.provider)) continue;
       seen.add(entry.provider);
-      rows.push({ id: entry.provider, name: entry.providerName });
+      rows.push({ id: entry.provider, name: entry.providerName ?? entry.provider });
     }
     const needle = query.trim().toLowerCase();
     if (!needle) return rows;
@@ -80,7 +80,8 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
   const providerModels = catalog.filter((entry) => entry.provider === provider);
   const selected = providerModels.find((entry) => entry.id === modelId) ?? providerModels[0];
   const providerCredential = credentials.find((row) => row.provider === provider);
-  const providerName = selected?.providerName ?? providers.find((row) => row.id === provider)?.name ?? provider;
+  const providerName =
+    selected?.providerName ?? providers.find((row) => row.id === provider)?.name ?? provider;
 
   async function connectWithKey() {
     if (!selected || apiKey.trim().length < 8) return;
@@ -139,7 +140,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
         if (authRun.current !== run) return;
         const result = await rpc.models.completeOAuth({ loginId: started.loginId });
         if (result.status === "pending") continue;
-        if (result.status === "error") throw new Error(result.message || "Model sign-in failed");
+        if (result.status === "error") throw new Error(result.error || "Model sign-in failed");
         if (result.status === "connected") {
           await rpc.models.setDefault({ provider: selected.provider, modelId: selected.id });
           setOauth(null);
@@ -221,7 +222,10 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                 <div className="text-[13px] text-[#77777D]">Provider</div>
                 <div className="mt-1 text-xl font-medium text-[#F1F1F2]">{providerName}</div>
                 <div className="mt-1 text-[13px] text-[#77777D]">
-                  Current default: {current.provider && current.model ? `${current.provider} · ${current.model}` : "none"}
+                  Current default:{" "}
+                  {current.provider && current.model
+                    ? `${current.provider} · ${current.model}`
+                    : "none"}
                 </div>
               </div>
 
@@ -257,8 +261,14 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                   </div>
                 ) : selected.signIn === "device-code" ? (
                   <div>
-                    <Button type="button" disabled={pending} onClick={() => void beginDeviceSignIn()}>
-                      {pending ? "Waiting for sign-in…" : selected.oauthLabel || `Sign in to ${providerName}`}
+                    <Button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => void beginDeviceSignIn()}
+                    >
+                      {pending
+                        ? "Waiting for sign-in…"
+                        : selected.oauthLabel || `Sign in to ${providerName}`}
                     </Button>
                     {oauth ? (
                       <div className="mt-4 rounded-[12px] bg-[#19191C] p-4 text-[13px] text-[#B8B8BD]">
@@ -267,9 +277,11 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                       </div>
                     ) : null}
                   </div>
-                ) : selected.auth === "none" ? (
+                ) : selected.provider === "ollama" ? (
                   <p className="text-[13.5px] leading-6 text-[#8C8C92]">
-                    This provider does not need an API key. Catalog refresh works locally; deployment defaults remain the fallback until a credential-backed default is selected.
+                    Ollama runs locally and does not need an API key. Refresh discovers the tags
+                    installed on this computer. A credential-backed remote default remains the
+                    runtime fallback until local model preference storage is added.
                   </p>
                 ) : (
                   <div>
