@@ -53,6 +53,9 @@ updated = '''  if (credential?.provider === "ollama" && !credential.secretId) {
   }
   if (credential && deps.secretStore) {
     const secretId = credential.secretId;
+    if (!secretId) {
+      throw new Error(`Missing encrypted credential for ${credential.provider}.`);
+    }
     return withModelCredentialLock(secretId, async () => {
       const row = await deps.prisma.secret.findUnique({ where: { id: secretId } });'''
 if executor.count(current) != 1:
