@@ -89,7 +89,6 @@ jobs:
           git fetch origin main
           git checkout main
           git reset --hard origin/main
-          cp "$GITHUB_WORKSPACE/$REPORT_PATH" "$REPORT_PATH"
           git add "$REPORT_PATH"
           git rm .github/workflows/observe-flowbots-release-v2.yml
           git commit -m "docs: record exact FlowBots main release acceptance"
