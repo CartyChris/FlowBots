@@ -312,7 +312,9 @@ app.whenReady().then(async () => {
       title: "Choose files for FlowBots",
       properties: ["openFile", "multiSelections"],
     };
-    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
     if (result.canceled) return [];
     return result.filePaths.map((filePath) => ({ name: path.basename(filePath), path: filePath }));
   });
@@ -323,7 +325,9 @@ app.whenReady().then(async () => {
       title: "Choose a workspace for FlowBots",
       properties: ["openDirectory"],
     };
-    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
     const selected = result.canceled ? undefined : result.filePaths[0];
     return selected ? { name: path.basename(selected), path: selected } : null;
   });
