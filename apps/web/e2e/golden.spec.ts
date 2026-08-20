@@ -115,6 +115,45 @@ test("Harness Center lists coding agents and probes a custom argv-based CLI", as
   await expect(page.getByRole("heading", { name: "Harness Center" })).toBeHidden();
 });
 
+test("roles, faces, composer actions, MCP, and reactions work in the shell", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `social-${stamp}@rakazo.test`, "password12", "Social");
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
+
+  await page.getByText("Chief").first().click();
+  const gear = page.locator("button:has-text('⚙')");
+  if (!(await gear.isVisible().catch(() => false))) {
+    await page.getByTitle("Agent computer").click();
+  }
+  await gear.click();
+  await page.getByLabel("Bot role").selectOption("Developer");
+  await page.getByRole("button", { name: "Use Cat face" }).click();
+  await page.getByRole("button", { name: "Save bot settings" }).click();
+  await expect(page.getByLabel("Bot role")).toHaveValue("Developer");
+  await expect(page.getByRole("button", { name: "Use Cat face" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  const composer = page.getByPlaceholder(/Message/);
+  await page.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("menu", { name: "Add context" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "MCP servers" }).click();
+  await expect(page.getByRole("heading", { name: /MCP/i })).toBeVisible();
+  await page.getByRole("button", { name: /Close MCP/i }).click();
+
+  await page.getByRole("button", { name: "Add" }).click();
+  await page.getByRole("menuitem", { name: "Ask a teammate" }).click();
+  await expect(composer).toHaveValue(/Ask a teammate bot to/);
+
+  await composer.fill("Reply with hello in one short sentence.");
+  await page.keyboard.press("Enter");
+  const fire = page.getByRole("button", { name: "React 🔥" }).last();
+  await expect(fire).toBeVisible({ timeout: 30_000 });
+  await fire.click();
+  await expect(fire).toHaveAttribute("aria-pressed", "true");
+});
+
 test("sign-in, spawn, and stop work in the shell", async ({ page }) => {
   const stamp = Date.now();
   const email = `shell-${stamp}@rakazo.test`;

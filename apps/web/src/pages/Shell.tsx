@@ -9,12 +9,16 @@ import type {
 } from "@rakazo/contracts";
 import {
   abortableDelay,
+  applyBotRoleInstructions,
+  BOT_ROLE_PRESETS,
+  type BotRolePreset,
+  botRoleSelection,
   cronFromPreset,
   defaultCronPreset,
   formatCron,
   presetFromCron,
 } from "@rakazo/core";
-import { BotAvatar, Button } from "@rakazo/ui-web";
+import { BOT_AVATAR_FACE_CHOICES, BotAvatar, type BotAvatarState, Button } from "@rakazo/ui-web";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
@@ -25,8 +29,11 @@ import {
   reduceComputerStatus,
   reduceThreadSnapshot,
 } from "../lib/thread-events";
+import { ComposerActions } from "./ComposerActions";
 import { HarnessesOverlay } from "./HarnessesOverlay";
 import { HostComputerPrompt } from "./HostComputerPrompt";
+import { McpOverlay } from "./McpOverlay";
+import { MessageReactions } from "./MessageReactions";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { RoutineSchedule } from "./RoutineSchedule";
 import { WindowChrome } from "./WindowChrome";
@@ -45,6 +52,7 @@ export function ShellPage() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [mcpOpen, setMcpOpen] = useState(false);
   const [harnessesOpen, setHarnessesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [booting, setBooting] = useState(false);
@@ -290,6 +298,24 @@ export function ShellPage() {
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl);
 
+  async function addWebFilesToDraft(files: FileList) {
+    const contexts = await Promise.all(
+      Array.from(files)
+        .slice(0, 6)
+        .map(async (file) => {
+          const textLike =
+            file.type.startsWith("text/") ||
+            /\.(md|txt|json|ya?ml|toml|csv|ts|tsx|js|jsx|py|rs|go|java|c|cpp|h|html|css)$/i.test(
+              file.name,
+            );
+          if (!textLike) return `File: ${file.name} (${file.size} bytes; binary)`;
+          const body = (await file.text()).slice(0, 50_000);
+          return `File: ${file.name}\n${body}`;
+        }),
+    );
+    setDraft((current) => [current.trim(), ...contexts].filter(Boolean).join("\n\n"));
+  }
+
   const userName = session.data?.user.name ?? "You";
   const initials = userName
     .split(" ")
@@ -333,7 +359,12 @@ export function ShellPage() {
                 background: active?.id === bot.id ? "#161618" : "transparent",
               }}
             >
-              <BotAvatar color={bot.color} size={38} />
+              <BotAvatar
+                color={bot.color}
+                size={38}
+                state={avatarStateFor(bot.status)}
+                label={bot.name}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[15px] font-medium text-[#ECECEE]">{bot.name}</span>
@@ -428,7 +459,14 @@ export function ShellPage() {
             onClick={() => setPanel("settings")}
             className="flex min-w-0 items-center gap-3"
           >
-            {active ? <BotAvatar color={active.color} size={26} /> : null}
+            {active ? (
+              <BotAvatar
+                color={active.color}
+                size={26}
+                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                label={active.name}
+              />
+            ) : null}
             <span className="min-w-0">
               <span className="block truncate text-[16px] font-medium text-[#ECECEE]">
                 {active?.name ?? "Select a bot"}
@@ -493,9 +531,23 @@ export function ShellPage() {
         </div>
         <div className="px-6 pb-6 pt-3">
           <div className="flex items-center gap-3.5 rounded-full border border-[#202023] bg-[#131315] py-[9px] pr-2.5 pl-3">
-            <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-full border border-[#26262A] text-[18px] text-[#9A9AA0]">
-              +
-            </span>
+            <ComposerActions
+              onSelectedPaths={({ kind, paths }) => {
+                const label = kind === "workspace" ? "Workspace" : "Files";
+                const context = `${label}: ${paths.map((item) => `${item.name} (${item.path})`).join(", ")}`;
+                setDraft((current) => [current.trim(), context].filter(Boolean).join("\n\n"));
+              }}
+              onWebFiles={(files) => void addWebFilesToDraft(files)}
+              onComputer={() => setPanel("computer")}
+              onConnections={() => setPluginsOpen(true)}
+              onMcp={() => setMcpOpen(true)}
+              onHarnesses={() => setHarnessesOpen(true)}
+              onTeammate={() =>
+                setDraft((current) =>
+                  [current.trim(), "Ask a teammate bot to "].filter(Boolean).join("\n\n"),
+                )
+              }
+            />
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -765,6 +817,7 @@ export function ShellPage() {
       </aside>
 
       {pluginsOpen ? <PluginsOverlay onClose={() => setPluginsOpen(false)} /> : null}
+      {mcpOpen ? <McpOverlay onClose={() => setMcpOpen(false)} /> : null}
       {harnessesOpen ? <HarnessesOverlay onClose={() => setHarnessesOpen(false)} /> : null}
 
       {booting ? (
@@ -780,7 +833,12 @@ export function ShellPage() {
         <div className="absolute inset-0 z-30 flex flex-col bg-[#050506]">
           <div className="flex items-center justify-between gap-4 border-b border-[#171719] px-[18px] py-3.5">
             <div className="flex min-w-0 items-center gap-3">
-              <BotAvatar color={active.color} size={28} />
+              <BotAvatar
+                color={active.color}
+                size={28}
+                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                label={active.name}
+              />
               <span className="truncate text-[15.5px] font-medium text-[#ECECEE]">
                 {active.name}’s computer
               </span>
@@ -845,6 +903,17 @@ export function ShellPage() {
       ) : null}
     </div>
   );
+}
+
+function avatarStateFor(status: string | undefined): BotAvatarState {
+  const normalized = status?.toLowerCase();
+  if (normalized === "running" || normalized === "working") return "working";
+  if (normalized === "queued" || normalized === "leased" || normalized === "booting") {
+    return "thinking";
+  }
+  if (normalized === "failed" || normalized === "error") return "error";
+  if (normalized === "completed") return "happy";
+  return "idle";
 }
 
 function applyThreadEvent(
@@ -1048,6 +1117,7 @@ function MessageView({
         }
         return null;
       })}
+      {message.role === "bot" ? <MessageReactions messageId={message.id} /> : null}
     </>
   );
 }
@@ -1123,6 +1193,7 @@ function BotSettings({
     title?: string;
     description?: string;
     instructions?: string;
+    color?: string;
   }) => Promise<void>;
   onExport: () => Promise<void>;
   onDelete: () => Promise<void>;
@@ -1130,6 +1201,10 @@ function BotSettings({
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
+  const storedRole = botRoleSelection(bot.instructions);
+  const [role, setRole] = useState<BotRolePreset>(storedRole.role ?? "Employee");
+  const [roleContext, setRoleContext] = useState(storedRole.context);
+  const [color, setColor] = useState(bot.color);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1137,8 +1212,55 @@ function BotSettings({
   return (
     <div>
       <div className="flex justify-center">
-        <BotAvatar color={bot.color} size={64} />
+        <BotAvatar color={color} size={64} state="happy" label={bot.name} />
       </div>
+      <div className="mt-5">
+        <div className="mb-2 text-[14px] text-[#85858A]">Face</div>
+        <div className="grid grid-cols-5 gap-2">
+          {BOT_AVATAR_FACE_CHOICES.map((choice) => (
+            <button
+              key={choice.variant}
+              type="button"
+              aria-label={`Use ${choice.label} face`}
+              aria-pressed={color === choice.color}
+              onClick={() => setColor(choice.color)}
+              className={`grid place-items-center rounded-[12px] border py-2 ${
+                color === choice.color ? "border-[#A8A8AD] bg-[#1D1D20]" : "border-[#26262A]"
+              }`}
+            >
+              <BotAvatar color={choice.color} variant={choice.variant} state="happy" size={36} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="mt-5 block text-[14px] text-[#85858A]">
+        Bot role
+        <select
+          value={role}
+          onChange={(event) => setRole(event.target.value as BotRolePreset)}
+          className="mt-2 w-full rounded-[11px] border border-[#26262A] bg-[#111113] px-3.5 py-3 text-[#ECECEE]"
+        >
+          {(Object.keys(BOT_ROLE_PRESETS) as BotRolePreset[]).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="mt-4 block text-[14px] text-[#85858A]">
+        Role context
+        <textarea
+          value={roleContext}
+          onChange={(event) => setRoleContext(event.target.value)}
+          placeholder={
+            role === "Custom"
+              ? "Describe this bot's personality and working style"
+              : "Optional extra guidance for this role"
+          }
+          rows={3}
+          className="mt-2 w-full rounded-[11px] border border-[#26262A] bg-transparent px-3.5 py-3 text-[#ECECEE]"
+        />
+      </label>
       <label className="mt-6 block text-[14px] text-[#85858A]">
         Name
         <input
@@ -1167,7 +1289,16 @@ function BotSettings({
       <div className="mt-5 flex flex-col items-start gap-3">
         <button
           type="button"
-          onClick={() => void onSave({ name, title, description, instructions: description })}
+          aria-label="Save bot settings"
+          onClick={() =>
+            void onSave({
+              name,
+              title,
+              description,
+              color,
+              instructions: applyBotRoleInstructions(bot.instructions, role, roleContext),
+            })
+          }
           className="rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A]"
         >
           Save
