@@ -152,7 +152,7 @@
   .rk-bot-avatar .rk-bot-eyes,
   .rk-bot-avatar .rk-bot-work-sparks,
   .rk-bot-avatar .rk-bot-presence {
-    animation: none;
-    transform: none;
+    animation: none !important;
+    transform: none !important;
   }
 }
