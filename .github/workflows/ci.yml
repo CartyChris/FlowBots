@@ -132,7 +132,9 @@ jobs:
           test "$(git rev-parse HEAD)" = "$START_SHA"
           test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
       - name: Apply staged Task 12 migration
-        run: python3 scripts/migrations/apply-task12-parity.py
+        run: |
+          python3 scripts/migrations/apply-task12-parity.py
+          python3 scripts/migrations/add-models-sidebar.py
       - name: Format and verify transformed tree
         run: |
           pnpm exec biome check --write apps/api/src/router.ts apps/api/src/model-catalog-router.test.ts apps/web/src/pages/Shell.tsx apps/web/src/pages/PluginsOverlay.tsx apps/web/src/pages/ModelSettingsOverlay.tsx apps/web/playwright.config.ts apps/web/e2e/routine-parity.spec.ts apps/web/e2e/settings-parity.spec.ts
@@ -144,11 +146,11 @@ jobs:
           git diff --check
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-      - name: Restore canonical CI and remove migration script
+      - name: Restore canonical CI and remove migration scripts
         run: |
           git fetch origin main --depth=1
           git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm scripts/migrations/apply-task12-parity.py
+          rm scripts/migrations/apply-task12-parity.py scripts/migrations/add-models-sidebar.py
       - name: Commit only on unchanged PR head
         run: |
           START_SHA="${{ github.event.pull_request.head.sha }}"
