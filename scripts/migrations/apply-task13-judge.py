@@ -80,6 +80,18 @@ router = replace_once(
         });''',
     "credentialless Ollama default",
 )
+router = replace_once(
+    router,
+    '''        if (xaiCredential) {
+          const secret = await deps.prisma.secret.findFirst({
+            where: {
+              id: xaiCredential.secretId,''',
+    '''        if (xaiCredential?.secretId) {
+          const secret = await deps.prisma.secret.findFirst({
+            where: {
+              id: xaiCredential.secretId,''',
+    "nullable xai model-list secret",
+)
 router_path.write_text(router)
 
 executor_path = Path("packages/adapters/src/executor.ts")
