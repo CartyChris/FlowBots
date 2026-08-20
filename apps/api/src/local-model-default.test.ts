@@ -26,7 +26,7 @@ describe("credentialless local model defaults", () => {
         workspaceId: actor.workspaceId,
         provider: "openai",
         label: "OpenAI",
-        secretId: "secret-openai",
+        secretId: "secret-openai" as string | null,
         isDefault: true,
         defaultModel: "gpt-current",
       },
@@ -36,7 +36,7 @@ describe("credentialless local model defaults", () => {
         workspaceId: "workspace-2",
         provider: "xai",
         label: "xAI",
-        secretId: "secret-xai",
+        secretId: "secret-xai" as string | null,
         isDefault: true,
         defaultModel: "grok-current",
       },
@@ -56,6 +56,10 @@ describe("credentialless local model defaults", () => {
       findFirst: vi.fn(
         async ({ where }: { where: Record<string, unknown> }) =>
           rows.find((row) => matches(row, where)) ?? null,
+      ),
+      findMany: vi.fn(
+        async ({ where }: { where: Record<string, unknown> }) =>
+          rows.filter((row) => matches(row, where)),
       ),
       updateMany: vi.fn(
         async ({
@@ -88,7 +92,7 @@ describe("credentialless local model defaults", () => {
           isDefault: Boolean(data.isDefault),
           defaultModel: String(data.defaultModel),
         };
-        rows.push(created as (typeof rows)[number]);
+        rows.push(created);
         return created;
       }),
     };
@@ -100,7 +104,8 @@ describe("credentialless local model defaults", () => {
       },
     } as unknown as RouterDeps;
 
-    await clientFor(deps).models.setDefault({ provider: "ollama", modelId: "qwen3.8:9b" });
+    const client = clientFor(deps);
+    await client.models.setDefault({ provider: "ollama", modelId: "qwen3.8:9b" });
 
     expect(userModelCredential.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -128,6 +133,22 @@ describe("credentialless local model defaults", () => {
           workspaceId: "workspace-2",
           isDefault: true,
           defaultModel: "grok-current",
+        }),
+      ]),
+    );
+
+    await expect(client.models.credentials()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "w1-openai",
+          provider: "openai",
+          hasKey: true,
+        }),
+        expect.objectContaining({
+          id: "w1-ollama",
+          provider: "ollama",
+          hasKey: false,
+          isDefault: true,
         }),
       ]),
     );
