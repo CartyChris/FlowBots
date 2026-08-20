@@ -79,7 +79,9 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
 
   const providerModels = catalog.filter((entry) => entry.provider === provider);
   const selected = providerModels.find((entry) => entry.id === modelId) ?? providerModels[0];
-  const providerCredential = credentials.find((row) => row.provider === provider);
+  const providerCredential = credentials.find(
+    (row) => row.provider === provider && row.hasKey,
+  );
   const providerName =
     selected?.providerName ?? providers.find((row) => row.id === provider)?.name ?? provider;
 
@@ -187,7 +189,9 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
           />
           <div className="rk-scroll max-h-[610px] overflow-y-auto">
             {providers.map((row) => {
-              const connected = credentials.some((credential) => credential.provider === row.id);
+              const connected = credentials.some(
+                (credential) => credential.provider === row.id && credential.hasKey,
+              );
               return (
                 <button
                   key={row.id}
