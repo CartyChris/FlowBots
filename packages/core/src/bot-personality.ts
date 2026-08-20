@@ -45,7 +45,8 @@ export function botRoleSelection(instructions: string): {
   context: string;
 } {
   const match = /<!-- flowbots-role:([^>]+) -->/.exec(instructions);
-  if (!match || !(match[1] in BOT_ROLE_PRESETS)) return { role: null, context: "" };
+  const storedRole = match?.[1];
+  if (!storedRole || !(storedRole in BOT_ROLE_PRESETS)) return { role: null, context: "" };
   const contextMatch = ROLE_CONTEXT.exec(instructions);
   let context = "";
   if (contextMatch?.[1]) {
@@ -55,5 +56,5 @@ export function botRoleSelection(instructions: string): {
       context = "";
     }
   }
-  return { role: match[1] as BotRolePreset, context };
+  return { role: storedRole as BotRolePreset, context };
 }
