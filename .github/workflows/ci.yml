@@ -135,7 +135,7 @@ jobs:
         run: python3 scripts/migrations/wire-social-shell.py
       - name: Format and verify social slice
         run: |
-          pnpm exec biome check --write apps/web/src/pages/Shell.tsx apps/web/e2e/golden.spec.ts packages/core/src/bot-personality.ts packages/core/src/bot-personality.test.ts apps/web/src/pages/ComposerActions.tsx apps/web/src/pages/MessageReactions.tsx packages/ui-web/src/bot-avatar.tsx packages/ui-web/src/styles.css apps/desktop/src/main.ts apps/web/src/lib/desktop.test.ts apps/desktop/e2e/smoke.spec.ts
+          pnpm exec biome check --write apps/web/src/pages/Shell.tsx apps/web/e2e/golden.spec.ts packages/core/src/bot-personality.ts packages/core/src/bot-personality.test.ts apps/web/src/pages/ComposerActions.tsx apps/web/src/pages/MessageReactions.tsx apps/web/src/pages/McpOverlay.tsx packages/ui-web/src/bot-avatar.tsx packages/ui-web/src/styles.css apps/desktop/src/main.ts apps/web/src/lib/desktop.test.ts apps/desktop/e2e/smoke.spec.ts
           pnpm db:generate
           pnpm check
           pnpm exec vitest run packages/core/src/bot-personality.test.ts packages/ui-web/src/bot-avatar.test.ts packages/adapters/src/reaction-store.test.ts packages/adapters/src/peer-connector.test.ts apps/web/src/lib/docker-setup.test.ts apps/web/src/lib/desktop.test.ts
@@ -144,7 +144,8 @@ jobs:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
       - name: Restore CI and remove migration script
         run: |
-          git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
+          git fetch origin main --depth=1
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
           rm scripts/migrations/wire-social-shell.py
       - name: Commit only on unchanged PR head
         run: |
