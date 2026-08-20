@@ -24,6 +24,20 @@ source, removed = stale_body.subn("", source, count=1)
 if removed != 1:
     raise SystemExit(f"stale model-key body migration anchor count={removed}")
 
+peer_path = Path("packages/adapters/src/peer-connector.ts")
+peer = peer_path.read_text()
+current_peer_import = (
+    'import { createThreadMessage, type PrismaClient, type ThreadEvents } from "@rakazo/db";'
+)
+normalized_peer_import = '''import {
+  createThreadMessage,
+  type PrismaClient,
+  type ThreadEvents,
+} from "@rakazo/db";'''
+if peer.count(current_peer_import) != 1:
+    raise SystemExit(f"current peer import anchor count={peer.count(current_peer_import)}")
+peer_path.write_text(peer.replace(current_peer_import, normalized_peer_import, 1))
+
 exec(compile(source, str(source_path), "exec"), {"__name__": "__main__"})
 
 executor_path = Path("packages/adapters/src/executor.ts")
