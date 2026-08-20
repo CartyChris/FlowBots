@@ -139,8 +139,8 @@ test("roles, faces, composer actions, MCP, and reactions work in the shell", asy
   await page.getByRole("button", { name: "Add" }).click();
   await expect(page.getByRole("menu", { name: "Add context" })).toBeVisible();
   await page.getByRole("menuitem", { name: "MCP servers" }).click();
-  await expect(page.getByRole("heading", { name: /MCP/i })).toBeVisible();
-  await page.getByRole("button", { name: /Close MCP/i }).click();
+  await expect(page.getByRole("heading", { name: "MCP servers", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close MCP servers", exact: true }).click();
 
   await page.getByRole("button", { name: "Add" }).click();
   await page.getByRole("menuitem", { name: "Ask a teammate" }).click();
