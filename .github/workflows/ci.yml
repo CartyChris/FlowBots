@@ -107,6 +107,59 @@ jobs:
         run: pnpm --filter @rakazo/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  social-shell-migration:
+    name: Social Shell exact-head migration
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 7 && github.event.pull_request.head.ref == 'feature/flowbots-local-social-vnext' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse stale branch state
+        run: |
+          START_SHA="${{ github.event.pull_request.head.sha }}"
+          git fetch origin feature/flowbots-local-social-vnext
+          test "$(git rev-parse HEAD)" = "$START_SHA"
+          test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
+      - name: Apply staged social Shell migration
+        run: python3 scripts/migrations/wire-social-shell.py
+      - name: Format and verify social slice
+        run: |
+          pnpm exec biome check --write apps/web/src/pages/Shell.tsx apps/web/e2e/golden.spec.ts packages/core/src/bot-personality.ts packages/core/src/bot-personality.test.ts apps/web/src/pages/ComposerActions.tsx apps/web/src/pages/MessageReactions.tsx packages/ui-web/src/bot-avatar.tsx packages/ui-web/src/styles.css apps/desktop/src/main.ts apps/web/src/lib/desktop.test.ts apps/desktop/e2e/smoke.spec.ts
+          pnpm db:generate
+          pnpm check
+          pnpm exec vitest run packages/core/src/bot-personality.test.ts packages/ui-web/src/bot-avatar.test.ts packages/adapters/src/reaction-store.test.ts packages/adapters/src/peer-connector.test.ts apps/web/src/lib/docker-setup.test.ts apps/web/src/lib/desktop.test.ts
+          git diff --check
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Restore CI and remove migration script
+        run: |
+          git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
+          rm scripts/migrations/wire-social-shell.py
+      - name: Commit only on unchanged PR head
+        run: |
+          START_SHA="${{ github.event.pull_request.head.sha }}"
+          git fetch origin feature/flowbots-local-social-vnext
+          test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(web): wire social roles faces reactions and composer"
+          git fetch origin feature/flowbots-local-social-vnext
+          test "$(git rev-parse origin/feature/flowbots-local-social-vnext)" = "$START_SHA"
+          git push origin HEAD:feature/flowbots-local-social-vnext
+
   deploy-production:
     if: >-
       github.event_name == 'push' &&
