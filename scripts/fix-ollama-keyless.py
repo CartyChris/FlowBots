@@ -10,24 +10,9 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
 
 
 router = Path("apps/api/src/router.ts")
-replace_once(
-    router,
-    '''        return rows.map((row) => ({
-          id: row.id,
-          provider: row.provider,
-          label: row.label,
-          hasKey: true,
-          isDefault: row.isDefault,
-        }));''',
-    '''        return rows.map((row) => ({
-          id: row.id,
-          provider: row.provider,
-          label: row.label,
-          hasKey: Boolean(row.secretId),
-          isDefault: row.isDefault,
-        }));''',
-    "credential list hasKey",
-)
+router_text = router.read_text()
+if router_text.count("hasKey: Boolean(row.secretId),") != 1:
+    raise SystemExit("credential list hasKey GREEN invariant missing or ambiguous")
 
 settings = Path("apps/web/src/pages/ModelSettingsOverlay.tsx")
 replace_once(
@@ -48,10 +33,11 @@ replace_once(
 )
 
 judge = Path("docs/superpowers/reviews/2026-08-20-flowbots-fable-upstream-parity.md")
-replace_once(
-    judge,
-    '''5. **Final acceptance remains evidence-driven.** Canonical CI, full PR diff review, merged-main CI, and fresh macOS/Mnemosyne/mounted-DMG verification are still mandatory after this review.''',
-    '''5. **Final acceptance remains evidence-driven.** Canonical CI, full PR diff review, merged-main CI, and fresh macOS/Mnemosyne/mounted-DMG verification are still mandatory after this review.
-6. **The final skeptical pass found one verified Task 13 presentation defect and closed it RED→GREEN.** A credentialless Ollama preference row was reported as `hasKey: true`, causing Model Settings to misclassify the local preference as an encrypted credential. The added contract requires keyless Ollama rows to remain `hasKey: false` while encrypted providers remain true; the API now derives that flag from `secretId` and the UI only treats key-backed rows as connected credentials.''',
-    "judge final defect note",
-)
+judge_text = judge.read_text()
+note = "6. **The final skeptical pass found one verified Task 13 presentation defect and closed it RED→GREEN.**"
+if note not in judge_text:
+    old = "5. **Final acceptance remains evidence-driven.** Canonical CI, full PR diff review, merged-main CI, and fresh macOS/Mnemosyne/mounted-DMG verification are still mandatory after this review."
+    new = old + "\n" + note + " A credentialless Ollama preference row was reported as `hasKey: true`, causing Model Settings to misclassify the local preference as an encrypted credential. The added contract requires keyless Ollama rows to remain `hasKey: false` while encrypted providers remain true; the API now derives that flag from `secretId` and the UI only treats key-backed rows as connected credentials."
+    if judge_text.count(old) != 1:
+        raise SystemExit("judge final defect note anchor changed")
+    judge.write_text(judge_text.replace(old, new, 1))
