@@ -32,6 +32,30 @@ test("model management stays reachable and accepts typed custom provider/model I
   await page.getByRole("button", { name: "Close model settings", exact: true }).click();
 });
 
+test("Look Studio exposes fifteen bot types and persists a custom identity", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `looks-parity-${stamp}@rakazo.test`, "password12", "Looks Parity");
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
+
+  await page.getByRole("button", { name: "Look Studio", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Look Studio · Chief/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /bot type$/ })).toHaveCount(15);
+
+  const fox = page.getByRole("button", { name: "Use Fox bot type", exact: true });
+  await fox.click();
+  await page.getByRole("button", { name: /Headphones/ }).click();
+  await page.getByRole("button", { name: /Circuit/ }).click();
+  await page.getByRole("button", { name: "Strong", exact: true }).click();
+  await page.getByRole("button", { name: "Save bot look", exact: true }).click();
+  await expect(fox).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Close Look Studio", exact: true }).click();
+  await page.getByRole("button", { name: "Look Studio", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Use Fox bot type", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
 async function completeOnboarding(page: Page, answers: string[]) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
   const heading = page.getByRole("heading", { name: /Connect a model|Create your first bot/ });
