@@ -7,7 +7,7 @@ import {
 
 describe("GitHub extension helpers", () => {
   it("normalizes canonical public GitHub repository URLs", () => {
-    expect(normalizeGitHubRepoUrl("https://github.com/OpenAI/example/")) .toBe(
+    expect(normalizeGitHubRepoUrl("https://github.com/OpenAI/example/")).toBe(
       "https://github.com/OpenAI/example",
     );
     expect(normalizeGitHubRepoUrl("github.com/OpenAI/example.git")).toBe(
