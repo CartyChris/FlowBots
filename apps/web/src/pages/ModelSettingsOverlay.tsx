@@ -18,6 +18,10 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState("");
   const [modelId, setModelId] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [customProvider, setCustomProvider] = useState("");
+  const [customModelId, setCustomModelId] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
+  const [customApiKey, setCustomApiKey] = useState("");
   const [pending, setPending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +44,9 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
     setCurrent({ provider: me.defaultProvider, model: me.defaultModel });
     const nextProvider =
       (provider && models.some((entry) => entry.provider === provider) ? provider : "") ||
-      me.defaultProvider ||
+      (me.defaultProvider && models.some((entry) => entry.provider === me.defaultProvider)
+        ? me.defaultProvider
+        : "") ||
       models[0]?.provider ||
       "";
     setProvider(nextProvider);
@@ -100,6 +106,40 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
       await refresh(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not connect model provider");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function addCustomModel() {
+    const nextProvider = customProvider.trim();
+    const nextModel = customModelId.trim();
+    const key = customApiKey.trim();
+    const label = customLabel.trim() || nextProvider;
+    if (!nextProvider || !nextModel) {
+      setError("Type both a custom provider ID and model ID.");
+      return;
+    }
+    if (key.length < 8) {
+      setError("Custom hosted providers require an API key of at least 8 characters.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await rpc.models.connect({
+        provider: nextProvider,
+        apiKey: key,
+        label,
+        modelId: nextModel,
+      });
+      await rpc.models.setDefault({ provider: nextProvider, modelId: nextModel });
+      setCustomApiKey("");
+      setNotice(`${label} · ${nextModel} connected and set as the workspace default.`);
+      await refresh(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add the custom model");
     } finally {
       setPending(false);
     }
@@ -169,7 +209,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
       <div className="flex h-[760px] w-[980px] max-w-full overflow-hidden rounded-[26px] border border-[#232326] bg-[#141416] shadow-[0_40px_90px_rgba(0,0,0,.55)]">
         <aside className="w-[300px] shrink-0 border-r border-[#202023] p-6">
           <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-2xl font-medium text-[#F1F1F2]">Models</h2>
+            <h2 className="font-medium text-2xl text-[#F1F1F2]">Models</h2>
             <button
               type="button"
               aria-label="Close model settings"
@@ -206,7 +246,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                   }`}
                 >
                   <span className="truncate text-[14.5px] text-[#ECECEE]">{row.name}</span>
-                  {connected ? <span className="text-[11px] text-[#63D27B]">connected</span> : null}
+                  {connected ? <span className="text-[#63D27B] text-[11px]">connected</span> : null}
                 </button>
               );
             })}
@@ -214,16 +254,84 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
         </aside>
 
         <section className="rk-scroll min-w-0 flex-1 overflow-y-auto p-8">
+          <div className="mb-7 rounded-[18px] border border-[#BDF268]/20 bg-[#BDF268]/[0.045] p-5">
+            <p className="font-semibold text-[#BDF268] text-[10px] uppercase tracking-[0.2em]">
+              Catalog escape hatch
+            </p>
+            <h3 className="mt-2 font-medium text-lg text-[#F1F1F2]">Add custom model</h3>
+            <p className="mt-1 text-[#85858A] text-[12.5px] leading-5">
+              Type any hosted provider/model identifier even when it is not in the discovered catalog.
+              FlowBots persists the credential through the same encrypted model connection path.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-[#85858A] text-[12px]">
+                Custom provider ID
+                <input
+                  aria-label="Custom provider ID"
+                  value={customProvider}
+                  onChange={(event) => setCustomProvider(event.target.value)}
+                  placeholder="openrouter"
+                  className="rounded-[11px] border border-[#303136] bg-[#0B0B0D] px-3.5 py-3 font-mono text-[#ECECEE] text-[13px] outline-none"
+                />
+              </label>
+              <label className="grid gap-1.5 text-[#85858A] text-[12px]">
+                Custom model ID
+                <input
+                  aria-label="Custom model ID"
+                  value={customModelId}
+                  onChange={(event) => setCustomModelId(event.target.value)}
+                  placeholder="vendor/model-name"
+                  className="rounded-[11px] border border-[#303136] bg-[#0B0B0D] px-3.5 py-3 font-mono text-[#ECECEE] text-[13px] outline-none"
+                />
+              </label>
+              <label className="grid gap-1.5 text-[#85858A] text-[12px]">
+                Custom provider label
+                <input
+                  aria-label="Custom provider label"
+                  value={customLabel}
+                  onChange={(event) => setCustomLabel(event.target.value)}
+                  placeholder="My provider (optional)"
+                  className="rounded-[11px] border border-[#303136] bg-[#0B0B0D] px-3.5 py-3 text-[#ECECEE] text-[13px] outline-none"
+                />
+              </label>
+              <label className="grid gap-1.5 text-[#85858A] text-[12px]">
+                Custom provider API key
+                <input
+                  aria-label="Custom provider API key"
+                  type="password"
+                  value={customApiKey}
+                  onChange={(event) => setCustomApiKey(event.target.value)}
+                  placeholder="Provider API key"
+                  autoComplete="off"
+                  className="rounded-[11px] border border-[#303136] bg-[#0B0B0D] px-3.5 py-3 font-mono text-[#ECECEE] text-[13px] outline-none"
+                />
+              </label>
+            </div>
+            <Button
+              type="button"
+              className="mt-4"
+              disabled={
+                pending ||
+                !customProvider.trim() ||
+                !customModelId.trim() ||
+                customApiKey.trim().length < 8
+              }
+              onClick={() => void addCustomModel()}
+            >
+              {pending ? "Saving…" : "Add custom model"}
+            </Button>
+          </div>
+
           {loading ? <p className="text-[#85858A]">Loading model catalog…</p> : null}
           {!loading && !selected ? (
-            <p className="text-[#85858A]">No models are currently available for this provider.</p>
+            <p className="text-[#85858A]">No catalog model is selected. You can still add one manually above.</p>
           ) : null}
           {selected ? (
             <>
               <div className="mb-6">
-                <div className="text-[13px] text-[#77777D]">Provider</div>
-                <div className="mt-1 text-xl font-medium text-[#F1F1F2]">{providerName}</div>
-                <div className="mt-1 text-[13px] text-[#77777D]">
+                <div className="text-[#77777D] text-[13px]">Provider</div>
+                <div className="mt-1 font-medium text-[#F1F1F2] text-xl">{providerName}</div>
+                <div className="mt-1 text-[#77777D] text-[13px]">
                   Current default:{" "}
                   {current.provider && current.model
                     ? `${current.provider} · ${current.model}`
@@ -231,7 +339,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
 
-              <label className="block text-[13px] text-[#85858A]">
+              <label className="block text-[#85858A] text-[13px]">
                 Model
                 <select
                   value={selected.id}
@@ -251,7 +359,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <div className="text-[14.5px] text-[#ECECEE]">{providerCredential.label}</div>
-                      <div className="mt-1 text-[12.5px] text-[#77777D]">
+                      <div className="mt-1 text-[#77777D] text-[12.5px]">
                         Credential is encrypted and never displayed after saving.
                       </div>
                     </div>
@@ -273,7 +381,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                         : selected.oauthLabel || `Sign in to ${providerName}`}
                     </Button>
                     {oauth ? (
-                      <div className="mt-4 rounded-[12px] bg-[#19191C] p-4 text-[13px] text-[#B8B8BD]">
+                      <div className="mt-4 rounded-[12px] bg-[#19191C] p-4 text-[#B8B8BD] text-[13px]">
                         Open {oauth.verificationUri} and enter code{" "}
                         <strong className="font-mono text-[#ECECEE]">{oauth.userCode}</strong>.
                       </div>
@@ -281,7 +389,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                   </div>
                 ) : selected.provider === "ollama" ? (
                   <div>
-                    <p className="text-[13.5px] leading-6 text-[#8C8C92]">
+                    <p className="text-[13.5px] text-[#8C8C92] leading-6">
                       Ollama runs locally and does not need an API key. Refresh discovers the tags
                       installed on this computer, and the selected local model is stored as this
                       workspace's default without creating a secret.
@@ -299,7 +407,7 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-[13px] text-[#85858A]">
+                    <label className="block text-[#85858A] text-[13px]">
                       API key
                       <input
                         type="password"
@@ -333,8 +441,8 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
               </Button>
             </>
           ) : null}
-          {notice ? <p className="mt-5 text-[13.5px] text-[#63D27B]">{notice}</p> : null}
-          {error ? <p className="mt-5 text-[13.5px] text-[#D66B6D]">{error}</p> : null}
+          {notice ? <p className="mt-5 text-[#63D27B] text-[13.5px]">{notice}</p> : null}
+          {error ? <p className="mt-5 text-[#D66B6D] text-[13.5px]">{error}</p> : null}
         </section>
       </div>
     </div>
