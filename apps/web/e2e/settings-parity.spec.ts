@@ -10,28 +10,27 @@ test("Connections exposes All and Connected views", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "Connected", exact: true })).toBeVisible();
 });
 
-test(
-  "model management stays reachable and accepts typed custom provider/model IDs",
-  async ({ page }) => {
-    const stamp = Date.now();
-    const name = "Model Parity";
-    await signup(page, `models-parity-${stamp}@rakazo.test`, "password12", name);
-    await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
+test("model management stays reachable and accepts typed custom provider/model IDs", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const name = "Model Parity";
+  await signup(page, `models-parity-${stamp}@rakazo.test`, "password12", name);
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
 
-    const models = page.getByRole("button", { name: "Models", exact: true });
-    await expect(models).toBeVisible({ timeout: 5_000 });
-    await models.click();
-    await expect(page.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
-    await expect(page.getByPlaceholder("Search providers")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Add custom model" })).toBeVisible();
-    await expect(page.getByLabel("Custom provider ID")).toBeVisible();
-    await expect(page.getByLabel("Custom model ID")).toBeVisible();
-    await expect(page.getByLabel("Custom provider label")).toBeVisible();
-    await expect(page.getByLabel("Custom provider API key")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Add custom model" })).toBeVisible();
-    await page.getByRole("button", { name: "Close model settings", exact: true }).click();
-  },
-);
+  const models = page.getByRole("button", { name: "Models", exact: true });
+  await expect(models).toBeVisible({ timeout: 5_000 });
+  await models.click();
+  await expect(page.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("Search providers")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add custom model" })).toBeVisible();
+  await expect(page.getByLabel("Custom provider ID")).toBeVisible();
+  await expect(page.getByLabel("Custom model ID")).toBeVisible();
+  await expect(page.getByLabel("Custom provider label")).toBeVisible();
+  await expect(page.getByLabel("Custom provider API key")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add custom model" })).toBeVisible();
+  await page.getByRole("button", { name: "Close model settings", exact: true }).click();
+});
 
 async function completeOnboarding(page: Page, answers: string[]) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
