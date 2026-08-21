@@ -45,6 +45,7 @@ export function BotAvatar({
   const pupil = state === "surprised" ? 4.4 : 3.4;
   const expressionClass = state === "working" || state === "thinking" ? "rk-bot-busy" : "";
   const accessibleLabel = label ? `${label} — ${state}` : undefined;
+  const showStatusEffects = size >= 30;
 
   return (
     <span
@@ -142,7 +143,32 @@ export function BotAvatar({
           </g>
         ) : null}
       </svg>
-      {(state === "working" || state === "thinking") && size >= 30 ? (
+
+      {showStatusEffects && state === "working" ? (
+        <span className="rk-bot-emote-stage" aria-hidden="true">
+          <span className="rk-bot-emote-cycle rk-bot-emote-keyboard">⌨</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-code">{"</>"}</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-file">▧</span>
+        </span>
+      ) : null}
+
+      {showStatusEffects && state === "thinking" ? (
+        <span className="rk-bot-thought-orbit" aria-hidden="true">
+          <span>•</span>
+          <span>✦</span>
+          <span>?</span>
+        </span>
+      ) : null}
+
+      {showStatusEffects && state === "happy" ? (
+        <span className="rk-bot-success-burst" aria-hidden="true">
+          <span>✦</span>
+          <span>★</span>
+          <span>+</span>
+        </span>
+      ) : null}
+
+      {(state === "working" || state === "thinking") && showStatusEffects ? (
         <span
           className="rk-bot-presence absolute -right-[1px] -bottom-[1px] h-[8px] w-[8px] rounded-full border-2 border-[#0D0D0E] bg-[#79E39C]"
           aria-hidden="true"
