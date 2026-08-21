@@ -60,7 +60,9 @@ export function WorkbenchOverlay({
           extensionInstructions,
         }),
       );
-      setNotice("Sandbox job dispatched to the bot. Completion remains tied to its real run and verification.");
+      setNotice(
+        "Sandbox job dispatched to the bot. Completion remains tied to its real run and verification.",
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not dispatch the sandbox job.");
     } finally {
@@ -81,7 +83,9 @@ export function WorkbenchOverlay({
     setNotice(null);
     try {
       await onRun(buildArtifactTask({ botName, brief, formats, extensionInstructions }));
-      setNotice("Artifact job dispatched. FlowBots will only report files that the bot actually creates.");
+      setNotice(
+        "Artifact job dispatched. FlowBots will only report files that the bot actually creates.",
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not dispatch the artifact job.");
     } finally {
@@ -99,9 +103,9 @@ export function WorkbenchOverlay({
             </p>
             <h2 className="mt-1 font-semibold text-2xl tracking-tight">Bot Workbench</h2>
             <p className="mt-1 max-w-2xl text-[#A6A6A1] text-sm">
-              Stage real bot work through a visible sandbox control surface or generate verified project
-              files. The UI simulates the workflow; your configured FlowBots runtime remains the actual
-              execution boundary.
+              Stage real bot work through a visible sandbox control surface or generate verified
+              project files. The UI simulates the workflow; your configured FlowBots runtime remains
+              the actual execution boundary.
             </p>
           </div>
           <button
@@ -116,7 +120,11 @@ export function WorkbenchOverlay({
 
         <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_1fr]">
           <aside className="border-white/10 border-b bg-[#0B0C0D] p-4 lg:border-r lg:border-b-0">
-            <div role="tablist" aria-label="Workbench modes" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+            <div
+              role="tablist"
+              aria-label="Workbench modes"
+              className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1"
+            >
               <button
                 type="button"
                 role="tab"
@@ -129,7 +137,9 @@ export function WorkbenchOverlay({
                 }`}
               >
                 <span className="block font-semibold text-sm">Sandbox Lab</span>
-                <span className="mt-1 block text-[11px] opacity-70">Build · test · research · transform</span>
+                <span className="mt-1 block text-[11px] opacity-70">
+                  Build · test · research · transform
+                </span>
               </button>
               <button
                 type="button"
@@ -167,12 +177,13 @@ export function WorkbenchOverlay({
                   className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#17181A] p-4"
                 >
                   <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#BDF268] via-[#8EDFF7] to-[#D8C5FF] opacity-70" />
-                  <p className="text-[#73746F] text-[10px] uppercase tracking-[0.2em]">Stage {index + 1}</p>
+                  <p className="text-[#73746F] text-[10px] uppercase tracking-[0.2em]">
+                    Stage {index + 1}
+                  </p>
                   <p className="mt-2 font-semibold text-sm">{label}</p>
                   <div className="mt-3 flex gap-1">
                     {Array.from({ length: 5 }).map((_, marker) => (
                       <span
-                        // biome-ignore lint/suspicious/noArrayIndexKey: fixed decorative stage meter
                         key={marker}
                         className={`h-1 flex-1 rounded-full ${marker <= index + 1 ? "bg-[#BDF268]/70" : "bg-white/10"}`}
                       />
@@ -232,9 +243,10 @@ export function WorkbenchOverlay({
                   />
                 </label>
                 <div className="rounded-2xl border border-[#BDF268]/15 bg-[#BDF268]/[0.04] p-4 text-[#ADAEA8] text-xs leading-5">
-                  <strong className="text-[#DDF8AB]">Boundary rule:</strong> FlowBots will explicitly report the
-                  actual runtime it receives and must run a failable verification before calling the job complete.
-                  The visual lab itself never pretends to be the security boundary.
+                  <strong className="text-[#DDF8AB]">Boundary rule:</strong> FlowBots will
+                  explicitly report the actual runtime it receives and must run a failable
+                  verification before calling the job complete. The visual lab itself never pretends
+                  to be the security boundary.
                 </div>
                 <button
                   type="button"
@@ -281,16 +293,19 @@ export function WorkbenchOverlay({
                           }`}
                         >
                           <span className="block font-semibold text-sm">{format.label}</span>
-                          <span className="mt-1 block text-[#858680] text-[11px]">{format.detail}</span>
+                          <span className="mt-1 block text-[#858680] text-[11px]">
+                            {format.detail}
+                          </span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-[#8EDFF7]/15 bg-[#8EDFF7]/[0.04] p-4 text-[#ADAEA8] text-xs leading-5">
-                  <strong className="text-[#BCEFFF]">Real-file rule:</strong> requested deliverables are written
-                  under <code>flowbots-exports/</code>. The bot must verify the path before reporting it; changing a
-                  file extension does not count as generating a valid document or presentation.
+                  <strong className="text-[#BCEFFF]">Real-file rule:</strong> requested deliverables
+                  are written under <code>flowbots-exports/</code>. The bot must verify the path
+                  before reporting it; changing a file extension does not count as generating a
+                  valid document or presentation.
                 </div>
                 <button
                   type="button"
@@ -298,13 +313,18 @@ export function WorkbenchOverlay({
                   onClick={() => void submitArtifacts()}
                   className="rounded-2xl bg-[#8EDFF7] px-5 py-3 font-semibold text-[#071317] text-sm transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {busy ? "Dispatching…" : `Generate ${formats.length} format${formats.length === 1 ? "" : "s"} with ${botName}`}
+                  {busy
+                    ? "Dispatching…"
+                    : `Generate ${formats.length} format${formats.length === 1 ? "" : "s"} with ${botName}`}
                 </button>
               </div>
             )}
 
             {notice ? (
-              <div role="status" className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[#C8C8C1] text-xs">
+              <div
+                role="status"
+                className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-[#C8C8C1] text-xs"
+              >
                 {notice}
               </div>
             ) : null}
