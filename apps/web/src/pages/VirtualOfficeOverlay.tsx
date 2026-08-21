@@ -104,8 +104,8 @@ export function VirtualOfficeOverlay({
               </span>
             </div>
             <p className="mt-1 text-[#81827D] text-xs sm:text-sm">
-              Every bot is an employee here. Their room, custom look, and motion follow real FlowBots
-              state.
+              Every bot is an employee here. Their room, custom look, and motion follow real
+              FlowBots state.
             </p>
           </div>
 
@@ -135,7 +135,9 @@ export function VirtualOfficeOverlay({
               <div className="mx-auto grid h-20 w-20 place-items-center rounded-[24px] border border-[#BDF268]/15 bg-[#BDF268]/10 text-4xl shadow-[0_0_45px_rgba(189,242,104,.08)]">
                 ⌂
               </div>
-              <h3 className="mt-5 font-semibold text-xl">The office is ready for its first employee.</h3>
+              <h3 className="mt-5 font-semibold text-xl">
+                The office is ready for its first employee.
+              </h3>
               <p className="mt-2 text-[#868781] text-sm leading-6">
                 Create a bot in FlowBots and it will appear here automatically—no separate office
                 roster to maintain.
@@ -160,7 +162,9 @@ export function VirtualOfficeOverlay({
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-90"
-                    style={{ background: `linear-gradient(90deg, ${zone.accent}, transparent 72%)` }}
+                    style={{
+                      background: `linear-gradient(90deg, ${zone.accent}, transparent 72%)`,
+                    }}
                   />
                   <div className="relative mb-4 flex items-center gap-3">
                     <div
@@ -284,7 +288,9 @@ export function VirtualOfficeOverlay({
         <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-white/10 border-t bg-[#090A0C]/92 px-5 py-3 text-[#62635E] text-[10px] sm:px-8">
           <span>Office placement follows persisted bot/run status.</span>
           <span className="text-[#454641]">•</span>
-          <span>Custom looks are shared with chat through the same FlowBots identity registry.</span>
+          <span>
+            Custom looks are shared with chat through the same FlowBots identity registry.
+          </span>
           <span className="text-[#454641]">•</span>
           <span>Workbench actions use the real bot runtime.</span>
         </footer>
