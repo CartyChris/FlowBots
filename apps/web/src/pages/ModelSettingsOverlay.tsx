@@ -260,8 +260,9 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
             </p>
             <h3 className="mt-2 font-medium text-lg text-[#F1F1F2]">Add custom model</h3>
             <p className="mt-1 text-[#85858A] text-[12.5px] leading-5">
-              Type any hosted provider/model identifier even when it is not in the discovered catalog.
-              FlowBots persists the credential through the same encrypted model connection path.
+              Type any hosted provider/model identifier even when it is not in the discovered
+              catalog. FlowBots persists the credential through the same encrypted model connection
+              path.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1.5 text-[#85858A] text-[12px]">
@@ -324,7 +325,9 @@ export function ModelSettingsOverlay({ onClose }: { onClose: () => void }) {
 
           {loading ? <p className="text-[#85858A]">Loading model catalog…</p> : null}
           {!loading && !selected ? (
-            <p className="text-[#85858A]">No catalog model is selected. You can still add one manually above.</p>
+            <p className="text-[#85858A]">
+              No catalog model is selected. You can still add one manually above.
+            </p>
           ) : null}
           {selected ? (
             <>
