@@ -60,7 +60,6 @@ export const BotSchema = z.object({
   description: z.string(),
   instructions: z.string(),
   color: z.string(),
-  appearance: BotAppearanceSchema,
   notifyOnFinish: z.boolean(),
   parentBotId: Id.nullable(),
   threadId: Id,
@@ -77,8 +76,7 @@ export const CreateBotInput = z.object({
   description: z.string().max(4000).default(""),
   instructions: z.string().max(20000).default(""),
   notifyOnFinish: z.boolean().default(true),
-  color: HexColor.optional(),
-  appearance: BotAppearanceSchema.optional(),
+  color: z.string().optional(),
 });
 export type CreateBotInput = z.infer<typeof CreateBotInput>;
 
@@ -89,8 +87,7 @@ export const UpdateBotInput = z.object({
   description: z.string().max(4000).optional(),
   instructions: z.string().max(20000).optional(),
   notifyOnFinish: z.boolean().optional(),
-  color: HexColor.optional(),
-  appearance: BotAppearanceSchema.optional(),
+  color: z.string().optional(),
 });
 
 export const RoutineSchema = z.object({
@@ -260,14 +257,7 @@ export type Me = z.infer<typeof MeSchema>;
 export const ExportManifestSchema = z.object({
   version: z.literal(1),
   exportedAt: z.string(),
-  bot: BotSchema.pick({
-    name: true,
-    title: true,
-    description: true,
-    instructions: true,
-    color: true,
-    appearance: true,
-  }),
+  bot: BotSchema.pick({ name: true, title: true, description: true, instructions: true }),
   memory: z.array(z.object({ path: z.string(), content: z.string() })),
   routines: z.array(RoutineSchema.pick({ name: true, prompt: true, cron: true, timezone: true })),
   files: z.array(z.object({ path: z.string(), content: z.string() })),
