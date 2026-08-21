@@ -87,7 +87,8 @@ export function BotLookStudio({
   }
 
   function randomize() {
-    const preset = BOT_AVATAR_FACE_CHOICES[Math.floor(Math.random() * BOT_AVATAR_FACE_CHOICES.length)];
+    const preset =
+      BOT_AVATAR_FACE_CHOICES[Math.floor(Math.random() * BOT_AVATAR_FACE_CHOICES.length)];
     const eye = EYE_STYLES[Math.floor(Math.random() * EYE_STYLES.length)];
     const accessory = ACCESSORIES[Math.floor(Math.random() * ACCESSORIES.length)];
     const pattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
@@ -365,7 +366,9 @@ function EditorSection({
 }) {
   return (
     <section className="border-white/[0.07] border-b py-5 first:pt-0 last:border-0">
-      <p className="font-semibold text-[#696A64] text-[9px] uppercase tracking-[0.2em]">{eyebrow}</p>
+      <p className="font-semibold text-[#696A64] text-[9px] uppercase tracking-[0.2em]">
+        {eyebrow}
+      </p>
       <h3 className="mt-1 font-semibold text-base">{title}</h3>
       {detail ? <p className="mt-1 text-[#777872] text-[11px] leading-5">{detail}</p> : null}
       <div className="mt-4">{children}</div>
