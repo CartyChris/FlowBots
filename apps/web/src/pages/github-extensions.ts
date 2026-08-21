@@ -18,13 +18,18 @@ export function normalizeGitHubRepoUrl(value: string): string {
     throw new Error("Enter a valid GitHub repository URL.");
   }
 
-  if (url.protocol !== "https:") throw new Error("GitHub extensions require an HTTPS repository URL.");
-  if (url.hostname.toLowerCase() !== "github.com" && url.hostname.toLowerCase() !== "www.github.com") {
+  if (url.protocol !== "https:")
+    throw new Error("GitHub extensions require an HTTPS repository URL.");
+  if (
+    url.hostname.toLowerCase() !== "github.com" &&
+    url.hostname.toLowerCase() !== "www.github.com"
+  ) {
     throw new Error("GitHub extensions must use github.com.");
   }
 
   const parts = url.pathname.split("/").filter(Boolean);
-  if (parts.length !== 2) throw new Error("Use a repository URL such as https://github.com/owner/repo.");
+  if (parts.length !== 2)
+    throw new Error("Use a repository URL such as https://github.com/owner/repo.");
   const owner = parts[0];
   const repo = parts[1]?.replace(/\.git$/i, "");
   const validSegment = /^[A-Za-z0-9_.-]+$/;
@@ -38,8 +43,13 @@ export function sanitizeExtensionInstructions(value: string): string {
   return value.trim().slice(0, 4_000);
 }
 
-export function extensionAppliesToBot(config: Pick<GitHubExtensionConfig, "botIds">, botId: string): boolean {
-  const botIds = Array.isArray(config.botIds) ? config.botIds.filter((id) => typeof id === "string") : [];
+export function extensionAppliesToBot(
+  config: Pick<GitHubExtensionConfig, "botIds">,
+  botId: string,
+): boolean {
+  const botIds = Array.isArray(config.botIds)
+    ? config.botIds.filter((id) => typeof id === "string")
+    : [];
   return botIds.length === 0 || botIds.includes(botId);
 }
 
@@ -52,7 +62,9 @@ export function extensionInstructionsForBot(
   botId: string,
 ): string[] {
   return installs
-    .filter((install) => install.kind === "plugin" && install.source.startsWith("https://github.com/"))
+    .filter(
+      (install) => install.kind === "plugin" && install.source.startsWith("https://github.com/"),
+    )
     .filter((install) => install.config.flowbotsExtension === true)
     .filter((install) => {
       const scope = install.config.scope;
