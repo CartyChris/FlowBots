@@ -2,6 +2,56 @@ import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 
+export const BotAvatarVariantSchema = z.enum([
+  "orb",
+  "blob",
+  "cat",
+  "robot",
+  "spark",
+  "fox",
+  "bunny",
+  "ghost",
+  "slime",
+  "cyclops",
+  "astro",
+  "dragon",
+  "cloud",
+  "cube",
+  "skull",
+]);
+export type BotAvatarVariant = z.infer<typeof BotAvatarVariantSchema>;
+
+export const BotEyeStyleSchema = z.enum(["classic", "mono", "sleepy", "star", "pixel"]);
+export type BotEyeStyle = z.infer<typeof BotEyeStyleSchema>;
+
+export const BotAccessorySchema = z.enum([
+  "none",
+  "antenna",
+  "headphones",
+  "crown",
+  "glasses",
+  "cap",
+]);
+export type BotAccessory = z.infer<typeof BotAccessorySchema>;
+
+export const BotPatternSchema = z.enum(["solid", "stripe", "dots", "circuit"]);
+export type BotPattern = z.infer<typeof BotPatternSchema>;
+
+export const BotGlowSchema = z.enum(["off", "soft", "strong"]);
+export type BotGlow = z.infer<typeof BotGlowSchema>;
+
+const HexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+
+export const BotAppearanceSchema = z.object({
+  variant: BotAvatarVariantSchema.default("orb"),
+  secondaryColor: HexColor.default("#F4F4F1"),
+  eyeStyle: BotEyeStyleSchema.default("classic"),
+  accessory: BotAccessorySchema.default("none"),
+  pattern: BotPatternSchema.default("solid"),
+  glow: BotGlowSchema.default("off"),
+});
+export type BotAppearance = z.infer<typeof BotAppearanceSchema>;
+
 export const BotSchema = z.object({
   id: Id,
   workspaceId: Id,
@@ -10,6 +60,7 @@ export const BotSchema = z.object({
   description: z.string(),
   instructions: z.string(),
   color: z.string(),
+  appearance: BotAppearanceSchema,
   notifyOnFinish: z.boolean(),
   parentBotId: Id.nullable(),
   threadId: Id,
@@ -26,7 +77,8 @@ export const CreateBotInput = z.object({
   description: z.string().max(4000).default(""),
   instructions: z.string().max(20000).default(""),
   notifyOnFinish: z.boolean().default(true),
-  color: z.string().optional(),
+  color: HexColor.optional(),
+  appearance: BotAppearanceSchema.optional(),
 });
 export type CreateBotInput = z.infer<typeof CreateBotInput>;
 
@@ -37,7 +89,8 @@ export const UpdateBotInput = z.object({
   description: z.string().max(4000).optional(),
   instructions: z.string().max(20000).optional(),
   notifyOnFinish: z.boolean().optional(),
-  color: z.string().optional(),
+  color: HexColor.optional(),
+  appearance: BotAppearanceSchema.optional(),
 });
 
 export const RoutineSchema = z.object({
@@ -207,7 +260,14 @@ export type Me = z.infer<typeof MeSchema>;
 export const ExportManifestSchema = z.object({
   version: z.literal(1),
   exportedAt: z.string(),
-  bot: BotSchema.pick({ name: true, title: true, description: true, instructions: true }),
+  bot: BotSchema.pick({
+    name: true,
+    title: true,
+    description: true,
+    instructions: true,
+    color: true,
+    appearance: true,
+  }),
   memory: z.array(z.object({ path: z.string(), content: z.string() })),
   routines: z.array(RoutineSchema.pick({ name: true, prompt: true, cron: true, timezone: true })),
   files: z.array(z.object({ path: z.string(), content: z.string() })),
