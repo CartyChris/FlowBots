@@ -12,9 +12,6 @@ Web, desktop, and mobile are still supported. Bring your own AI and sandbox. Thi
 
 Each bot has one thread, one computer, memory, routines, and history. A bot can also spawn more bots — each a regular peer with its own thread and computer — or run short-lived subagents inside the current turn. This repository is the complete core product — it runs without a Rakazo-operated control plane.
 
-## Demo
-
-https://github.com/user-attachments/assets/dccdeddb-2134-4a56-8eed-b2e591736b1c
 
 ## Stack
 
