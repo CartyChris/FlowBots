@@ -100,9 +100,9 @@ export function HostComputerPrompt() {
               </button>
             </div>
             <p className="mt-3 text-[#6C6C70] text-[12px] leading-relaxed">
-              The setup-helper option temporarily runs a bot on {hostLabel} so it can inspect Docker and
-              guide the setup. It must ask before installing system software, using administrator
-              privileges, or changing host security settings.
+              The setup-helper option temporarily runs a bot on {hostLabel} so it can inspect Docker
+              and guide the setup. It must ask before installing system software, using
+              administrator privileges, or changing host security settings.
             </p>
           </div>
         </div>
