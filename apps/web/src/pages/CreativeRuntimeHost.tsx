@@ -3,6 +3,7 @@ import { BotAvatar, registerBotAvatarAppearances } from "@rakazo/ui-web";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { rpc } from "../lib/rpc";
+import { BotLookStudio } from "./BotLookStudio.js";
 import {
   appearanceCapabilityForBot,
   appearanceForBot,
@@ -10,7 +11,6 @@ import {
   botAppearanceSource,
   botAvatarAppearanceRegistrations,
 } from "./bot-appearance.js";
-import { BotLookStudio } from "./BotLookStudio.js";
 import { extensionInstructionsForBot } from "./github-extensions.js";
 import { VirtualOfficeOverlay } from "./VirtualOfficeOverlay.js";
 import { WorkbenchOverlay } from "./WorkbenchOverlay.js";
@@ -26,10 +26,7 @@ export function CreativeRuntimeHost() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const chatBot = useMemo(
-    () => bots.find((bot) => bot.id === botId) ?? bots[0],
-    [bots, botId],
-  );
+  const chatBot = useMemo(() => bots.find((bot) => bot.id === botId) ?? bots[0], [bots, botId]);
   const activeBot = useMemo(
     () => bots.find((bot) => bot.id === (workbenchBotId ?? botId)) ?? bots[0],
     [bots, botId, workbenchBotId],
@@ -237,7 +234,7 @@ export function CreativeRuntimeHost() {
 
       {lookBotId && lookBot ? (
         <BotLookStudio
-          key={`${lookBot.id}:${lookBot.color}`}
+          key={lookBot.id}
           bot={lookBot}
           appearance={appearanceForBot(capabilities, lookBot.id)}
           onSave={saveLook}
