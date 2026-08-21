@@ -13,7 +13,7 @@ import {
   BotAvatar,
   type BotAvatarState,
 } from "@rakazo/ui-web";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 const EYE_STYLES: Array<{ id: BotEyeStyle; label: string; glyph: string }> = [
   { id: "classic", label: "Classic", glyph: "••" },
@@ -64,10 +64,10 @@ export function BotLookStudio({
   onSave: (input: { color: string; appearance: BotAppearance }) => Promise<void>;
   onClose: () => void;
 }) {
-  const fallback = useMemo(() => {
-    const base = appearanceForPreset(avatarVariantForColor(bot.color));
-    return { ...base, secondaryColor: base.secondaryColor } satisfies BotAppearance;
-  }, [bot.color]);
+  const fallback = useMemo(
+    () => appearanceForPreset(avatarVariantForColor(bot.color)) satisfies BotAppearance,
+    [bot.color],
+  );
   const [primaryColor, setPrimaryColor] = useState(bot.color);
   const [draft, setDraft] = useState<BotAppearance>(appearance ?? fallback);
   const [previewState, setPreviewState] = useState<BotAvatarState>("working");
@@ -221,6 +221,7 @@ export function BotLookStudio({
                     <button
                       key={preset.variant}
                       type="button"
+                      aria-label={`Use ${preset.label} bot type`}
                       aria-pressed={selected}
                       onClick={() => choosePreset(index)}
                       className={`group rounded-2xl border p-2.5 text-center transition ${
@@ -232,7 +233,6 @@ export function BotLookStudio({
                       <div className="mx-auto grid h-[62px] w-[62px] place-items-center rounded-xl bg-black/25">
                         <BotAvatar
                           color={preset.color}
-                          secondaryColor={undefined as never}
                           size={48}
                           variant={preset.variant}
                           state="idle"
@@ -261,7 +261,9 @@ export function BotLookStudio({
                 <ColorControl
                   label="Secondary"
                   value={draft.secondaryColor}
-                  onChange={(value) => setDraft((current) => ({ ...current, secondaryColor: value }))}
+                  onChange={(value) =>
+                    setDraft((current) => ({ ...current, secondaryColor: value }))
+                  }
                 />
               </div>
             </EditorSection>
@@ -359,7 +361,7 @@ function EditorSection({
   eyebrow: string;
   title: string;
   detail?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="border-white/[0.07] border-b py-5 first:pt-0 last:border-0">
