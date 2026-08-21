@@ -37,7 +37,8 @@ const TEMPLATE_LABEL: Record<SandboxTemplate, string> = {
 export function buildSandboxTask(input: SandboxTaskInput): string {
   const task = input.task.trim();
   if (!task) throw new Error("Sandbox task is required.");
-  const workingDirectory = input.workingDirectory?.trim() || "Choose the safest relevant workspace directory.";
+  const workingDirectory =
+    input.workingDirectory?.trim() || "Choose the safest relevant workspace directory.";
   const extensions = extensionSection(input.extensionInstructions);
 
   return [
@@ -70,7 +71,9 @@ export function buildArtifactTask(input: ArtifactTaskInput): string {
   if (!brief) throw new Error("Artifact brief is required.");
   const formats = [...new Set(input.formats)];
   if (formats.length === 0) throw new Error("Choose at least one artifact format.");
-  const outputs = formats.map((format) => `${format.toUpperCase()} (${FORMAT_EXTENSION[format]})`).join(", ");
+  const outputs = formats
+    .map((format) => `${format.toUpperCase()} (${FORMAT_EXTENSION[format]})`)
+    .join(", ");
   const extensions = extensionSection(input.extensionInstructions);
 
   return [
