@@ -1,4 +1,4 @@
-import { useId, useSyncExternalStore } from "react";
+import { type CSSProperties, useId, useSyncExternalStore } from "react";
 import { cn } from "./lib/utils.js";
 
 export type BotAvatarState = "idle" | "thinking" | "working" | "happy" | "error" | "surprised";
@@ -208,7 +208,7 @@ export function BotAvatar({
           flex: "none",
           "--rk-bot-primary": color,
           "--rk-bot-secondary": resolvedAppearance.secondaryColor,
-        } as React.CSSProperties
+        } as CSSProperties
       }
     >
       <svg
@@ -284,7 +284,6 @@ export function BotAvatar({
 
         <EyeLayer
           style={effectiveEyeStyle}
-          state={state}
           eyeY={eyeY}
           eyeScaleY={eyeScaleY}
           pupil={pupil}
@@ -374,14 +373,12 @@ function normalizeAppearance(
 
 function EyeLayer({
   style,
-  state,
   eyeY,
   eyeScaleY,
   pupil,
   secondary,
 }: {
   style: BotAvatarEyeStyle;
-  state: BotAvatarState;
   eyeY: number;
   eyeScaleY: number;
   pupil: number;
@@ -543,14 +540,36 @@ function VariantBackDetails({
       <g className="rk-bot-ears">
         <ellipse cx="34" cy="12" rx="10" ry="24" fill={primary} transform="rotate(-9 34 12)" />
         <ellipse cx="66" cy="12" rx="10" ry="24" fill={primary} transform="rotate(9 66 12)" />
-        <ellipse cx="34" cy="12" rx="4" ry="17" fill={secondary} opacity=".55" transform="rotate(-9 34 12)" />
-        <ellipse cx="66" cy="12" rx="4" ry="17" fill={secondary} opacity=".55" transform="rotate(9 66 12)" />
+        <ellipse
+          cx="34"
+          cy="12"
+          rx="4"
+          ry="17"
+          fill={secondary}
+          opacity=".55"
+          transform="rotate(-9 34 12)"
+        />
+        <ellipse
+          cx="66"
+          cy="12"
+          rx="4"
+          ry="17"
+          fill={secondary}
+          opacity=".55"
+          transform="rotate(9 66 12)"
+        />
       </g>
     );
   }
   if (variant === "dragon") {
     return (
-      <g className="rk-bot-ears" fill={primary} stroke={secondary} strokeWidth="1.2" strokeOpacity=".45">
+      <g
+        className="rk-bot-ears"
+        fill={primary}
+        stroke={secondary}
+        strokeWidth="1.2"
+        strokeOpacity=".45"
+      >
         <path d="M20 31 14 7 37 23Z" />
         <path d="m80 31 6-24-23 16Z" />
         <path d="M42 12 50 0l8 12Z" />
