@@ -51,9 +51,10 @@ test("Look Studio exposes fifteen bot types and persists a custom identity", asy
 
   await page.getByRole("button", { name: "Close Look Studio", exact: true }).click();
   await page.getByRole("button", { name: "Look Studio", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Use Fox bot type", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Use Fox bot type", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });
 
 async function completeOnboarding(page: Page, answers: string[]) {
