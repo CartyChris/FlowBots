@@ -16,7 +16,9 @@ describe("Workbench task builders", () => {
     expect(prompt).toContain("container");
     expect(prompt).toContain("projects/parser");
     expect(prompt).toContain("Fix the failing parser tests");
-    expect(prompt).toContain("Do not claim the task is complete until verification has actually run");
+    expect(prompt).toContain(
+      "Do not claim the task is complete until verification has actually run",
+    );
     expect(prompt).toContain("Follow the repo's CONTRIBUTING.md before editing.");
   });
 
