@@ -154,7 +154,8 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
           <div>
             <div className="text-2xl font-medium text-[#F1F1F2]">Connections</div>
             <p className="mt-1 text-[13.5px] text-[#7A7A80]">
-              Connect hosted apps or register declarative GitHub extensions for your FlowBots workspace.
+              Connect hosted apps or register declarative GitHub extensions for your FlowBots
+              workspace.
             </p>
           </div>
           <button
@@ -167,7 +168,11 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div role="tablist" aria-label="Connection type" className="flex gap-2 border-b border-[#202023] px-8 py-3">
+        <div
+          role="tablist"
+          aria-label="Connection type"
+          className="flex gap-2 border-b border-[#202023] px-8 py-3"
+        >
           <button
             type="button"
             role="tab"
@@ -185,9 +190,7 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
             aria-selected={surface === "github"}
             onClick={() => setSurface("github")}
             className={`rounded-full px-4 py-2 text-[13px] ${
-              surface === "github"
-                ? "bg-[#BDF268] text-[#15170F]"
-                : "bg-[#202023] text-[#A8A8AD]"
+              surface === "github" ? "bg-[#BDF268] text-[#15170F]" : "bg-[#202023] text-[#A8A8AD]"
             }`}
           >
             GitHub Extensions
@@ -206,7 +209,9 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
                     type="password"
                     value={apiKey}
                     onChange={(event) => setApiKey(event.target.value)}
-                    placeholder={status.configured ? "Configured — enter a new key to rotate" : "ak_…"}
+                    placeholder={
+                      status.configured ? "Configured — enter a new key to rotate" : "ak_…"
+                    }
                     autoComplete="off"
                     className="mt-1.5 w-full rounded-[11px] border border-[#2A2A2E] bg-[#0D0D0F] px-3.5 py-3 font-mono text-[13px] text-[#ECECEE] outline-none"
                   />
@@ -233,8 +238,8 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
                 ) : null}
               </div>
               <p className="mt-2 text-[11.5px] text-[#696970]">
-                Status: {status.configured ? `connected via ${status.source}` : "not configured"}. The
-                key is never returned to this screen after saving.
+                Status: {status.configured ? `connected via ${status.source}` : "not configured"}.
+                The key is never returned to this screen after saving.
               </p>
             </div>
 
