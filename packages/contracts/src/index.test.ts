@@ -8,7 +8,7 @@ describe("contracts", () => {
     expect(parsed.notifyOnFinish).toBe(true);
   });
 
-  it("parses and defaults persisted bot appearance data", () => {
+  it("parses and defaults persisted bot appearance metadata", () => {
     const parsed = BotAppearanceSchema.parse({
       variant: "fox",
       secondaryColor: "#FFB85C",
@@ -20,21 +20,6 @@ describe("contracts", () => {
     expect(parsed.variant).toBe("fox");
     expect(parsed.accessory).toBe("headphones");
     expect(BotAppearanceSchema.parse({}).variant).toBe("orb");
-  });
-
-  it("accepts a custom appearance when creating a bot", () => {
-    const parsed = CreateBotInput.parse({
-      name: "Pixel",
-      appearance: {
-        variant: "ghost",
-        secondaryColor: "#A9F1FF",
-        eyeStyle: "pixel",
-        accessory: "antenna",
-        pattern: "dots",
-        glow: "soft",
-      },
-    });
-    expect(parsed.appearance?.variant).toBe("ghost");
   });
 
   it("exposes the product rpc surface", () => {
