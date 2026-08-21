@@ -22,7 +22,8 @@ const SCOPES: Array<{ id: GitHubExtensionScope; label: string; detail: string }>
   {
     id: "workspace-feature",
     label: "Workspace feature",
-    detail: "Register the repository as a declarative FlowBots feature descriptor for future adapters.",
+    detail:
+      "Register the repository as a declarative FlowBots feature descriptor for future adapters.",
   },
 ];
 
@@ -124,9 +125,10 @@ export function GitHubExtensions() {
           </p>
           <h3 className="mt-2 font-semibold text-xl">GitHub Extensions</h3>
           <p className="mt-2 max-w-3xl text-[#9B9C96] text-sm leading-6">
-            Register a public GitHub repository as declarative guidance or a FlowBots feature descriptor.
-            Registration persists the source and bounded configuration; it does not execute repository
-            JavaScript, install scripts, shell commands, or binaries on your host.
+            Register a public GitHub repository as declarative guidance or a FlowBots feature
+            descriptor. Registration persists the source and bounded configuration; it does not
+            execute repository JavaScript, install scripts, shell commands, or binaries on your
+            host.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -186,7 +188,9 @@ export function GitHubExtensions() {
 
           <fieldset className="mt-4">
             <legend className="text-[#A8A9A3] text-xs">Target bots</legend>
-            <p className="mt-1 text-[#686963] text-[11px]">Leave all unchecked to apply to every bot.</p>
+            <p className="mt-1 text-[#686963] text-[11px]">
+              Leave all unchecked to apply to every bot.
+            </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {bots.map((bot) => (
                 <label
@@ -211,12 +215,18 @@ export function GitHubExtensions() {
           </fieldset>
 
           {error ? (
-            <div role="alert" className="mt-4 rounded-xl border border-red-400/25 bg-red-400/10 px-3 py-2 text-red-200 text-xs">
+            <div
+              role="alert"
+              className="mt-4 rounded-xl border border-red-400/25 bg-red-400/10 px-3 py-2 text-red-200 text-xs"
+            >
               {error}
             </div>
           ) : null}
           {notice ? (
-            <div role="status" className="mt-4 rounded-xl border border-[#BDF268]/20 bg-[#BDF268]/10 px-3 py-2 text-[#E5F7C7] text-xs">
+            <div
+              role="status"
+              className="mt-4 rounded-xl border border-[#BDF268]/20 bg-[#BDF268]/10 px-3 py-2 text-[#E5F7C7] text-xs"
+            >
               {notice}
             </div>
           ) : null}
@@ -237,7 +247,9 @@ export function GitHubExtensions() {
               <p className="font-semibold text-[#777871] text-[10px] uppercase tracking-[0.2em]">
                 Installed manifests
               </p>
-              <h4 className="mt-1 font-semibold text-base">{extensions.length} GitHub extension{extensions.length === 1 ? "" : "s"}</h4>
+              <h4 className="mt-1 font-semibold text-base">
+                {extensions.length} GitHub extension{extensions.length === 1 ? "" : "s"}
+              </h4>
             </div>
           </div>
 
@@ -250,7 +262,10 @@ export function GitHubExtensions() {
                 .filter(Boolean)
                 .join(", ");
               return (
-                <article key={install.id} className="rounded-2xl border border-[#303135] bg-[#151618] p-4">
+                <article
+                  key={install.id}
+                  className="rounded-2xl border border-[#303135] bg-[#151618] p-4"
+                >
                   <div className="flex items-start gap-3">
                     <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#222329] font-bold text-[#BDF268] text-xs">
                       GH
@@ -263,7 +278,9 @@ export function GitHubExtensions() {
                           {String(config.scope ?? "bot-instructions")}
                         </span>
                         <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[#A4A59F]">
-                          {targets.length === 0 ? "All bots" : targetNames || `${targets.length} targeted bots`}
+                          {targets.length === 0
+                            ? "All bots"
+                            : targetNames || `${targets.length} targeted bots`}
                         </span>
                       </div>
                       {String(config.instructions ?? "").trim() ? (
