@@ -1,12 +1,50 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { avatarVariantForColor, BOT_AVATAR_FACE_CHOICES } from "./bot-avatar.js";
+import {
+  avatarVariantForColor,
+  BOT_AVATAR_FACE_CHOICES,
+  BOT_AVATAR_VARIANTS,
+} from "./bot-avatar.js";
 
-describe("BotAvatar face choices", () => {
-  it("persists every selectable face through the existing color field", () => {
+describe("BotAvatar look system", () => {
+  it("ships fifteen distinct base bot silhouettes including ten new looks", () => {
+    expect(BOT_AVATAR_VARIANTS).toHaveLength(15);
+    expect(BOT_AVATAR_VARIANTS).toEqual(
+      expect.arrayContaining([
+        "orb",
+        "blob",
+        "cat",
+        "robot",
+        "spark",
+        "fox",
+        "bunny",
+        "ghost",
+        "slime",
+        "cyclops",
+        "astro",
+        "dragon",
+        "cloud",
+        "cube",
+        "skull",
+      ]),
+    );
+    expect(BOT_AVATAR_FACE_CHOICES).toHaveLength(15);
+  });
+
+  it("keeps legacy color-derived faces deterministic for preset colors", () => {
     expect(BOT_AVATAR_FACE_CHOICES.map((choice) => avatarVariantForColor(choice.color))).toEqual(
       BOT_AVATAR_FACE_CHOICES.map((choice) => choice.variant),
     );
+  });
+
+  it("renders custom appearance layers for eyes, accessories, patterns, and glow", async () => {
+    const source = await readFile(new URL("./bot-avatar.tsx", import.meta.url), "utf8");
+    expect(source).toContain("BotAvatarAppearance");
+    expect(source).toContain("data-bot-eye-style");
+    expect(source).toContain("rk-bot-accessory");
+    expect(source).toContain("rk-bot-pattern");
+    expect(source).toContain("rk-bot-glow");
+    expect(source).toContain("registerBotAvatarAppearances");
   });
 
   it("renders changing work and thinking emote layers instead of only a presence dot", async () => {
@@ -26,6 +64,13 @@ describe("BotAvatar face choices", () => {
     expect(css).toContain("@keyframes rkBotSuccessBurst");
     expect(css).toContain("@keyframes rkBotErrorShake");
     expect(css).toMatch(/data-bot-state="error"[^}]*animation:/s);
+  });
+
+  it("adds visual motion contracts for custom look details", async () => {
+    const css = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+    expect(css).toContain("@keyframes rkBotAccessoryBob");
+    expect(css).toContain("@keyframes rkBotGlowPulse");
+    expect(css).toContain("data-bot-pattern");
   });
 
   it("disables continuous avatar motion when reduced motion is requested", async () => {
