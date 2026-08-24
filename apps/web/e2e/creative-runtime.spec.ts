@@ -8,7 +8,7 @@ test("virtual office and workbench are reachable from the shell", async ({ page 
   await page.getByRole("button", { name: "Virtual Office" }).click();
   await expect(page.getByRole("heading", { name: "Virtual Office" })).toBeVisible();
   await expect(page.getByText("Focus Desks", { exact: true })).toBeVisible();
-  await expect(page.getByText("Artifact Studio", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Artifact Studio", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close virtual office" }).click();
 
   await page.getByRole("button", { name: "Workbench" }).click();
@@ -24,7 +24,9 @@ test("plugins can register declarative GitHub extensions", async ({ page }) => {
 
   await page.getByText("Plugins", { exact: true }).click();
   await page.getByRole("tab", { name: "GitHub Extensions" }).click();
-  await expect(page.getByRole("heading", { name: "GitHub Extensions" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "GitHub Extensions", exact: true }),
+  ).toBeVisible();
   await expect(page.getByLabel("GitHub repository URL")).toBeVisible();
   await expect(page.getByLabel("Extension scope")).toBeVisible();
   await expect(page.getByLabel("Extension instructions")).toBeVisible();
