@@ -4,6 +4,7 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
   "spawn_bot",
   "delegate_to_bot",
+  "delegate_team",
   "delete_bot",
 ]);
 
@@ -65,6 +66,16 @@ export const builtinAgentTools: ConnectorTool[] = [
     inputSchema: {
       type: "object",
       properties: { path: { type: "string" } },
+      required: ["path"],
+    },
+  },
+  {
+    name: "share_file",
+    description:
+      "Share a real file from this bot's workspace with the user as a downloadable thread attachment. The file must exist; FlowBots never fabricates an attachment or download.",
+    inputSchema: {
+      type: "object",
+      properties: { path: { type: "string", description: "Workspace-relative file path." } },
       required: ["path"],
     },
   },
@@ -231,6 +242,31 @@ export const builtinAgentTools: ConnectorTool[] = [
         task: { type: "string", description: "Concrete work for the teammate to complete." },
       },
       required: ["task"],
+    },
+  },
+  {
+    name: "delegate_team",
+    description:
+      "Fan out 1-4 durable tasks to existing teammate bots for parallel specialist work. FlowBots bounds the team size and returns concrete child run IDs. Read teammate updates before claiming or synthesizing their results.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        assignments: {
+          type: "array",
+          maxItems: 4,
+          items: {
+            type: "object",
+            properties: {
+              bot_id: { type: "string" },
+              name: { type: "string" },
+              task: { type: "string" },
+            },
+            required: ["task"],
+          },
+        },
+        synthesis_goal: { type: "string" },
+      },
+      required: ["assignments"],
     },
   },
   {
