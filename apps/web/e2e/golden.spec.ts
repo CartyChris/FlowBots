@@ -81,6 +81,8 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }) =>
   await page.getByRole("button", { name: "Close plugins" }).click();
 
   await page.getByText("Chief").first().click();
+  const lookStudioClose = page.getByRole("button", { name: "Close Look Studio", exact: true });
+  if (await lookStudioClose.isVisible().catch(() => false)) await lookStudioClose.click();
   const gear = page.locator("button:has-text('⚙')");
   if (!(await gear.isVisible().catch(() => false))) {
     await page.getByTitle("Agent computer").click();
