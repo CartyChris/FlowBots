@@ -82,6 +82,13 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     title: z.string().optional(),
     status: z.enum(["created", "deleted"]),
   }),
+  z.object({
+    kind: z.literal("file"),
+    artifactId: Id,
+    name: z.string().min(1),
+    mimeType: z.string().min(1),
+    size: z.number().int().nonnegative(),
+  }),
 ]);
 export type MessageBlock = z.infer<typeof MessageBlock>;
 
