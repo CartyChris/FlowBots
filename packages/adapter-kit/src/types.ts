@@ -255,6 +255,8 @@ export interface ScriptedTurn {
   complete?: boolean;
 }
 
+export type AgentFinishReason = "stop" | "length" | "tool" | "error" | "unknown";
+
 export type AgentRuntimeEvent =
   | { type: "text"; text: string }
   | { type: "progress"; text: string }
@@ -272,7 +274,7 @@ export type AgentRuntimeEvent =
       progress?: string;
       result?: string;
     }
-  | { type: "done"; text?: string };
+  | { type: "done"; text?: string; finishReason?: AgentFinishReason };
 
 export interface AgentRuntimeCapabilities {
   streaming: boolean;
