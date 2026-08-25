@@ -84,8 +84,11 @@ export function SteeringStudio({
 
   useEffect(() => {
     setDraft(botSteeringSelection(bot.instructions ?? ""));
+  }, [bot.instructions]);
+
+  useEffect(() => {
     setNotice(null);
-  }, [bot.id, bot.instructions]);
+  }, [bot.id]);
 
   function setAxis(key: AxisKey, value: string) {
     setDraft((current) => ({ ...current, [key]: value }) as BotSteeringProfile);
