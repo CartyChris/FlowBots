@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 
 test("virtual office and workbench are reachable from the shell", async ({ page }) => {
@@ -22,7 +23,7 @@ test("steering studio persists all six agent-evolution axes", async ({ page }) =
   await signup(page, `steering-studio-${stamp}@rakazo.test`, "password12", "Steering Studio");
   await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
 
-  await page.getByRole("button", { name: "Steering Studio" }).click();
+  await page.getByRole("button", { name: "Steering Studio", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Steering Studio", exact: true })).toBeVisible();
   await page.getByLabel("Initiative").selectOption("proactive");
   await page.getByLabel("Expressiveness").selectOption("animated");
@@ -34,13 +35,37 @@ test("steering studio persists all six agent-evolution axes", async ({ page }) =
   await expect(page.getByText("Steering saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close Steering Studio" }).click();
 
-  await page.getByRole("button", { name: "Steering Studio" }).click();
+  await page.getByRole("button", { name: "Steering Studio", exact: true }).click();
   await expect(page.getByLabel("Initiative")).toHaveValue("proactive");
   await expect(page.getByLabel("Expressiveness")).toHaveValue("animated");
   await expect(page.getByLabel("Challenge")).toHaveValue("skeptical");
   await expect(page.getByLabel("Collaboration")).toHaveValue("team-first");
   await expect(page.getByLabel("Research")).toHaveValue("web-first");
   await expect(page.getByLabel("Depth")).toHaveValue("exhaustive");
+});
+
+test("changed workspace deliverables are downloadable with exact bytes", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `artifact-download-${stamp}@rakazo.test`, "password12", "Artifact Download");
+  await completeOnboarding(page, ["Coding & repos", "Clear and tight"]);
+
+  const composer = page.getByPlaceholder(/Message/);
+  await composer.fill("write a file in your home called output/result.txt that says artifact-download-ok");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/artifact-download-ok|writing that into my home|handled/i).first()).toBeVisible({
+    timeout: 30_000,
+  });
+
+  const fileLink = page.getByRole("link", { name: /result\.txt/i });
+  await expect(fileLink).toBeVisible({ timeout: 20_000 });
+  const downloadPromise = page.waitForEvent("download");
+  await fileLink.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("result.txt");
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  if (!downloadedPath) throw new Error("downloaded artifact has no local path");
+  expect(await readFile(downloadedPath, "utf8")).toBe("artifact-download-ok");
 });
 
 test("plugins can register declarative GitHub extensions", async ({ page }) => {
