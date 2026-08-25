@@ -17,6 +17,32 @@ test("virtual office and workbench are reachable from the shell", async ({ page 
   await expect(page.getByRole("tab", { name: "Artifact Studio" })).toBeVisible();
 });
 
+test("steering studio persists all six agent-evolution axes", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `steering-studio-${stamp}@rakazo.test`, "password12", "Steering Studio");
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
+
+  await page.getByRole("button", { name: "Steering Studio" }).click();
+  await expect(page.getByRole("heading", { name: "Steering Studio", exact: true })).toBeVisible();
+  await page.getByLabel("Initiative").selectOption("proactive");
+  await page.getByLabel("Expressiveness").selectOption("animated");
+  await page.getByLabel("Challenge").selectOption("skeptical");
+  await page.getByLabel("Collaboration").selectOption("team-first");
+  await page.getByLabel("Research").selectOption("web-first");
+  await page.getByLabel("Depth").selectOption("exhaustive");
+  await page.getByRole("button", { name: "Save steering profile" }).click();
+  await expect(page.getByText("Steering saved", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close Steering Studio" }).click();
+
+  await page.getByRole("button", { name: "Steering Studio" }).click();
+  await expect(page.getByLabel("Initiative")).toHaveValue("proactive");
+  await expect(page.getByLabel("Expressiveness")).toHaveValue("animated");
+  await expect(page.getByLabel("Challenge")).toHaveValue("skeptical");
+  await expect(page.getByLabel("Collaboration")).toHaveValue("team-first");
+  await expect(page.getByLabel("Research")).toHaveValue("web-first");
+  await expect(page.getByLabel("Depth")).toHaveValue("exhaustive");
+});
+
 test("plugins can register declarative GitHub extensions", async ({ page }) => {
   const stamp = Date.now();
   await signup(page, `github-extension-${stamp}@rakazo.test`, "password12", "Extension Runtime");
