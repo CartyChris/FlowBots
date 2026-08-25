@@ -3,10 +3,15 @@ import type {
   ArtifactPut,
   ArtifactStore,
   ComputerRef,
+  PortableFile,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { persistWorkspaceArtifact } from "./artifact-delivery.js";
+import {
+  captureChangedWorkspaceArtifacts,
+  persistWorkspaceArtifact,
+  snapshotWorkspaceArtifacts,
+} from "./artifact-delivery.js";
 
 const context: AdapterContext = {
   operationId: "artifact-delivery",
@@ -33,7 +38,7 @@ class RecordingArtifactStore implements ArtifactStore {
 
   async put(artifact: ArtifactPut) {
     this.puts.push(artifact);
-    return { id: "storage-1", hash: "sha256-real" };
+    return { id: `storage-${this.puts.length}`, hash: `sha256-${this.puts.length}` };
   }
 
   async get() {
@@ -61,6 +66,31 @@ function sandboxWith(bytes: Uint8Array): SandboxProvider {
       },
     }),
     readFile: async () => bytes,
+  } as unknown as SandboxProvider;
+}
+
+function workspaceSandbox(currentFiles: () => PortableFile[]): SandboxProvider {
+  return {
+    describe: () => ({
+      id: "workspace-artifact-sandbox",
+      contractVersion: "1",
+      adapterVersion: "1",
+      capabilities: {
+        graphical: false,
+        pty: false,
+        snapshots: false,
+        takeover: false,
+        persistentHome: true,
+      },
+    }),
+    readFile: async (_computer: ComputerRef, filePath: string) => {
+      const file = currentFiles().find((candidate) => candidate.path === filePath);
+      if (!file) throw new Error(`missing ${filePath}`);
+      return file.content;
+    },
+    exportWorkspace: async function* () {
+      for (const file of currentFiles()) yield file;
+    },
   } as unknown as SandboxProvider;
 }
 
@@ -103,7 +133,7 @@ describe("workspace artifact persistence", () => {
       name: "result.pdf",
       mimeType: "application/pdf",
       size: bytes.byteLength,
-      hash: "sha256-real",
+      hash: "sha256-1",
       storageKey: "storage-1",
     });
     expect(block).toEqual({
@@ -140,5 +170,48 @@ describe("workspace artifact persistence", () => {
       }),
     ).rejects.toThrow("database unavailable");
     expect(store.removed).toEqual(["storage-1"]);
+  });
+
+  it("captures only new or byte-changed relevant deliverables and skips already-shared paths", async () => {
+    let files: PortableFile[] = [
+      { path: "report.pdf", content: Uint8Array.from([1, 2, 3]) },
+      { path: "notes.md", content: new TextEncoder().encode("unchanged") },
+      { path: "already.pdf", content: Uint8Array.from([7]) },
+    ];
+    const sandbox = workspaceSandbox(() => files);
+    const baseline = await snapshotWorkspaceArtifacts(sandbox, computer, context);
+
+    files = [
+      { path: "report.pdf", content: Uint8Array.from([1, 2, 4]) },
+      { path: "notes.md", content: new TextEncoder().encode("unchanged") },
+      { path: "already.pdf", content: Uint8Array.from([8]) },
+      { path: "site/index.html", content: new TextEncoder().encode("<h1>new</h1>") },
+      { path: "node_modules/cache/result.json", content: new TextEncoder().encode("{}") },
+    ];
+
+    const store = new RecordingArtifactStore();
+    let row = 0;
+    const prisma = {
+      artifact: {
+        create: async () => ({ id: `artifact-row-${++row}` }),
+      },
+    };
+    const blocks = await captureChangedWorkspaceArtifacts({
+      artifacts: store,
+      prisma: prisma as never,
+      sandbox,
+      computer,
+      context,
+      baseline,
+      excludePaths: new Set(["already.pdf"]),
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      botId: "bot-1",
+      runId: "run-1",
+    });
+
+    expect(store.puts.map((artifact) => artifact.name)).toEqual(["report.pdf", "index.html"]);
+    expect(blocks.map((block) => block.name)).toEqual(["report.pdf", "index.html"]);
+    expect(blocks.every((block) => block.kind === "file" && block.artifactId)).toBe(true);
   });
 });
