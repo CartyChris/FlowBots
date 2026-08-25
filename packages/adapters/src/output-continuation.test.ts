@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   CONTINUATION_LIMIT_NOTICE,
-  MAX_OUTPUT_CONTINUATION_ROUNDS,
   continuationDecision,
   continuationPrompt,
+  MAX_OUTPUT_CONTINUATION_ROUNDS,
 } from "./output-continuation.js";
 
 describe("output continuation", () => {
