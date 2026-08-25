@@ -53,7 +53,9 @@ export function selectChangedRunArtifacts(
       const previous = before.get(normalizePath(file.path));
       return !previous || previous.size !== file.size || previous.modifiedAt !== file.modifiedAt;
     })
-    .sort((a, b) => artifactPriority(a.path) - artifactPriority(b.path) || a.path.localeCompare(b.path))
+    .sort(
+      (a, b) => artifactPriority(a.path) - artifactPriority(b.path) || a.path.localeCompare(b.path),
+    )
     .slice(0, MAX_RUN_ARTIFACTS);
 }
 
@@ -63,7 +65,8 @@ export function isRelevantDeliverable(filePath: string): boolean {
   if (!segments.length || segments.some((segment) => IGNORED_SEGMENTS.has(segment.toLowerCase()))) {
     return false;
   }
-  if (segments.some((segment) => segment.startsWith(".") && segment !== ".well-known")) return false;
+  if (segments.some((segment) => segment.startsWith(".") && segment !== ".well-known"))
+    return false;
   return DELIVERABLE_EXTENSIONS.has(path.posix.extname(normalized).toLowerCase());
 }
 
