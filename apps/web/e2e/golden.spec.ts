@@ -81,8 +81,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }) =>
   await page.getByRole("button", { name: "Close plugins" }).click();
 
   await page.getByText("Chief").first().click();
-  const lookStudioClose = page.getByRole("button", { name: "Close Look Studio", exact: true });
-  if (await lookStudioClose.isVisible().catch(() => false)) await lookStudioClose.click();
+  await closeLookStudioIfOpen(page);
   const gear = page.locator("button:has-text('⚙')");
   if (!(await gear.isVisible().catch(() => false))) {
     await page.getByTitle("Agent computer").click();
@@ -123,6 +122,7 @@ test("roles, faces, composer actions, MCP, and reactions work in the shell", asy
   await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
 
   await page.getByText("Chief").first().click();
+  await closeLookStudioIfOpen(page);
   const gear = page.locator("button:has-text('⚙')");
   if (!(await gear.isVisible().catch(() => false))) {
     await page.getByTitle("Agent computer").click();
@@ -189,6 +189,12 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }) => {
     page.getByRole("complementary").getByRole("button", { name: /Scout/ }),
   ).toBeVisible();
 });
+
+async function closeLookStudioIfOpen(page: Page) {
+  const close = page.getByRole("button", { name: "Close Look Studio", exact: true });
+  await close.waitFor({ state: "visible", timeout: 3_000 }).catch(() => undefined);
+  if (await close.isVisible().catch(() => false)) await close.click();
+}
 
 async function completeOnboarding(page: Page, answers: string[]) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
