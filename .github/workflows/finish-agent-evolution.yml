@@ -1,0 +1,68 @@
+name: Finish agent evolution integration
+
+on:
+  push:
+    branches:
+      - feature/flowbots-creative-runtime
+    paths:
+      - .github/workflows/finish-agent-evolution.yml
+      - .github/scripts/finish-agent-evolution.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/flowbots-creative-runtime
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Apply exact anchored integration
+        run: node .github/scripts/finish-agent-evolution.mjs
+      - name: Apply safe Biome fixes
+        run: |
+          pnpm exec biome check --write \
+            apps/api/src/app.ts \
+            apps/web/e2e/00-golden.spec.ts \
+            apps/web/e2e/creative-runtime.spec.ts \
+            apps/web/src/pages/Shell.tsx \
+            apps/web/src/pages/SteeringStudio.tsx \
+            packages/adapters/src/artifact-delivery.ts \
+            packages/adapters/src/executor.ts \
+            packages/adapters/src/peer-connector.ts \
+            packages/adapters/src/pi-runtime.ts \
+            packages/adapters/src/web-search.ts \
+            packages/core/src/bot-personality.ts
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm check
+      - name: Focused agent evolution tests
+        run: >-
+          pnpm exec vitest run
+          packages/adapters/src/artifact-delivery.test.ts
+          packages/adapters/src/artifacts.test.ts
+          packages/adapters/src/output-continuation.test.ts
+          packages/adapters/src/agent-evolution-integration.test.ts
+          packages/adapters/src/pi-runtime.test.ts
+      - name: Diff integrity
+        run: git diff --check
+      - name: Commit verified integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/finish-agent-evolution.mjs .github/workflows/finish-agent-evolution.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: finish agent evolution delivery path"
+          git push origin HEAD:feature/flowbots-creative-runtime
