@@ -1,4 +1,5 @@
 import type { Bot, BotAppearance, CapabilityInstall } from "@rakazo/contracts";
+import { applyBotSteeringProfile, type BotSteeringProfile } from "@rakazo/core";
 import { BotAvatar, registerBotAvatarAppearances } from "@rakazo/ui-web";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -12,6 +13,7 @@ import {
   botAvatarAppearanceRegistrations,
 } from "./bot-appearance.js";
 import { extensionInstructionsForBot } from "./github-extensions.js";
+import { SteeringStudio } from "./SteeringStudio.js";
 import { VirtualOfficeOverlay } from "./VirtualOfficeOverlay.js";
 import { WorkbenchOverlay } from "./WorkbenchOverlay.js";
 
@@ -23,6 +25,7 @@ export function CreativeRuntimeHost() {
   const [officeOpen, setOfficeOpen] = useState(false);
   const [workbenchBotId, setWorkbenchBotId] = useState<string | null>(null);
   const [lookBotId, setLookBotId] = useState<string | null>(null);
+  const [steeringBotId, setSteeringBotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +37,10 @@ export function CreativeRuntimeHost() {
   const lookBot = useMemo(
     () => bots.find((bot) => bot.id === (lookBotId ?? botId)) ?? bots[0],
     [bots, botId, lookBotId],
+  );
+  const steeringBot = useMemo(
+    () => bots.find((bot) => bot.id === (steeringBotId ?? botId)) ?? bots[0],
+    [bots, botId, steeringBotId],
   );
   const extensionInstructions = useMemo(
     () => (activeBot ? extensionInstructionsForBot(capabilities, activeBot.id) : []),
@@ -110,6 +117,21 @@ export function CreativeRuntimeHost() {
     }
   }
 
+  async function openSteeringStudio(targetBotId = botId ?? null) {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await refresh();
+      const target = next.bots.find((bot) => bot.id === targetBotId) ?? next.bots[0];
+      if (!target) throw new Error("Create a bot before opening Steering Studio.");
+      setSteeringBotId(target.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open Steering Studio.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function saveLook(input: { color: string; appearance: BotAppearance }) {
     if (!lookBot) throw new Error("No bot is selected.");
     const existing = appearanceCapabilityForBot(capabilities, lookBot.id);
@@ -133,6 +155,13 @@ export function CreativeRuntimeHost() {
     await refresh();
   }
 
+  async function saveSteering(profile: BotSteeringProfile) {
+    if (!steeringBot) throw new Error("No bot is selected.");
+    const instructions = applyBotSteeringProfile(steeringBot.instructions ?? "", profile);
+    await rpc.bots.update({ botId: steeringBot.id, instructions });
+    await refresh();
+  }
+
   async function runWorkbench(prompt: string) {
     if (!activeBot) throw new Error("No bot is selected.");
     await rpc.threads.send({ botId: activeBot.id, text: prompt });
@@ -140,14 +169,14 @@ export function CreativeRuntimeHost() {
 
   return (
     <>
-      <div className="absolute top-[10px] right-[62px] z-20 flex items-center gap-1.5 rounded-2xl border border-white/[0.07] bg-[#101113]/92 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,.35)] backdrop-blur-xl">
+      <div className="absolute top-[10px] right-[62px] z-20 flex items-center gap-1 rounded-2xl border border-white/[0.07] bg-[#101113]/92 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,.35)] backdrop-blur-xl">
         {chatBot ? (
           <button
             type="button"
             aria-label={`Customize ${chatBot.name} look`}
             onClick={() => void openLookStudio(chatBot.id)}
             disabled={loading}
-            className="group flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/[0.055] disabled:opacity-45"
+            className="group hidden items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-white/[0.055] disabled:opacity-45 md:flex"
           >
             <BotAvatar
               color={chatBot.color}
@@ -163,42 +192,54 @@ export function CreativeRuntimeHost() {
             </span>
           </button>
         ) : null}
-        <span className="mx-0.5 h-6 w-px bg-white/[0.07]" aria-hidden="true" />
+        <span className="mx-0.5 hidden h-6 w-px bg-white/[0.07] md:block" aria-hidden="true" />
         <button
           type="button"
           aria-label="Virtual Office"
           onClick={() => void openOffice()}
           disabled={loading}
-          className="rounded-xl px-2.5 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#BDF268]/[0.08] hover:text-[#E9F9CD] disabled:opacity-45"
+          className="rounded-xl px-2 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#BDF268]/[0.08] hover:text-[#E9F9CD] disabled:opacity-45 sm:px-2.5"
         >
-          <span aria-hidden="true" className="mr-1.5 text-[#BDF268]">
+          <span aria-hidden="true" className="mr-1 text-[#BDF268] sm:mr-1.5">
             ⌂
           </span>
-          Office
+          <span className="hidden sm:inline">Office</span>
         </button>
         <button
           type="button"
           aria-label="Workbench"
           onClick={() => void openWorkbench()}
           disabled={loading}
-          className="rounded-xl px-2.5 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#8EDFF7]/[0.08] hover:text-[#D8F5FE] disabled:opacity-45"
+          className="rounded-xl px-2 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#8EDFF7]/[0.08] hover:text-[#D8F5FE] disabled:opacity-45 sm:px-2.5"
         >
-          <span aria-hidden="true" className="mr-1.5 text-[#8EDFF7]">
+          <span aria-hidden="true" className="mr-1 text-[#8EDFF7] sm:mr-1.5">
             ◫
           </span>
-          Workbench
+          <span className="hidden sm:inline">Workbench</span>
+        </button>
+        <button
+          type="button"
+          aria-label="Steering Studio"
+          onClick={() => void openSteeringStudio()}
+          disabled={loading}
+          className="rounded-xl px-2 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#8EDFF7]/[0.08] hover:text-[#D8F5FE] disabled:opacity-45 sm:px-2.5"
+        >
+          <span aria-hidden="true" className="mr-1 text-[#8EDFF7] sm:mr-1.5">
+            ◈
+          </span>
+          <span className="hidden sm:inline">Steer</span>
         </button>
         <button
           type="button"
           aria-label="Look Studio"
           onClick={() => void openLookStudio()}
           disabled={loading}
-          className="rounded-xl px-2.5 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#D8C5FF]/[0.08] hover:text-[#F0E8FF] disabled:opacity-45"
+          className="rounded-xl px-2 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#D8C5FF]/[0.08] hover:text-[#F0E8FF] disabled:opacity-45 sm:px-2.5"
         >
-          <span aria-hidden="true" className="mr-1.5 text-[#D8C5FF]">
+          <span aria-hidden="true" className="mr-1 text-[#D8C5FF] sm:mr-1.5">
             ✦
           </span>
-          Look Studio
+          <span className="hidden sm:inline">Look</span>
         </button>
       </div>
 
@@ -239,6 +280,15 @@ export function CreativeRuntimeHost() {
           appearance={appearanceForBot(capabilities, lookBot.id)}
           onSave={saveLook}
           onClose={() => setLookBotId(null)}
+        />
+      ) : null}
+
+      {steeringBotId && steeringBot ? (
+        <SteeringStudio
+          key={steeringBot.id}
+          bot={steeringBot}
+          onSave={saveSteering}
+          onClose={() => setSteeringBotId(null)}
         />
       ) : null}
     </>
