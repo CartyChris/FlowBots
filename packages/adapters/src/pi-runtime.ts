@@ -197,9 +197,12 @@ export class PiAgentRuntime implements AgentRuntime {
 export function mapAssistantFinishReason(message: unknown): AgentFinishReason {
   if (!message || typeof message !== "object") return "unknown";
   const record = message as Record<string, unknown>;
-  const raw = [record.stopReason, record.finishReason, record.stop_reason, record.finish_reason].find(
-    (value): value is string => typeof value === "string" && value.trim().length > 0,
-  );
+  const raw = [
+    record.stopReason,
+    record.finishReason,
+    record.stop_reason,
+    record.finish_reason,
+  ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
   if (!raw) return "unknown";
 
   const normalized = raw

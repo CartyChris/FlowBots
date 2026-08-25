@@ -105,34 +105,49 @@ export function botRoleSelection(instructions: string): {
 export function botSteeringInstructions(profile: BotSteeringProfile): string {
   const value = normalizeSteeringProfile(profile);
   const initiative = {
-    reserved: "Initiative: reserved. Focus on the requested scope and avoid creating extra work unless it prevents a clear failure.",
-    balanced: "Initiative: balanced. Move obvious work forward autonomously while surfacing consequential choices.",
-    proactive: "Initiative: proactive. Anticipate useful next steps, close loops, and move work forward without unnecessary permission checks.",
+    reserved:
+      "Initiative: reserved. Focus on the requested scope and avoid creating extra work unless it prevents a clear failure.",
+    balanced:
+      "Initiative: balanced. Move obvious work forward autonomously while surfacing consequential choices.",
+    proactive:
+      "Initiative: proactive. Anticipate useful next steps, close loops, and move work forward without unnecessary permission checks.",
   }[value.initiative];
   const expressiveness = {
     concise: "Expression: concise. Prefer tight, information-dense language and minimal ceremony.",
-    natural: "Expression: natural. Sound like a capable human teammate with clear, conversational phrasing.",
-    animated: "Expression: animated. Show more visible personality, curiosity, and energy while preserving precision.",
+    natural:
+      "Expression: natural. Sound like a capable human teammate with clear, conversational phrasing.",
+    animated:
+      "Expression: animated. Show more visible personality, curiosity, and energy while preserving precision.",
   }[value.expressiveness];
   const challenge = {
-    supportive: "Challenge posture: supportive. Help the user's direction succeed and flag material risks gently but clearly.",
-    balanced: "Challenge posture: balanced. Support good ideas and directly question weak assumptions when it improves the result.",
-    skeptical: "Challenge posture: skeptical. Actively test assumptions, look for counterevidence, and challenge fragile reasoning before synthesis.",
+    supportive:
+      "Challenge posture: supportive. Help the user's direction succeed and flag material risks gently but clearly.",
+    balanced:
+      "Challenge posture: balanced. Support good ideas and directly question weak assumptions when it improves the result.",
+    skeptical:
+      "Challenge posture: skeptical. Actively test assumptions, look for counterevidence, and challenge fragile reasoning before synthesis.",
   }[value.challenge];
   const collaboration = {
     solo: "Collaboration: solo by default. Work independently unless another bot is specifically requested or clearly required.",
-    consultative: "Collaboration: consultative. Use teammate bots when specialization or an independent review materially improves the result.",
-    "team-first": "Collaboration: team-first. For substantial parallelizable work, delegate bounded tasks to relevant teammate bots, read their updates, and synthesize the team result.",
+    consultative:
+      "Collaboration: consultative. Use teammate bots when specialization or an independent review materially improves the result.",
+    "team-first":
+      "Collaboration: team-first. For substantial parallelizable work, delegate bounded tasks to relevant teammate bots, read their updates, and synthesize the team result.",
   }[value.collaboration];
   const research = {
-    normal: "Research posture: normal. Use web tools when external or current evidence materially improves the answer.",
-    "web-first": "Research posture: web-first. Prefer web_search/web_fetch for factual research before synthesis, especially when external evidence is useful.",
-    "verify-current": "Research posture: verify-current. Any current/latest/recent factual claim must be checked with web_search/web_fetch when the public web can verify it; cite the source URLs used.",
+    normal:
+      "Research posture: normal. Use web tools when external or current evidence materially improves the answer.",
+    "web-first":
+      "Research posture: web-first. Prefer web_search/web_fetch for factual research before synthesis, especially when external evidence is useful.",
+    "verify-current":
+      "Research posture: verify-current. Any current/latest/recent factual claim must be checked with web_search/web_fetch when the public web can verify it; cite the source URLs used.",
   }[value.research];
   const depth = {
     brief: "Depth: brief. Solve the whole task but compress explanation and optional detail.",
-    standard: "Depth: standard. Include the reasoning, evidence, and implementation detail needed for a confident result.",
-    exhaustive: "Depth: exhaustive. Investigate thoroughly, cover important edge cases and alternatives, and do not stop at a shallow first answer.",
+    standard:
+      "Depth: standard. Include the reasoning, evidence, and implementation detail needed for a confident result.",
+    exhaustive:
+      "Depth: exhaustive. Investigate thoroughly, cover important edge cases and alternatives, and do not stop at a shallow first answer.",
   }[value.depth];
 
   return [
@@ -146,10 +161,7 @@ export function botSteeringInstructions(profile: BotSteeringProfile): string {
   ].join("\n");
 }
 
-export function applyBotSteeringProfile(
-  instructions: string,
-  profile: BotSteeringProfile,
-): string {
+export function applyBotSteeringProfile(instructions: string, profile: BotSteeringProfile): string {
   const value = normalizeSteeringProfile(profile);
   const userOwned = instructions.replace(STEERING_SECTION, "\n").trim();
   const encoded = encodeURIComponent(JSON.stringify(value));

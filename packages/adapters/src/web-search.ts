@@ -22,13 +22,10 @@ export async function keylessWebSearch(
   const query = input.query.trim();
   if (!query) throw new Error("web_search requires a query");
   const maxResults = clampInteger(input.maxResults ?? 6, 1, 10);
-  const recencyDays = input.recencyDays
-    ? clampInteger(input.recencyDays, 1, 3650)
-    : undefined;
+  const recencyDays = input.recencyDays ? clampInteger(input.recencyDays, 1, 3650) : undefined;
   const searchQuery = recencyDays ? `${query} past ${recencyDays} days` : query;
   const fetcher: SearchFetch =
-    options.fetch ??
-    ((request) => safeWebFetch(request, { signal: options.signal }));
+    options.fetch ?? ((request) => safeWebFetch(request, { signal: options.signal }));
 
   let duckError: unknown;
   try {
@@ -51,7 +48,8 @@ export async function keylessWebSearch(
     });
     return parseBingRssResults(bing.text, maxResults);
   } catch (error) {
-    const duckMessage = duckError instanceof Error ? duckError.message : String(duckError ?? "no results");
+    const duckMessage =
+      duckError instanceof Error ? duckError.message : String(duckError ?? "no results");
     const bingMessage = error instanceof Error ? error.message : String(error);
     throw new Error(`web_search failed via DuckDuckGo (${duckMessage}) and Bing (${bingMessage})`);
   }
@@ -60,14 +58,19 @@ export async function keylessWebSearch(
 export function parseDuckDuckGoResults(html: string, maxResults = 6): WebSearchResult[] {
   const results: WebSearchResult[] = [];
   const seen = new Set<string>();
-  const rowPattern = /<div\b[^>]*class=["'][^"']*\bresult\b[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*\bresult\b|<\/body>|$)/gi;
+  const rowPattern =
+    /<div\b[^>]*class=["'][^"']*\bresult\b[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*\bresult\b|<\/body>|$)/gi;
   for (const row of html.matchAll(rowPattern)) {
     const block = row[1] ?? "";
-    const anchor = block.match(/<a\b[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+    const anchor = block.match(
+      /<a\b[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i,
+    );
     if (!anchor) continue;
     const url = normalizeDuckDuckGoUrl(decodeHtmlEntities(anchor[1] ?? ""));
     if (!url || seen.has(url)) continue;
-    const snippetMatch = block.match(/<[^>]+class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\//i);
+    const snippetMatch = block.match(
+      /<[^>]+class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\//i,
+    );
     results.push({
       title: cleanMarkup(anchor[2] ?? ""),
       url,
@@ -136,7 +139,9 @@ function xmlValue(block: string, tag: string): string {
 }
 
 function cleanMarkup(value: string): string {
-  return decodeHtmlEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " "))
+  return decodeHtmlEntities(
+    value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, " "),
+  )
     .replace(/\s+/g, " ")
     .trim();
 }

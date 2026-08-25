@@ -50,9 +50,13 @@ test("changed workspace deliverables are downloadable with exact bytes", async (
   await completeOnboarding(page, ["Coding & repos", "Clear and tight"]);
 
   const composer = page.getByPlaceholder(/Message/);
-  await composer.fill("write a file in your home called output/result.txt that says artifact-download-ok");
+  await composer.fill(
+    "write a file in your home called output/result.txt that says artifact-download-ok",
+  );
   await page.keyboard.press("Enter");
-  await expect(page.getByText(/artifact-download-ok|writing that into my home|handled/i).first()).toBeVisible({
+  await expect(
+    page.getByText(/artifact-download-ok|writing that into my home|handled/i).first(),
+  ).toBeVisible({
     timeout: 30_000,
   });
 

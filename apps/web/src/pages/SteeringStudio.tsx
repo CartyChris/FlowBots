@@ -1,8 +1,5 @@
 import type { Bot } from "@rakazo/contracts";
-import {
-  type BotSteeringProfile,
-  botSteeringSelection,
-} from "@rakazo/core";
+import { type BotSteeringProfile, botSteeringSelection } from "@rakazo/core";
 import { useEffect, useState } from "react";
 
 const AXES = [
@@ -118,7 +115,8 @@ export function SteeringStudio({
             </p>
             <h2 className="mt-1 truncate font-semibold text-2xl tracking-tight">Steering Studio</h2>
             <p className="mt-1 text-[#858680] text-xs">
-              Tune how {bot.name} takes initiative, communicates, researches, collaborates, and challenges ideas. Steering never changes permissions.
+              Tune how {bot.name} takes initiative, communicates, researches, collaborates, and
+              challenges ideas. Steering never changes permissions.
             </p>
           </div>
           <button
@@ -171,7 +169,8 @@ export function SteeringStudio({
           </div>
 
           <div className="mt-5 rounded-2xl border border-white/[0.07] bg-black/20 p-4 text-[#858780] text-xs leading-relaxed">
-            Profiles are stored inside the bot's existing instructions using a versioned FlowBots marker, so your own instructions remain intact and local-first behavior is preserved.
+            Profiles are stored inside the bot's existing instructions using a versioned FlowBots
+            marker, so your own instructions remain intact and local-first behavior is preserved.
           </div>
         </div>
 
@@ -193,7 +192,8 @@ export function SteeringStudio({
             </span>
           ) : null}
           <span className="ml-auto hidden max-w-[330px] text-right text-[#686A64] text-[10px] sm:block">
-            Personality controls style and initiative only. Tool permissions and truthfulness boundaries are unchanged.
+            Personality controls style and initiative only. Tool permissions and truthfulness
+            boundaries are unchanged.
           </span>
         </footer>
       </section>

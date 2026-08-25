@@ -9,8 +9,8 @@ import type {
 import type { MessageBlock } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
-  MAX_ARTIFACT_BYTES,
   isRelevantDeliverable,
+  MAX_ARTIFACT_BYTES,
   mimeTypeForArtifact,
   selectChangedRunArtifacts,
 } from "./run-artifacts.js";
@@ -52,7 +52,8 @@ export async function snapshotWorkspaceArtifacts(
   const baseline = new Map<string, string>();
   for await (const file of sandbox.exportWorkspace(computer, context)) {
     const normalized = normalizePath(file.path);
-    if (!isRelevantDeliverable(normalized) || file.content.byteLength > MAX_ARTIFACT_BYTES) continue;
+    if (!isRelevantDeliverable(normalized) || file.content.byteLength > MAX_ARTIFACT_BYTES)
+      continue;
     baseline.set(normalized, hashBytes(file.content));
   }
   return baseline;
@@ -73,7 +74,8 @@ export async function captureChangedWorkspaceArtifacts(
   for await (const file of input.sandbox.exportWorkspace(input.computer, input.context)) {
     const normalized = normalizePath(file.path);
     if (excluded.has(normalized)) continue;
-    if (!isRelevantDeliverable(normalized) || file.content.byteLength > MAX_ARTIFACT_BYTES) continue;
+    if (!isRelevantDeliverable(normalized) || file.content.byteLength > MAX_ARTIFACT_BYTES)
+      continue;
     if (input.baseline.get(normalized) === hashBytes(file.content)) continue;
 
     current.set(normalized, file.content);
