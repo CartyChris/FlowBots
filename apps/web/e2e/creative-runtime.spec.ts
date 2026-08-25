@@ -50,9 +50,7 @@ test("plugins can register declarative GitHub extensions", async ({ page }) => {
 
   await page.getByText("Plugins", { exact: true }).click();
   await page.getByRole("tab", { name: "GitHub Extensions" }).click();
-  await expect(
-    page.getByRole("heading", { name: "GitHub Extensions", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GitHub Extensions", exact: true })).toBeVisible();
   await expect(page.getByLabel("GitHub repository URL")).toBeVisible();
   await expect(page.getByLabel("Extension scope")).toBeVisible();
   await expect(page.getByLabel("Extension instructions")).toBeVisible();
