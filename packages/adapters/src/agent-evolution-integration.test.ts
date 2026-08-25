@@ -167,6 +167,8 @@ describe("executor connector stack web routing", () => {
       events.push(event);
     }
     expect(calls).toEqual(["web_search"]);
-    expect(events).toEqual([{ type: "result", data: { ok: true, via: "peer", tool: "web_search" } }]);
+    expect(events).toEqual([
+      { type: "result", data: { ok: true, via: "peer", tool: "web_search" } },
+    ]);
   });
 });
