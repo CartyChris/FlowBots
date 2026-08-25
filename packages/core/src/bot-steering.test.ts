@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   applyBotSteeringProfile,
   BOT_ROLE_PRESETS,
+  type BotSteeringProfile,
   botSteeringInstructions,
   botSteeringSelection,
-  type BotSteeringProfile,
 } from "./bot-personality.js";
 
 const profile: BotSteeringProfile = {
