@@ -69,7 +69,7 @@ test("changed workspace deliverables are downloadable with exact bytes", async (
   const downloadedPath = await download.path();
   expect(downloadedPath).not.toBeNull();
   if (!downloadedPath) throw new Error("downloaded artifact has no local path");
-  expect(await readFile(downloadedPath, "utf8")).toBe("artifact-download-ok");
+  expect(await readFile(downloadedPath, "utf8")).toBe("artifact-download-ok\n");
 });
 
 test("plugins can register declarative GitHub extensions", async ({ page }) => {
