@@ -109,8 +109,8 @@ await edit("apps/api/src/app.ts", (source) => {
   );
   next = replaceOnce(
     next,
-    `    sandbox,\n    memory,\n    home,`,
-    `    sandbox,\n    artifacts,\n    memory,\n    home,`,
+    `  const executor = createRunExecutor({\n    prisma,\n    runtime,\n    sandbox,\n    memory,\n    home,`,
+    `  const executor = createRunExecutor({\n    prisma,\n    runtime,\n    sandbox,\n    artifacts,\n    memory,\n    home,`,
     "api executor artifacts",
   );
   next = replaceOnce(
