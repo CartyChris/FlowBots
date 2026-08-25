@@ -17,6 +17,7 @@ import {
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
   LocalAgentHomeStore,
+  LocalArtifactStore,
   listMessageReactions,
   McpConnector,
   PeerConnector,
@@ -84,6 +85,7 @@ export async function createApp(
   const secrets = new EncryptedSecretStore(env.encryptionKey);
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
+  const artifacts = new LocalArtifactStore(env.dataDir);
   const memory = new HybridMemoryStore(
     new MarkdownMemoryStore(prisma),
     new MnemosyneSemanticIndex({
@@ -150,6 +152,7 @@ export async function createApp(
     prisma,
     runtime,
     sandbox,
+    artifacts,
     memory,
     home,
     connector: stack.connector,
@@ -256,6 +259,39 @@ export async function createApp(
         400,
       );
     }
+  });
+  app.get("/api/artifacts/:artifactId/download", async (c) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
+    if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+    const actor = await requireMembership(prisma, session.user.id).catch(() => null);
+    if (!actor) return c.json({ error: "Forbidden" }, 403);
+    const artifact = await prisma.artifact.findUnique({
+      where: { id: c.req.param("artifactId") },
+    });
+    if (
+      !artifact ||
+      artifact.workspaceId !== actor.workspaceId ||
+      artifact.userId !== actor.userId
+    ) {
+      return c.json({ error: "Artifact not found" }, 404);
+    }
+    const bytes = await artifacts
+      .get(artifact.storageKey, {
+        operationId: `artifact-download:${artifact.id}`,
+        traceId: `artifact-download:${artifact.id}`,
+        workspaceId: actor.workspaceId,
+        userId: actor.userId,
+        botId: artifact.botId,
+        runId: artifact.runId ?? undefined,
+        signal: c.req.raw.signal,
+      })
+      .catch(() => null);
+    if (!bytes) return c.json({ error: "Artifact not found" }, 404);
+    const filename = artifact.name.replace(/[\r\n"]/g, "_");
+    c.header("Content-Type", artifact.mimeType);
+    c.header("Content-Length", String(bytes.byteLength));
+    c.header("Content-Disposition", `attachment; filename="${filename}"`);
+    return c.body(bytes);
   });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });

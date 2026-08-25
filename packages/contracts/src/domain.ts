@@ -2,6 +2,56 @@ import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 
+export const BotAvatarVariantSchema = z.enum([
+  "orb",
+  "blob",
+  "cat",
+  "robot",
+  "spark",
+  "fox",
+  "bunny",
+  "ghost",
+  "slime",
+  "cyclops",
+  "astro",
+  "dragon",
+  "cloud",
+  "cube",
+  "skull",
+]);
+export type BotAvatarVariant = z.infer<typeof BotAvatarVariantSchema>;
+
+export const BotEyeStyleSchema = z.enum(["classic", "mono", "sleepy", "star", "pixel"]);
+export type BotEyeStyle = z.infer<typeof BotEyeStyleSchema>;
+
+export const BotAccessorySchema = z.enum([
+  "none",
+  "antenna",
+  "headphones",
+  "crown",
+  "glasses",
+  "cap",
+]);
+export type BotAccessory = z.infer<typeof BotAccessorySchema>;
+
+export const BotPatternSchema = z.enum(["solid", "stripe", "dots", "circuit"]);
+export type BotPattern = z.infer<typeof BotPatternSchema>;
+
+export const BotGlowSchema = z.enum(["off", "soft", "strong"]);
+export type BotGlow = z.infer<typeof BotGlowSchema>;
+
+const HexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+
+export const BotAppearanceSchema = z.object({
+  variant: BotAvatarVariantSchema.default("orb"),
+  secondaryColor: HexColor.default("#F4F4F1"),
+  eyeStyle: BotEyeStyleSchema.default("classic"),
+  accessory: BotAccessorySchema.default("none"),
+  pattern: BotPatternSchema.default("solid"),
+  glow: BotGlowSchema.default("off"),
+});
+export type BotAppearance = z.infer<typeof BotAppearanceSchema>;
+
 export const BotSchema = z.object({
   id: Id,
   workspaceId: Id,

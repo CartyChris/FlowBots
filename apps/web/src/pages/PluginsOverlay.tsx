@@ -2,6 +2,7 @@ import type { ConnectionCatalogItem } from "@rakazo/contracts";
 import { Button } from "@rakazo/ui-web";
 import { useEffect, useMemo, useState } from "react";
 import { rpc } from "../lib/rpc";
+import { GitHubExtensions } from "./GitHubExtensions.js";
 
 let cachedCatalog: ConnectionCatalogItem[] = [];
 
@@ -15,8 +16,10 @@ type ComposioStatus = {
 };
 
 type CatalogView = "all" | "connected";
+type PluginSurface = "apps" | "github";
 
 export function PluginsOverlay({ onClose }: { onClose: () => void }) {
+  const [surface, setSurface] = useState<PluginSurface>("apps");
   const [query, setQuery] = useState("");
   const [view, setView] = useState<CatalogView>("all");
   const [catalog, setCatalog] = useState<ConnectionCatalogItem[]>(cachedCatalog);
@@ -151,7 +154,8 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
           <div>
             <div className="text-2xl font-medium text-[#F1F1F2]">Connections</div>
             <p className="mt-1 text-[13.5px] text-[#7A7A80]">
-              Composio runs directly from your FlowBots instance. Keys stay encrypted locally.
+              Connect hosted apps or register declarative GitHub extensions for your FlowBots
+              workspace.
             </p>
           </div>
           <button
@@ -164,136 +168,175 @@ export function PluginsOverlay({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="border-b border-[#202023] px-8 py-5">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="min-w-[320px] flex-1 text-[12.5px] text-[#85858A]">
-              Composio API key
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder={status.configured ? "Configured — enter a new key to rotate" : "ak_…"}
-                autoComplete="off"
-                className="mt-1.5 w-full rounded-[11px] border border-[#2A2A2E] bg-[#0D0D0F] px-3.5 py-3 font-mono text-[13px] text-[#ECECEE] outline-none"
-              />
-            </label>
-            <Button
-              type="button"
-              variant="pill"
-              size="sm"
-              disabled={apiKey.trim().length < 8 || savingKey}
-              onClick={() => void saveComposioKey()}
-            >
-              {savingKey ? "Saving…" : status.configured ? "Rotate key" : "Connect Composio"}
-            </Button>
-            {status.source === "local" ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={savingKey}
-                onClick={() => void clearComposioKey()}
-              >
-                Remove local key
-              </Button>
-            ) : null}
-          </div>
-          <p className="mt-2 text-[11.5px] text-[#696970]">
-            Status: {status.configured ? `connected via ${status.source}` : "not configured"}. The
-            key is never returned to this screen after saving.
-          </p>
+        <div
+          role="tablist"
+          aria-label="Connection type"
+          className="flex gap-2 border-b border-[#202023] px-8 py-3"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={surface === "apps"}
+            onClick={() => setSurface("apps")}
+            className={`rounded-full px-4 py-2 text-[13px] ${
+              surface === "apps" ? "bg-[#ECECEE] text-[#17171A]" : "bg-[#202023] text-[#A8A8AD]"
+            }`}
+          >
+            Apps
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={surface === "github"}
+            onClick={() => setSurface("github")}
+            className={`rounded-full px-4 py-2 text-[13px] ${
+              surface === "github" ? "bg-[#BDF268] text-[#15170F]" : "bg-[#202023] text-[#A8A8AD]"
+            }`}
+          >
+            GitHub Extensions
+          </button>
         </div>
 
-        <div className="px-8 pt-4">
-          <div role="tablist" aria-label="Connection catalog view" className="mb-3 flex gap-2">
-            {(["all", "connected"] as CatalogView[]).map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={view === option}
-                onClick={() => setView(option)}
-                className={`rounded-full px-3.5 py-1.5 text-[13px] ${
-                  view === option ? "bg-[#ECECEE] text-[#17171A]" : "bg-[#202023] text-[#A8A8AD]"
-                }`}
-              >
-                {option === "all" ? "All" : "Connected"}
-              </button>
-            ))}
-          </div>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search apps — Gmail, GitHub, Slack, Vercel…"
-            disabled={!status.configured}
-            className="w-full rounded-[13px] border border-[#26262A] bg-[#101012] px-4 py-3 text-[15px] text-[#ECECEE] outline-none disabled:opacity-40"
-          />
-        </div>
-        <div className="rk-scroll flex-1 overflow-y-auto px-8 py-6">
-          {error ? <p className="mb-4 text-sm text-[#C94244]">{error}</p> : null}
-          {!loading && !status.configured ? (
-            <div className="rounded-[16px] border border-dashed border-[#2A2A2E] p-6 text-[#78787E]">
-              Add your Composio key above to unlock the app catalog locally. Browser, web fetch,
-              shell, files, computer use, and MCP do not depend on Composio.
-            </div>
-          ) : null}
-          {status.configured && !loading && catalog.length === 0 ? (
-            <p className="text-[#6C6C70]">
-              Connected, but the app catalog is currently unavailable.
-            </p>
-          ) : null}
-          {status.configured && !loading && catalog.length > 0 && visible.length === 0 ? (
-            <p className="text-[#6C6C70]">
-              {view === "connected" ? "No connected apps yet." : "No apps match this search."}
-            </p>
-          ) : null}
-          {visible.map((item) => (
-            <div
-              key={item.slug}
-              className="flex items-center gap-4 rounded-[13px] px-3 py-2.5 hover:bg-[#18181B]"
-            >
-              {item.logo ? (
-                <img
-                  src={item.logo}
-                  alt=""
-                  className="h-[42px] w-[42px] rounded-xl bg-[#2C2C30] object-contain"
-                />
-              ) : (
-                <div className="grid h-[42px] w-[42px] place-items-center rounded-xl bg-[#2C2C30] font-semibold">
-                  {item.name[0]}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="text-[15.5px] font-medium text-[#ECECEE]">{item.name}</div>
-                <div className="text-[13.5px] text-[#7A7A80]">
-                  {item.slug}
-                  {item.noAuth ? " · no auth" : ""}
-                </div>
+        {surface === "github" ? (
+          <GitHubExtensions />
+        ) : (
+          <>
+            <div className="border-b border-[#202023] px-8 py-5">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="min-w-[320px] flex-1 text-[12.5px] text-[#85858A]">
+                  Composio API key
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.target.value)}
+                    placeholder={
+                      status.configured ? "Configured — enter a new key to rotate" : "ak_…"
+                    }
+                    autoComplete="off"
+                    className="mt-1.5 w-full rounded-[11px] border border-[#2A2A2E] bg-[#0D0D0F] px-3.5 py-3 font-mono text-[13px] text-[#ECECEE] outline-none"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  variant="pill"
+                  size="sm"
+                  disabled={apiKey.trim().length < 8 || savingKey}
+                  onClick={() => void saveComposioKey()}
+                >
+                  {savingKey ? "Saving…" : status.configured ? "Rotate key" : "Connect Composio"}
+                </Button>
+                {status.source === "local" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={savingKey}
+                    onClick={() => void clearComposioKey()}
+                  >
+                    Remove local key
+                  </Button>
+                ) : null}
               </div>
-              {item.connected ? (
-                <Button
-                  type="button"
-                  variant="pill"
-                  size="sm"
-                  disabled={pending === item.slug}
-                  onClick={() => void revoke(item)}
-                >
-                  {pending === item.slug ? "Revoking…" : "Revoke"}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="pill"
-                  size="sm"
-                  disabled={pending === item.slug}
-                  onClick={() => void connect(item)}
-                >
-                  {pending === item.slug ? "Connecting…" : "Connect"}
-                </Button>
-              )}
+              <p className="mt-2 text-[11.5px] text-[#696970]">
+                Status: {status.configured ? `connected via ${status.source}` : "not configured"}.
+                The key is never returned to this screen after saving.
+              </p>
             </div>
-          ))}
-        </div>
+
+            <div className="px-8 pt-4">
+              <div role="tablist" aria-label="Connection catalog view" className="mb-3 flex gap-2">
+                {(["all", "connected"] as CatalogView[]).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === option}
+                    onClick={() => setView(option)}
+                    className={`rounded-full px-3.5 py-1.5 text-[13px] ${
+                      view === option
+                        ? "bg-[#ECECEE] text-[#17171A]"
+                        : "bg-[#202023] text-[#A8A8AD]"
+                    }`}
+                  >
+                    {option === "all" ? "All" : "Connected"}
+                  </button>
+                ))}
+              </div>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search apps — Gmail, GitHub, Slack, Vercel…"
+                disabled={!status.configured}
+                className="w-full rounded-[13px] border border-[#26262A] bg-[#101012] px-4 py-3 text-[15px] text-[#ECECEE] outline-none disabled:opacity-40"
+              />
+            </div>
+            <div className="rk-scroll flex-1 overflow-y-auto px-8 py-6">
+              {error ? <p className="mb-4 text-sm text-[#C94244]">{error}</p> : null}
+              {!loading && !status.configured ? (
+                <div className="rounded-[16px] border border-dashed border-[#2A2A2E] p-6 text-[#78787E]">
+                  Add your Composio key above to unlock the app catalog locally. Browser, web fetch,
+                  shell, files, computer use, and MCP do not depend on Composio.
+                </div>
+              ) : null}
+              {status.configured && !loading && catalog.length === 0 ? (
+                <p className="text-[#6C6C70]">
+                  Connected, but the app catalog is currently unavailable.
+                </p>
+              ) : null}
+              {status.configured && !loading && catalog.length > 0 && visible.length === 0 ? (
+                <p className="text-[#6C6C70]">
+                  {view === "connected" ? "No connected apps yet." : "No apps match this search."}
+                </p>
+              ) : null}
+              {visible.map((item) => (
+                <div
+                  key={item.slug}
+                  className="flex items-center gap-4 rounded-[13px] px-3 py-2.5 hover:bg-[#18181B]"
+                >
+                  {item.logo ? (
+                    <img
+                      src={item.logo}
+                      alt=""
+                      className="h-[42px] w-[42px] rounded-xl bg-[#2C2C30] object-contain"
+                    />
+                  ) : (
+                    <div className="grid h-[42px] w-[42px] place-items-center rounded-xl bg-[#2C2C30] font-semibold">
+                      {item.name[0]}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-[#ECECEE] text-[15.5px]">{item.name}</div>
+                    <div className="text-[#7A7A80] text-[13.5px]">
+                      {item.slug}
+                      {item.noAuth ? " · no auth" : ""}
+                    </div>
+                  </div>
+                  {item.connected ? (
+                    <Button
+                      type="button"
+                      variant="pill"
+                      size="sm"
+                      disabled={pending === item.slug}
+                      onClick={() => void revoke(item)}
+                    >
+                      {pending === item.slug ? "Revoking…" : "Revoke"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="pill"
+                      size="sm"
+                      disabled={pending === item.slug}
+                      onClick={() => void connect(item)}
+                    >
+                      {pending === item.slug ? "Connecting…" : "Connect"}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

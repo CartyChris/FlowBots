@@ -107,6 +107,106 @@ jobs:
         run: pnpm --filter @rakazo/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
 
+  package-macos-dmg:
+    name: FlowBots universal macOS DMG
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5433/rakazo
+      - name: Build universal FlowBots DMG
+        run: CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @rakazo/desktop pack:mac
+      - name: Inspect and launch packaged FlowBots application
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(apps/desktop/out/FlowBots-*-universal.dmg)
+          test "${#dmgs[@]}" -eq 1
+          dmg="${dmgs[0]}"
+          mount_point="$(mktemp -d)"
+          launch_log="$(mktemp)"
+          app_pid=""
+          stop_app() {
+            if [[ -z "$app_pid" ]] || ! kill -0 "$app_pid" 2>/dev/null; then
+              return
+            fi
+            kill "$app_pid" 2>/dev/null || true
+            for _ in {1..10}; do
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                wait "$app_pid" 2>/dev/null || true
+                return
+              fi
+              sleep 0.5
+            done
+            kill -9 "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          cleanup() {
+            stop_app
+            hdiutil detach "$mount_point" -quiet || true
+            rm -f "$launch_log"
+            rmdir "$mount_point" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" >/dev/null
+          app="$mount_point/FlowBots.app"
+          resources="$app/Contents/Resources"
+          pty_root="$resources/app.asar.unpacked/node_modules/node-pty/prebuilds"
+          test -d "$app"
+          test -d "$resources/web"
+          test -d "$resources/migrations"
+          test -d "$resources/app.asar.unpacked/node_modules/node-pty"
+          bundle_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app/Contents/Info.plist")"
+          test "$bundle_name" = "FlowBots"
+          app_archs="$(lipo -archs "$app/Contents/MacOS/FlowBots")"
+          echo "FlowBots architectures: $app_archs"
+          [[ "$app_archs" == *x86_64* ]]
+          [[ "$app_archs" == *arm64* ]]
+          for binary in pty.node spawn-helper; do
+            arm64_info="$(file "$pty_root/darwin-arm64/$binary")"
+            x64_info="$(file "$pty_root/darwin-x64/$binary")"
+            echo "$arm64_info"
+            echo "$x64_info"
+            [[ "$arm64_info" == *arm64* ]]
+            [[ "$arm64_info" != *x86_64* ]]
+            [[ "$x64_info" == *x86_64* ]]
+            [[ "$x64_info" != *arm64* ]]
+          done
+          "$app/Contents/MacOS/FlowBots" >"$launch_log" 2>&1 &
+          app_pid=$!
+          sleep 12
+          if ! kill -0 "$app_pid" 2>/dev/null; then
+            cat "$launch_log"
+            echo "FlowBots exited during startup smoke test" >&2
+            exit 1
+          fi
+          if grep -E "ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING|Uncaught Exception|A JavaScript error occurred in the main process|Mnemosyne memory is required" "$launch_log"; then
+            cat "$launch_log"
+            echo "FlowBots emitted a fatal startup error" >&2
+            exit 1
+          fi
+          stop_app
+          app_pid=""
+          test -s "$dmg"
+          shasum -a 256 "$dmg"
+      - name: Upload FlowBots DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowBots-macOS-universal-${{ github.event.pull_request.head.sha }}
+          path: apps/desktop/out/FlowBots-*-universal.dmg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
   deploy-production:
     if: >-
       github.event_name == 'push' &&

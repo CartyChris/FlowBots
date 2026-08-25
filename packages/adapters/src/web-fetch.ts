@@ -30,6 +30,8 @@ export type RequestWebFetchHop = (input: WebFetchHop) => Promise<WebFetchHopResu
 export interface WebFetchInput {
   url: string;
   maxChars?: number;
+  /** Internal parser mode. Bot-facing web_fetch should keep the default readable extraction. */
+  extract?: "readable" | "raw";
 }
 
 export interface WebFetchResult {
@@ -125,9 +127,12 @@ export async function safeWebFetch(
       throw new Error(`web_fetch supports text responses, received ${contentType}`);
     }
     const decoded = new TextDecoder("utf-8").decode(hop.body);
-    const readable = contentType.toLowerCase().includes("text/html")
-      ? htmlToReadableText(decoded)
-      : collapseWhitespace(decoded);
+    const readable =
+      input.extract === "raw"
+        ? decoded
+        : contentType.toLowerCase().includes("text/html")
+          ? htmlToReadableText(decoded)
+          : collapseWhitespace(decoded);
     const truncated = hop.truncated || readable.length > maxChars;
     return {
       url: validated.url,

@@ -3,6 +3,7 @@ import { type Api, type Model, type Models, Type } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
   AdapterContext,
+  AgentFinishReason,
   AgentRunRequest,
   AgentRuntime,
   AgentRuntimeEvent,
@@ -67,7 +68,7 @@ export class PiAgentRuntime implements AgentRuntime {
             : (models.getModel(provider, modelId) ?? models.getModel("openrouter", modelId)));
         if (!model) {
           queue.push({ type: "text", text: `Unknown model ${provider}/${modelId}` });
-          queue.push({ type: "done" });
+          queue.push({ type: "done", finishReason: "unknown" });
           return;
         }
 
@@ -113,7 +114,7 @@ export class PiAgentRuntime implements AgentRuntime {
         });
 
         if (signal.aborted) {
-          queue.push({ type: "done", text: "stopped" });
+          queue.push({ type: "done", text: "stopped", finishReason: "unknown" });
           return;
         }
         const onAbort = () => {
@@ -123,6 +124,7 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
+        let finishReason: AgentFinishReason = "unknown";
         agent.subscribe((event) => {
           if (
             event.type === "message_update" &&
@@ -135,6 +137,7 @@ export class PiAgentRuntime implements AgentRuntime {
             }
           }
           if (event.type === "message_end" && event.message.role === "assistant") {
+            finishReason = mapAssistantFinishReason(event.message);
             const text = assistantText(event.message);
             if (text && !streamed) {
               streamed = text;
@@ -160,19 +163,23 @@ export class PiAgentRuntime implements AgentRuntime {
         const error = agent.state.errorMessage;
         if (error) {
           queue.push({ type: "text", text: `I hit a problem: ${sanitizeError(error)}` });
-          queue.push({ type: "done", text: sanitizeError(error) });
+          queue.push({ type: "done", text: sanitizeError(error), finishReason: "error" });
           return;
         }
+        const finalMessage = agent.state.messages.at(-1);
+        if (finishReason === "unknown" && finalMessage?.role === "assistant") {
+          finishReason = mapAssistantFinishReason(finalMessage);
+        }
         if (!streamed) {
-          const fallback = assistantText(agent.state.messages.at(-1)) || "I finished the work.";
+          const fallback = assistantText(finalMessage) || "I finished the work.";
           queue.push({ type: "text", text: fallback });
           streamed = fallback;
         }
-        queue.push({ type: "done", text: streamed });
+        queue.push({ type: "done", text: streamed, finishReason });
       } catch (error) {
         const message = sanitizeError(error instanceof Error ? error.message : String(error));
         queue.push({ type: "text", text: `I hit a problem: ${message}` });
-        queue.push({ type: "done", text: message });
+        queue.push({ type: "done", text: message, finishReason: "error" });
       } finally {
         queue.close();
       }
@@ -185,6 +192,56 @@ export class PiAgentRuntime implements AgentRuntime {
       running.delete(request.runId);
     }
   }
+}
+
+export function mapAssistantFinishReason(message: unknown): AgentFinishReason {
+  if (!message || typeof message !== "object") return "unknown";
+  const record = message as Record<string, unknown>;
+  const raw = [
+    record.stopReason,
+    record.finishReason,
+    record.stop_reason,
+    record.finish_reason,
+  ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  if (!raw) return "unknown";
+
+  const normalized = raw
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+
+  if (
+    normalized === "length" ||
+    normalized === "max_tokens" ||
+    normalized === "max_token" ||
+    normalized === "max_output_tokens" ||
+    normalized === "max_completion_tokens" ||
+    normalized === "token_limit" ||
+    normalized === "output_limit"
+  ) {
+    return "length";
+  }
+  if (
+    normalized === "stop" ||
+    normalized === "end_turn" ||
+    normalized === "complete" ||
+    normalized === "completed"
+  ) {
+    return "stop";
+  }
+  if (
+    normalized === "tool" ||
+    normalized === "tool_use" ||
+    normalized === "tool_calls" ||
+    normalized === "function_call"
+  ) {
+    return "tool";
+  }
+  if (normalized === "error" || normalized === "failed" || normalized === "failure") {
+    return "error";
+  }
+  return "unknown";
 }
 
 function streamModel(

@@ -1,6 +1,11 @@
 import type { ConnectorTool } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { normalizeAgentToolName, normalizeAgentToolNames, PiAgentRuntime } from "./pi-runtime.js";
+import {
+  mapAssistantFinishReason,
+  normalizeAgentToolName,
+  normalizeAgentToolNames,
+  PiAgentRuntime,
+} from "./pi-runtime.js";
 
 function tool(name: string): ConnectorTool {
   return { name, description: name, inputSchema: { type: "object" } };
@@ -32,6 +37,27 @@ describe("Pi agent runtime", () => {
       if (event.type === "text") events.push(event.text);
     }
     expect(events.join(" ")).toMatch(/Unknown model/i);
+  });
+});
+
+describe("Pi finish reason mapping", () => {
+  it("maps explicit token-limit variants to length", () => {
+    for (const reason of ["length", "max_tokens", "max_output_tokens", "token_limit"]) {
+      expect(mapAssistantFinishReason({ stopReason: reason })).toBe("length");
+    }
+    expect(mapAssistantFinishReason({ finish_reason: "length" })).toBe("length");
+  });
+
+  it("maps normal, tool, and error endings conservatively", () => {
+    expect(mapAssistantFinishReason({ stopReason: "stop" })).toBe("stop");
+    expect(mapAssistantFinishReason({ stopReason: "end_turn" })).toBe("stop");
+    expect(mapAssistantFinishReason({ stopReason: "tool_use" })).toBe("tool");
+    expect(mapAssistantFinishReason({ stopReason: "error" })).toBe("error");
+  });
+
+  it("keeps missing or unfamiliar provider values unknown", () => {
+    expect(mapAssistantFinishReason({})).toBe("unknown");
+    expect(mapAssistantFinishReason({ stopReason: "provider_magic" })).toBe("unknown");
   });
 });
 

@@ -7,7 +7,19 @@ import {
   botRoleSelection,
 } from "./bot-personality.js";
 
-const roles: BotRolePreset[] = ["Developer", "Researcher", "Employee", "Friend", "Coach", "Custom"];
+const roles: BotRolePreset[] = [
+  "Developer",
+  "Researcher",
+  "Employee",
+  "Friend",
+  "Coach",
+  "Analyst",
+  "Builder",
+  "Creative",
+  "Operator",
+  "Research Lead",
+  "Custom",
+];
 
 describe("bot role presets", () => {
   it("exposes the requested stable role set", () => {

@@ -1149,6 +1149,30 @@ function MessageView({
             </button>
           );
         }
+        if (block.kind === "file") {
+          return (
+            <div key={i} className="flex justify-start">
+              <a
+                href={`/api/artifacts/${encodeURIComponent(block.artifactId)}/download`}
+                download={block.name}
+                className="flex w-[min(420px,90%)] items-center gap-3 rounded-[18px] border border-[#2A2A2E] bg-[#141417] px-[18px] py-4 hover:border-[#3A3A40] hover:bg-[#18181B]"
+              >
+                <span aria-hidden className="text-xl">
+                  ↓
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium text-[#ECECEE]">
+                    {block.name}
+                  </span>
+                  <span className="mt-1 block truncate text-[12px] text-[#77777D]">
+                    {block.mimeType} · {block.size.toLocaleString()} bytes
+                  </span>
+                </span>
+                <span className="shrink-0 text-[12px] font-medium text-[#A7A7AC]">Download</span>
+              </a>
+            </div>
+          );
+        }
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={i} className="flex justify-end">
