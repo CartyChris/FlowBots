@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -26,7 +27,10 @@ export class LocalArtifactStore implements ArtifactStore {
     await mkdir(dir, { recursive: true });
     const file = path.join(dir, id);
     await writeFile(file, artifact.bytes);
-    return { id, hash: String(artifact.bytes.byteLength) };
+    return {
+      id,
+      hash: createHash("sha256").update(artifact.bytes).digest("hex"),
+    };
   }
 
   async get(id: string, context: AdapterContext) {
