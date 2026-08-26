@@ -19,29 +19,19 @@ jobs:
       - run: pnpm db:generate
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-      - name: Confirm group routing contract is RED
-        shell: bash
-        run: |
-          set +e
-          pnpm exec vitest run packages/core/src/group-chat-routing.test.ts
-          status=$?
-          set -e
-          if [[ $status -eq 0 ]]; then
-            echo "Expected group routing test to fail before implementation" >&2
-            exit 1
-          fi
-          echo "GROUP_ROUTING_RED_CONFIRMED=1"
+      - name: Group routing is GREEN before UI implementation
+        run: pnpm exec vitest run packages/core/src/group-chat-routing.test.ts
       - name: Install Chromium
         run: pnpm --filter @rakazo/web exec playwright install --with-deps chromium
-      - name: Confirm sticky-selection regression is RED
+      - name: Confirm persistent multi-bot room contract is RED
         shell: bash
         run: |
           set +e
-          pnpm test:e2e -- --grep "non-first bot selection survives"
+          pnpm test:e2e
           status=$?
           set -e
           if [[ $status -eq 0 ]]; then
-            echo "Expected sticky selection test to fail before implementation" >&2
+            echo "Expected group chat E2E to fail before persistence/UI implementation" >&2
             exit 1
           fi
-          echo "BOT_SELECTION_RED_CONFIRMED=1"
+          echo "GROUP_CHAT_UI_RED_CONFIRMED=1"
