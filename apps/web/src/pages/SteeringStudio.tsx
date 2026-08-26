@@ -1,5 +1,10 @@
 import type { Bot } from "@rakazo/contracts";
-import { type BotSteeringProfile, botSteeringSelection } from "@rakazo/core";
+import {
+  type BotSteeringProfile,
+  botSteeringSelection,
+  type FlowMembership,
+  flowMembershipFromInstructions,
+} from "@rakazo/core";
 import { useEffect, useState } from "react";
 
 const AXES = [
@@ -73,17 +78,21 @@ export function SteeringStudio({
   onClose,
 }: {
   bot: Bot;
-  onSave: (profile: BotSteeringProfile) => Promise<void>;
+  onSave: (profile: BotSteeringProfile, membership: FlowMembership) => Promise<void>;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<BotSteeringProfile>(() =>
     botSteeringSelection(bot.instructions ?? ""),
+  );
+  const [membership, setMembership] = useState<FlowMembership>(() =>
+    flowMembershipFromInstructions(bot.instructions ?? ""),
   );
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(botSteeringSelection(bot.instructions ?? ""));
+    setMembership(flowMembershipFromInstructions(bot.instructions ?? ""));
   }, [bot.instructions]);
 
   useEffect(() => {
@@ -99,7 +108,7 @@ export function SteeringStudio({
     setSaving(true);
     setNotice(null);
     try {
-      await onSave(draft);
+      await onSave(draft, membership);
       setNotice("Steering saved");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not save steering.");
@@ -170,6 +179,27 @@ export function SteeringStudio({
               </label>
             ))}
           </div>
+
+          <label className="mt-5 block rounded-2xl border border-[#BDF268]/15 bg-[#BDF268]/[0.035] p-4">
+            <span className="block font-semibold text-[#E8E9E4] text-xs">Shared Flow</span>
+            <span className="mt-1 block text-[#74766F] text-[10.5px] leading-relaxed">
+              Connected bots automatically know each other and can consult/delegate within this
+              workspace. Separated removes this bot from automatic teammate context and peer tools
+              until you reconnect it. This never changes permissions.
+            </span>
+            <select
+              aria-label="Shared Flow"
+              value={membership}
+              onChange={(event) => {
+                setMembership(event.currentTarget.value as FlowMembership);
+                setNotice(null);
+              }}
+              className="mt-3 w-full rounded-xl border border-white/10 bg-[#08090A] px-3 py-2.5 font-medium text-[#D7D9D2] text-xs outline-none focus:border-[#BDF268]/50"
+            >
+              <option value="connected">Connected</option>
+              <option value="isolated">Separated</option>
+            </select>
+          </label>
 
           <div className="mt-5 rounded-2xl border border-white/[0.07] bg-black/20 p-4 text-[#858780] text-xs leading-relaxed">
             Profiles are stored inside the bot's existing instructions using a versioned FlowBots

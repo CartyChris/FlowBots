@@ -18,7 +18,14 @@ import {
   formatCron,
   presetFromCron,
 } from "@rakazo/core";
-import { BOT_AVATAR_FACE_CHOICES, BotAvatar, type BotAvatarState, Button } from "@rakazo/ui-web";
+import {
+  BOT_AVATAR_FACE_CHOICES,
+  BotAvatar,
+  type BotAvatarState,
+  Button,
+  botWorkStateForTool,
+  type SemanticBotWorkState,
+} from "@rakazo/ui-web";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
@@ -60,6 +67,8 @@ export function ShellPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [booting, setBooting] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [activeWorkState, setActiveWorkState] = useState<SemanticBotWorkState | null>(null);
+  const workStateTimer = useRef<number | null>(null);
   const [routineDraft, setRoutineDraft] = useState({
     name: "",
     prompt: "",
@@ -171,6 +180,23 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
+            if (event.type === "agent.tool.called") {
+              const toolName = String(event.payload.name ?? "");
+              const semantic = botWorkStateForTool(toolName);
+              if (semantic) {
+                if (workStateTimer.current != null) window.clearTimeout(workStateTimer.current);
+                setActiveWorkState(semantic);
+                workStateTimer.current = window.setTimeout(() => {
+                  setActiveWorkState(null);
+                  workStateTimer.current = null;
+                }, 3_200);
+              }
+            }
+            if (event.type === "run.completed") {
+              if (workStateTimer.current != null) window.clearTimeout(workStateTimer.current);
+              workStateTimer.current = null;
+              setActiveWorkState(null);
+            }
             applyThreadEvent(event, setSnapshot, setComputer);
             if (
               event.type === "bot.spawned" ||
@@ -204,6 +230,9 @@ export function ShellPage() {
     })();
     return () => {
       abort.abort();
+      if (workStateTimer.current != null) window.clearTimeout(workStateTimer.current);
+      workStateTimer.current = null;
+      setActiveWorkState(null);
     };
   }, [active?.id]);
 
@@ -378,7 +407,11 @@ export function ShellPage() {
               <BotAvatar
                 color={bot.color}
                 size={38}
-                state={avatarStateFor(bot.status)}
+                state={
+                  bot.id === active?.id && activeWorkState
+                    ? activeWorkState
+                    : avatarStateFor(bot.status)
+                }
                 label={bot.name}
               />
               <div className="min-w-0 flex-1">
@@ -501,7 +534,7 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 size={26}
-                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                state={activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status)}
                 label={active.name}
               />
             ) : null}
@@ -562,7 +595,7 @@ export function ShellPage() {
                 className="rounded-[20px] bg-[#1A1A1D] px-[18px] py-[13px] text-[14.5px] text-[#85858A]"
                 style={{ animation: "rkPulse 1.2s ease-in-out infinite" }}
               >
-                working…
+                {activeWorkState ? `${activeWorkState}…` : "working…"}
               </div>
             </div>
           ) : null}
@@ -954,7 +987,7 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 size={28}
-                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                state={activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status)}
                 label={active.name}
               />
               <span className="truncate text-[15.5px] font-medium text-[#ECECEE]">

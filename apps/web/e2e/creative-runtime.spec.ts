@@ -18,19 +18,23 @@ test("virtual office and workbench are reachable from the shell", async ({ page 
   await expect(page.getByRole("tab", { name: "Artifact Studio" })).toBeVisible();
 });
 
-test("steering studio persists all six agent-evolution axes", async ({ page }) => {
+test("steering studio persists all six agent-evolution axes and Flow membership", async ({
+  page,
+}) => {
   const stamp = Date.now();
   await signup(page, `steering-studio-${stamp}@rakazo.test`, "password12", "Steering Studio");
   await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
 
   await page.getByRole("button", { name: "Steering Studio", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Steering Studio", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Shared Flow")).toHaveValue("connected");
   await page.getByLabel("Initiative").selectOption("proactive");
   await page.getByLabel("Expressiveness").selectOption("animated");
   await page.getByLabel("Challenge").selectOption("skeptical");
   await page.getByLabel("Collaboration").selectOption("team-first");
   await page.getByLabel("Research").selectOption("web-first");
   await page.getByLabel("Depth").selectOption("exhaustive");
+  await page.getByLabel("Shared Flow").selectOption("isolated");
   await page.getByRole("button", { name: "Save steering profile" }).click();
   await expect(page.getByText("Steering saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close Steering Studio" }).click();
@@ -42,6 +46,7 @@ test("steering studio persists all six agent-evolution axes", async ({ page }) =
   await expect(page.getByLabel("Collaboration")).toHaveValue("team-first");
   await expect(page.getByLabel("Research")).toHaveValue("web-first");
   await expect(page.getByLabel("Depth")).toHaveValue("exhaustive");
+  await expect(page.getByLabel("Shared Flow")).toHaveValue("isolated");
 });
 
 test("changed workspace deliverables are downloadable with exact bytes", async ({ page }) => {
