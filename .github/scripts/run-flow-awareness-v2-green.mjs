@@ -15,7 +15,7 @@ replaceOnce(
 replaceOnce(
   "apps/web/src/pages/Shell.tsx",
   '                working…',
-  '                {activeWorkState ? \`${activeWorkState}…\` : "working…"}',
+  '                {activeWorkState ? \`\${activeWorkState}…\` : "working…"}',
 );
 // The full-screen computer avatar has the same source expression; replace its remaining occurrence.
 replaceOnce(
@@ -36,7 +36,7 @@ replaceOnce(
 replaceOnce(
   "apps/web/src/pages/Shell.tsx",
   '                working…',
-  '                {activeWorkState ? \`${activeWorkState}…\` : "working…"}',
+  '                {activeWorkState ? \`\${activeWorkState}…\` : "working…"}',
 );
 replaceOnce(
   "apps/web/src/pages/Shell.tsx",
