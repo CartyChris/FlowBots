@@ -1,0 +1,59 @@
+name: Group Domain Stage
+on:
+  push:
+    branches: [feature/interactive-group-chats]
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply guarded domain transformation in runner only
+        run: node .github/scripts/group-domain-green.mjs
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Format transformed files
+        run: |
+          pnpm exec biome check --write \
+            packages/db/prisma/schema.prisma \
+            packages/db/src/index.ts \
+            packages/db/src/group-messages.ts \
+            packages/db/src/group-runs.ts \
+            packages/contracts/src/domain.ts \
+            packages/contracts/src/rpc.ts \
+            packages/core/src/group-chat-routing.ts \
+            packages/core/src/group-chat-routing.test.ts
+      - name: Group routing contracts
+        run: pnpm exec vitest run packages/core/src/group-chat-routing.test.ts
+      - name: Typecheck
+        run: pnpm check
+      - name: Lint
+        run: pnpm lint
+      - name: Diff integrity
+        run: git diff --check
+      - name: Bundle staged files
+        run: |
+          tar -czf /tmp/group-domain-staged.tar.gz \
+            packages/db/prisma/schema.prisma \
+            packages/db/src/index.ts \
+            packages/db/src/group-messages.ts \
+            packages/db/src/group-runs.ts \
+            packages/contracts/src/domain.ts \
+            packages/contracts/src/rpc.ts \
+            packages/core/src/group-chat-routing.ts \
+            packages/core/src/group-chat-routing.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: group-domain-staged
+          path: /tmp/group-domain-staged.tar.gz
+          if-no-files-found: error
