@@ -4,6 +4,7 @@ export * from "./async.js";
 export * from "./bot-personality.js";
 export * from "./cron.js";
 export * from "./events.js";
+export * from "./flow-awareness.js";
 export * from "./message-pages.js";
 export * from "./personality.js";
 export * from "./run-state.js";
