@@ -36,11 +36,20 @@ import {
   type Actor,
   appContract,
   type ComputerStatus,
+  type GroupChatSnapshot,
+  type GroupChatSummary,
   type Me,
   type ThreadSnapshot,
 } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, nextCronDate, projectMessages } from "@rakazo/core";
 import {
+  ACTIVE_RUN_STATUSES,
+  botParticipatesInFlow,
+  nextCronDate,
+  projectMessages,
+  resolveGroupResponders,
+} from "@rakazo/core";
+import {
+  createGroupMessage,
   createRepos,
   createThreadMessage,
   IsolationError,
@@ -416,6 +425,184 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
     },
+    groupChats: {
+      list: authed.groupChats.list.handler(async ({ context }) =>
+        groupChatSummaries(deps, context.actor),
+      ),
+      get: authed.groupChats.get.handler(async ({ context, input }) =>
+        groupChatSnapshot(deps, context.actor, input.groupChatId),
+      ),
+      create: authed.groupChats.create.handler(async ({ context, input }) => {
+        const bots = await requireGroupBots(deps, context.actor, input.botIds);
+        const room = await deps.prisma.groupChat.create({
+          data: {
+            workspaceId: context.actor.workspaceId,
+            userId: context.actor.userId,
+            name: input.name,
+            members: {
+              create: bots.map((bot, position) => ({ botId: bot.id, position })),
+            },
+          },
+        });
+        return groupChatSnapshot(deps, context.actor, room.id);
+      }),
+      update: authed.groupChats.update.handler(async ({ context, input }) => {
+        const existing = await deps.prisma.groupChat.findFirst({
+          where: {
+            id: input.groupChatId,
+            workspaceId: context.actor.workspaceId,
+            userId: context.actor.userId,
+          },
+        });
+        if (!existing) throw new IsolationError();
+        const bots = input.botIds
+          ? await requireGroupBots(deps, context.actor, input.botIds)
+          : null;
+        await deps.prisma.$transaction(async (tx) => {
+          if (bots) {
+            await tx.groupChatMember.deleteMany({ where: { groupChatId: existing.id } });
+            await tx.groupChatMember.createMany({
+              data: bots.map((bot, position) => ({
+                groupChatId: existing.id,
+                botId: bot.id,
+                position,
+              })),
+            });
+          }
+          await tx.groupChat.update({
+            where: { id: existing.id },
+            data: { name: input.name },
+          });
+        });
+        return groupChatSnapshot(deps, context.actor, existing.id);
+      }),
+      remove: authed.groupChats.remove.handler(async ({ context, input }) => {
+        const removed = await deps.prisma.groupChat.deleteMany({
+          where: {
+            id: input.groupChatId,
+            workspaceId: context.actor.workspaceId,
+            userId: context.actor.userId,
+          },
+        });
+        if (removed.count !== 1) throw new IsolationError();
+        return { ok: true as const };
+      }),
+      send: authed.groupChats.send.handler(async ({ context, input }) => {
+        const room = await deps.prisma.groupChat.findFirst({
+          where: {
+            id: input.groupChatId,
+            workspaceId: context.actor.workspaceId,
+            userId: context.actor.userId,
+          },
+          include: {
+            members: {
+              orderBy: { position: "asc" },
+              include: { bot: { include: { thread: true } } },
+            },
+          },
+        });
+        if (!room) throw new IsolationError();
+
+        if (input.clientNonce) {
+          const duplicate = await deps.prisma.groupMessage.findFirst({
+            where: { groupChatId: room.id, clientNonce: input.clientNonce },
+          });
+          if (duplicate) {
+            const priorRuns = await deps.prisma.run.findMany({
+              where: { groupChatId: room.id, groupPromptSeq: duplicate.seq },
+              select: { id: true, botId: true, status: true },
+            });
+            return {
+              messageSeq: duplicate.seq,
+              responderBotIds: priorRuns.map((run) => run.botId),
+              busyBotIds: [],
+              runIds: priorRuns.map((run) => run.id),
+            };
+          }
+        }
+
+        const message = await createGroupMessage(deps.prisma, {
+          groupChatId: room.id,
+          authorKind: "user",
+          blocks: [{ kind: "text", text: input.text }],
+          clientNonce: input.clientNonce ?? null,
+        });
+        const routingMembers = room.members.map(({ bot }) => ({
+          botId: bot.id,
+          name: bot.name,
+          title: bot.title,
+          description: bot.description,
+        }));
+        const responderBotIds = resolveGroupResponders(input.text, routingMembers);
+        const active = await deps.prisma.run.findMany({
+          where: {
+            botId: { in: responderBotIds },
+            status: { in: [...ACTIVE_RUN_STATUSES] },
+          },
+          select: { botId: true },
+        });
+        const busy = new Set(active.map((run) => run.botId));
+        const runnable = room.members.filter(
+          ({ bot }) => responderBotIds.includes(bot.id) && !busy.has(bot.id) && bot.thread,
+        );
+        const created = [] as Array<{ id: string; botId: string }>;
+        for (const member of runnable) {
+          const bot = member.bot;
+          const task = await deps.prisma.task.create({
+            data: {
+              workspaceId: context.actor.workspaceId,
+              botId: bot.id,
+              threadId: bot.thread!.id,
+              userId: context.actor.userId,
+              prompt: input.text,
+              status: "queued",
+              groupChatId: room.id,
+              groupPromptSeq: message.seq,
+            },
+          });
+          const run = await deps.prisma.run.create({
+            data: {
+              workspaceId: context.actor.workspaceId,
+              botId: bot.id,
+              threadId: bot.thread!.id,
+              taskId: task.id,
+              userId: context.actor.userId,
+              status: "queued",
+              trigger: "group",
+              groupChatId: room.id,
+              groupPromptSeq: message.seq,
+              clientNonce: input.clientNonce ? `${input.clientNonce}:${bot.id}` : undefined,
+            },
+          });
+          created.push({ id: run.id, botId: bot.id });
+        }
+        for (const run of created) await deps.jobs.enqueue(runContinueJob(run.id));
+        return {
+          messageSeq: message.seq,
+          responderBotIds,
+          busyBotIds: responderBotIds.filter((botId) => busy.has(botId)),
+          runIds: created.map((run) => run.id),
+        };
+      }),
+      stop: authed.groupChats.stop.handler(async ({ context, input }) => {
+        await groupChatSnapshot(deps, context.actor, input.groupChatId);
+        const active = await deps.prisma.run.findMany({
+          where: {
+            groupChatId: input.groupChatId,
+            status: { in: [...ACTIVE_RUN_STATUSES] },
+          },
+          select: { id: true },
+        });
+        await deps.prisma.run.updateMany({
+          where: { id: { in: active.map((run) => run.id) } },
+          data: { status: "cancelled", completedAt: new Date() },
+        });
+        await deps.prisma.event.deleteMany({
+          where: { runId: { in: active.map((run) => run.id) }, type: "thread.progress" },
+        });
+        return { ok: true as const };
+      }),
+    },
     threads: {
       get: authed.threads.get.handler(async ({ context, input }) =>
         snapshot(deps, context.actor, input.botId),
@@ -482,6 +669,7 @@ export function createRouter(deps: RouterDeps) {
         await deps.prisma.run.updateMany({
           where: {
             botId: bot.id,
+            groupChatId: null,
             status: "queued",
             id: { not: run.id },
           },
@@ -495,6 +683,7 @@ export function createRouter(deps: RouterDeps) {
         const activeRuns = await deps.prisma.run.findMany({
           where: {
             botId: bot.id,
+            groupChatId: null,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           select: { id: true },
@@ -502,6 +691,7 @@ export function createRouter(deps: RouterDeps) {
         await deps.prisma.run.updateMany({
           where: {
             botId: bot.id,
+            groupChatId: null,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           data: { status: "cancelled", completedAt: new Date() },
@@ -534,7 +724,11 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         const active = await deps.prisma.run.findFirst({
-          where: { botId: bot.id, status: { in: ["running", "queued", "leased"] } },
+          where: {
+            botId: bot.id,
+            groupChatId: null,
+            status: { in: ["running", "queued", "leased"] },
+          },
         });
         if (active) return { ok: true as const };
         const task = await deps.prisma.task.create({
@@ -1291,6 +1485,130 @@ export function createRouter(deps: RouterDeps) {
   });
 }
 
+async function requireGroupBots(deps: RouterDeps, actor: Actor, botIds: string[]) {
+  const unique = [...new Set(botIds)];
+  if (unique.length < 2 || unique.length > 12) {
+    throw new ORPCError("BAD_REQUEST", { message: "Group chats require 2–12 unique bots." });
+  }
+  const rows = await deps.prisma.bot.findMany({
+    where: {
+      id: { in: unique },
+      workspaceId: actor.workspaceId,
+      userId: actor.userId,
+    },
+    include: { thread: true },
+  });
+  if (rows.length !== unique.length) throw new IsolationError();
+  const byId = new Map(rows.map((bot) => [bot.id, bot]));
+  const ordered = unique
+    .map((id) => byId.get(id))
+    .filter((bot): bot is NonNullable<typeof bot> => !!bot);
+  if (ordered.some((bot) => !botParticipatesInFlow(bot.instructions))) {
+    throw new ORPCError("BAD_REQUEST", {
+      message:
+        "Separated bots cannot join a group chat until they are reconnected to the Shared Flow.",
+    });
+  }
+  return ordered;
+}
+
+async function groupChatSummaries(deps: RouterDeps, actor: Actor): Promise<GroupChatSummary[]> {
+  const rooms = await deps.prisma.groupChat.findMany({
+    where: { workspaceId: actor.workspaceId, userId: actor.userId },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  const snapshots = await Promise.all(rooms.map((room) => groupChatSnapshot(deps, actor, room.id)));
+  return snapshots.map((room) => ({
+    id: room.id,
+    name: room.name,
+    members: room.members,
+    preview: groupMessagePreview(room.messages.at(-1)?.blocks ?? []),
+    activeCount: room.activeRuns.length,
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
+  }));
+}
+
+async function groupChatSnapshot(
+  deps: RouterDeps,
+  actor: Actor,
+  groupChatId: string,
+): Promise<GroupChatSnapshot> {
+  const room = await deps.prisma.groupChat.findFirst({
+    where: { id: groupChatId, workspaceId: actor.workspaceId, userId: actor.userId },
+    include: {
+      members: { orderBy: { position: "asc" }, include: { bot: true } },
+      messages: { orderBy: { seq: "asc" }, take: 500 },
+    },
+  });
+  if (!room) throw new IsolationError();
+  const activeRuns = await deps.prisma.run.findMany({
+    where: { groupChatId: room.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
+    orderBy: { createdAt: "asc" },
+    include: { bot: true },
+  });
+  const activeRunIds = activeRuns.map((run) => run.id);
+  const toolEvents = activeRunIds.length
+    ? await deps.prisma.event.findMany({
+        where: { runId: { in: activeRunIds }, type: "agent.tool.called" },
+        orderBy: { seq: "asc" },
+        select: { runId: true, payload: true },
+      })
+    : [];
+  const lastTool = new Map<string, string>();
+  for (const event of toolEvents) {
+    if (!event.runId) continue;
+    const payload = event.payload as Record<string, unknown>;
+    lastTool.set(event.runId, String(payload.name ?? ""));
+  }
+  const activeByBot = new Map(activeRuns.map((run) => [run.botId, run.status]));
+  return {
+    id: room.id,
+    name: room.name,
+    members: room.members.map(({ bot, position }) => ({
+      botId: bot.id,
+      name: bot.name,
+      title: bot.title,
+      description: bot.description,
+      color: bot.color,
+      status: activeByBot.get(bot.id) ?? "idle",
+      position,
+    })),
+    messages: room.messages.map((message) => ({
+      id: message.id,
+      groupChatId: message.groupChatId,
+      seq: message.seq,
+      authorKind: message.authorKind as "user" | "bot" | "system",
+      botId: message.botId,
+      authorName: message.authorName,
+      authorColor: message.authorColor,
+      blocks: message.blocks as GroupChatSnapshot["messages"][number]["blocks"],
+      runId: message.runId,
+      createdAt: message.createdAt.toISOString(),
+    })),
+    activeRuns: activeRuns.map((run) => ({
+      runId: run.id,
+      botId: run.botId,
+      botName: run.bot.name,
+      botColor: run.bot.color,
+      status: run.status,
+      lastTool: lastTool.get(run.id) || null,
+      startedAt: run.startedAt?.toISOString() ?? null,
+    })),
+    createdAt: room.createdAt.toISOString(),
+    updatedAt: room.updatedAt.toISOString(),
+  };
+}
+
+function groupMessagePreview(blocks: GroupChatSnapshot["messages"][number]["blocks"]): string {
+  for (const block of blocks) {
+    if (block.kind === "text" && block.text.trim()) return block.text.trim().slice(0, 160);
+    if (block.kind === "file") return `Shared ${block.name}`;
+  }
+  return "";
+}
+
 async function snapshot(deps: RouterDeps, actor: Actor, botId: string): Promise<ThreadSnapshot> {
   const bot = await createRepos(deps.prisma).getBot(actor, botId);
   if (!bot.thread) throw new IsolationError();
@@ -1299,6 +1617,7 @@ async function snapshot(deps: RouterDeps, actor: Actor, botId: string): Promise<
     deps.prisma.run.findFirst({
       where: {
         botId,
+        groupChatId: null,
         status: { in: [...ACTIVE_RUN_STATUSES] },
       },
       orderBy: { createdAt: "desc" },

@@ -19,7 +19,8 @@ export function GroupChatEditor({
   onClose: () => void;
 }) {
   const connected = useMemo(
-    () => bots.filter((bot) => flowMembershipFromInstructions(bot.instructions ?? "") === "connected"),
+    () =>
+      bots.filter((bot) => flowMembershipFromInstructions(bot.instructions ?? "") === "connected"),
     [bots],
   );
   const [name, setName] = useState(initialName);

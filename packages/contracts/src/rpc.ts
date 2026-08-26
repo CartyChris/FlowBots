@@ -11,6 +11,8 @@ import {
   CreateRoutineInput,
   DeploymentSettingsSchema,
   ExportManifestSchema,
+  GroupChatSnapshotSchema,
+  GroupChatSummarySchema,
   MemoryDocumentSchema,
   MeSchema,
   ModelCredentialSchema,
@@ -137,6 +139,42 @@ export const appContract = {
     create: oc.input(CreateBotInput).output(BotSchema),
     update: oc.input(UpdateBotInput).output(BotSchema),
     remove: oc.input(botId).output(z.object({ ok: z.literal(true) })),
+  },
+  groupChats: {
+    list: oc.output(z.array(GroupChatSummarySchema)),
+    get: oc.input(z.object({ groupChatId: Id })).output(GroupChatSnapshotSchema),
+    create: oc
+      .input(
+        z.object({ name: z.string().trim().min(1).max(80), botIds: z.array(Id).min(2).max(12) }),
+      )
+      .output(GroupChatSnapshotSchema),
+    update: oc
+      .input(
+        z.object({
+          groupChatId: Id,
+          name: z.string().trim().min(1).max(80).optional(),
+          botIds: z.array(Id).min(2).max(12).optional(),
+        }),
+      )
+      .output(GroupChatSnapshotSchema),
+    remove: oc.input(z.object({ groupChatId: Id })).output(z.object({ ok: z.literal(true) })),
+    send: oc
+      .input(
+        z.object({
+          groupChatId: Id,
+          text: z.string().min(1),
+          clientNonce: z.string().max(160).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          messageSeq: z.number().int().nonnegative(),
+          responderBotIds: z.array(Id),
+          busyBotIds: z.array(Id),
+          runIds: z.array(Id),
+        }),
+      ),
+    stop: oc.input(z.object({ groupChatId: Id })).output(z.object({ ok: z.literal(true) })),
   },
   threads: {
     get: oc.input(z.object({ botId: Id })).output(ThreadSnapshotSchema),

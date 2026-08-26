@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { ThreadMessageSchema } from "./events.js";
+import { MessageBlock, ThreadMessageSchema } from "./events.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 
 export const BotAvatarVariantSchema = z.enum([
@@ -220,6 +220,64 @@ export const ThreadSnapshotSchema = z.object({
   computer: ComputerStatusSchema,
 });
 export type ThreadSnapshot = z.infer<typeof ThreadSnapshotSchema>;
+
+export const GroupChatMemberSchema = z.object({
+  botId: Id,
+  name: z.string(),
+  title: z.string(),
+  description: z.string(),
+  color: z.string(),
+  status: z.string(),
+  position: z.number().int().nonnegative(),
+});
+export type GroupChatMember = z.infer<typeof GroupChatMemberSchema>;
+
+export const GroupChatMessageSchema = z.object({
+  id: Id,
+  groupChatId: Id,
+  seq: z.number().int().nonnegative(),
+  authorKind: z.enum(["user", "bot", "system"]),
+  botId: Id.nullable(),
+  authorName: z.string().nullable(),
+  authorColor: z.string().nullable(),
+  blocks: z.array(MessageBlock),
+  runId: Id.nullable(),
+  createdAt: z.string(),
+});
+export type GroupChatMessage = z.infer<typeof GroupChatMessageSchema>;
+
+export const GroupChatActiveRunSchema = z.object({
+  runId: Id,
+  botId: Id,
+  botName: z.string(),
+  botColor: z.string(),
+  status: z.string(),
+  lastTool: z.string().nullable(),
+  startedAt: z.string().nullable(),
+});
+export type GroupChatActiveRun = z.infer<typeof GroupChatActiveRunSchema>;
+
+export const GroupChatSummarySchema = z.object({
+  id: Id,
+  name: z.string(),
+  members: z.array(GroupChatMemberSchema),
+  preview: z.string(),
+  activeCount: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type GroupChatSummary = z.infer<typeof GroupChatSummarySchema>;
+
+export const GroupChatSnapshotSchema = z.object({
+  id: Id,
+  name: z.string(),
+  members: z.array(GroupChatMemberSchema),
+  messages: z.array(GroupChatMessageSchema),
+  activeRuns: z.array(GroupChatActiveRunSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type GroupChatSnapshot = z.infer<typeof GroupChatSnapshotSchema>;
 
 export const ModelCredentialSchema = z.object({
   id: Id,

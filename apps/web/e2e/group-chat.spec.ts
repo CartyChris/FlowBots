@@ -1,10 +1,17 @@
 import { expect, type Page, test } from "@playwright/test";
 
-test("group chat routes @all to distinct bots and persists their authored replies", async ({ page }) => {
+test("group chat routes @all to distinct bots and persists their authored replies", async ({
+  page,
+}) => {
   const stamp = Date.now();
   await signup(page, `group-chat-${stamp}@rakazo.test`, "password12", "Group Chat");
   await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
-  await createBot(page, "Randy", "Research specialist", "Find current facts, evidence, and sources.");
+  await createBot(
+    page,
+    "Randy",
+    "Research specialist",
+    "Find current facts, evidence, and sources.",
+  );
   await createBot(page, "Susie", "Builder specialist", "Build apps, interfaces, and code.");
 
   await page.getByRole("button", { name: "New group chat" }).click();
@@ -19,15 +26,23 @@ test("group chat routes @all to distinct bots and persists their authored replie
   await composer.fill("@all Reply with your own name and one short sentence about what you do.");
   await page.keyboard.press("Enter");
 
-  await expect(page.locator('[data-group-author="Randy"]').first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('[data-group-author="Susie"]').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-group-author="Randy"]').first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator('[data-group-author="Susie"]').first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   const url = page.url();
   await page.reload();
   await expect(page).toHaveURL(url);
   await expect(page.getByRole("heading", { name: "Launch Room", exact: true })).toBeVisible();
-  await expect(page.locator('[data-group-author="Randy"]').first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('[data-group-author="Susie"]').first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[data-group-author="Randy"]').first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.locator('[data-group-author="Susie"]').first()).toBeVisible({
+    timeout: 20_000,
+  });
 });
 
 async function createBot(page: Page, name: string, title: string, description: string) {

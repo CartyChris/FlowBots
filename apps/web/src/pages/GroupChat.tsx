@@ -124,7 +124,9 @@ export function GroupChatPage() {
                   {group.name}
                 </span>
                 <span className="block truncate text-[11px] text-[#6F6F74]">
-                  {group.activeCount ? `${group.activeCount} working` : group.preview || `${group.members.length} bots`}
+                  {group.activeCount
+                    ? `${group.activeCount} working`
+                    : group.preview || `${group.members.length} bots`}
                 </span>
               </span>
             </button>
@@ -165,7 +167,9 @@ export function GroupChatPage() {
             {(room?.activeRuns.length ?? 0) > 0 ? (
               <button
                 type="button"
-                onClick={() => room && void rpc.groupChats.stop({ groupChatId: room.id }).then(refresh)}
+                onClick={() =>
+                  room && void rpc.groupChats.stop({ groupChatId: room.id }).then(refresh)
+                }
                 className="rounded-xl border border-red-300/15 bg-red-400/[0.04] px-3 py-2 text-[11.5px] font-medium text-red-200/80 hover:bg-red-400/[0.08]"
               >
                 Stop team
@@ -209,7 +213,8 @@ export function GroupChatPage() {
                 <AvatarStack members={room?.members ?? []} size={44} />
                 <h2 className="mt-4 text-[17px] font-semibold text-[#E6E6E9]">Start the room</h2>
                 <p className="mt-2 text-[12.5px] leading-relaxed text-[#747479]">
-                  Mention one specialist, use @all for a roundtable, or ask normally and FlowBots will route the turn to the most relevant teammates.
+                  Mention one specialist, use @all for a roundtable, or ask normally and FlowBots
+                  will route the turn to the most relevant teammates.
                 </p>
               </div>
             ) : null}
@@ -302,7 +307,8 @@ function GroupMessageRow({
   memberById: Map<string, GroupChatSnapshot["members"][number]>;
 }) {
   const bot = message.botId ? memberById.get(message.botId) : undefined;
-  const author = message.authorName ?? bot?.name ?? (message.authorKind === "user" ? "You" : "FlowBots");
+  const author =
+    message.authorName ?? bot?.name ?? (message.authorKind === "user" ? "You" : "FlowBots");
   const color = message.authorColor ?? bot?.color ?? "#A0A0A6";
   const isUser = message.authorKind === "user";
   return (
@@ -319,7 +325,9 @@ function GroupMessageRow({
         ) : null}
         <div
           className={`space-y-2 rounded-[18px] px-4 py-3 text-[14px] leading-relaxed ${
-            isUser ? "bg-[#ECECEE] text-[#171719]" : "border border-white/[0.06] bg-[#171719] text-[#DEDEE1]"
+            isUser
+              ? "bg-[#ECECEE] text-[#171719]"
+              : "border border-white/[0.06] bg-[#171719] text-[#DEDEE1]"
           }`}
         >
           {message.blocks.map((block, index) => (
@@ -338,7 +346,7 @@ function GroupBlock({
   block: GroupChatMessage["blocks"][number];
   darkText: boolean;
 }) {
-  if (block.kind === "text") return <ChatMarkdown content={block.text} />;
+  if (block.kind === "text") return <ChatMarkdown>{block.text}</ChatMarkdown>;
   if (block.kind === "file") {
     return (
       <a
@@ -347,20 +355,51 @@ function GroupBlock({
         className={`block rounded-xl border px-3 py-2 ${darkText ? "border-black/10" : "border-white/10"}`}
       >
         <span className="block font-medium">{block.name}</span>
-        <span className="text-[10px] opacity-60">{block.mimeType} · {block.size.toLocaleString()} bytes</span>
+        <span className="text-[10px] opacity-60">
+          {block.mimeType} · {block.size.toLocaleString()} bytes
+        </span>
       </a>
     );
   }
-  if (block.kind === "progress" || block.kind === "meta") return <div className="text-[12px] opacity-65">{block.text}</div>;
+  if (block.kind === "progress" || block.kind === "meta")
+    return <div className="text-[12px] opacity-65">{block.text}</div>;
   if (block.kind === "ask") return <div>{block.text}</div>;
   if (block.kind === "card") {
-    return <div>{block.lines.map((line) => <div key={`${line.k}-${line.v}`}>{line.k}: {line.v}</div>)}</div>;
+    return (
+      <div>
+        {block.lines.map((line) => (
+          <div key={`${line.k}-${line.v}`}>
+            {line.k}: {line.v}
+          </div>
+        ))}
+      </div>
+    );
   }
-  if (block.kind === "subagent") return <div>{block.name}: {block.result ?? block.progress ?? block.status}</div>;
-  if (block.kind === "computer") return <div>{block.state}: {block.text}</div>;
+  if (block.kind === "subagent")
+    return (
+      <div>
+        {block.name}: {block.result ?? block.progress ?? block.status}
+      </div>
+    );
+  if (block.kind === "computer")
+    return (
+      <div>
+        {block.state}: {block.text}
+      </div>
+    );
   if (block.kind === "choice") return <div>{block.question}</div>;
-  if (block.kind === "connect") return <div>{block.name}: {block.status}</div>;
-  if (block.kind === "child_bot") return <div>{block.name}: {block.status}</div>;
+  if (block.kind === "connect")
+    return (
+      <div>
+        {block.name}: {block.status}
+      </div>
+    );
+  if (block.kind === "child_bot")
+    return (
+      <div>
+        {block.name}: {block.status}
+      </div>
+    );
   return null;
 }
 
@@ -374,7 +413,10 @@ function AvatarStack({
   return (
     <div className="flex shrink-0 items-center">
       {members.slice(0, 4).map((member, index) => (
-        <div key={member.botId} style={{ marginLeft: index ? -Math.round(size * 0.3) : 0, zIndex: 5 - index }}>
+        <div
+          key={member.botId}
+          style={{ marginLeft: index ? -Math.round(size * 0.3) : 0, zIndex: 5 - index }}
+        >
           <BotAvatar color={member.color} size={size} state="idle" label={member.name} />
         </div>
       ))}

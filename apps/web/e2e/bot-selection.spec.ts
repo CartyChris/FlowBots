@@ -30,7 +30,9 @@ async function createBot(page: Page, name: string, title: string) {
   await page.getByTitle("New bot").click();
   await page.getByPlaceholder("Name this bot").fill(name);
   await page.getByPlaceholder("Describe what this bot does").fill(title);
-  await page.getByPlaceholder("What this bot is for").fill(`${name} handles ${title.toLowerCase()}.`);
+  await page
+    .getByPlaceholder("What this bot is for")
+    .fill(`${name} handles ${title.toLowerCase()}.`);
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByPlaceholder(`Message ${name}`)).toBeVisible();
 }

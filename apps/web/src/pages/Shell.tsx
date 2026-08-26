@@ -2,6 +2,7 @@ import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type {
   Bot,
   ComputerStatus,
+  GroupChatSummary,
   ProductEvent,
   Routine,
   ThreadMessage,
@@ -37,6 +38,7 @@ import {
   reduceThreadSnapshot,
 } from "../lib/thread-events";
 import { ComposerActions } from "./ComposerActions";
+import { GroupChatEditor } from "./GroupChatEditor";
 import { HarnessesOverlay } from "./HarnessesOverlay";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import { McpOverlay } from "./McpOverlay";
@@ -53,6 +55,8 @@ export function ShellPage() {
   const navigate = useNavigate();
   const session = authClient.useSession();
   const [bots, setBots] = useState<Bot[]>([]);
+  const [groups, setGroups] = useState<GroupChatSummary[]>([]);
+  const [groupEditorOpen, setGroupEditorOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
@@ -88,19 +92,23 @@ export function ShellPage() {
   const expandedHistoryThread = useRef<string | null>(null);
   const messageScroll = useRef<HTMLDivElement>(null);
 
+  const routeBotIdRef = useRef<string | undefined>(botId);
+  routeBotIdRef.current = botId;
   const active = bots.find((b) => b.id === botId) ?? bots[0];
   const activeBotIdRef = useRef<string | undefined>(active?.id);
   activeBotIdRef.current = active?.id;
   const activeRoutines = routinesBotId === active?.id ? routines : [];
 
   async function refreshBots() {
-    const list = await rpc.bots.list();
+    const [list, nextGroups] = await Promise.all([rpc.bots.list(), rpc.groupChats.list()]);
     setBots(list);
+    setGroups(nextGroups);
     if (list.length === 0) {
       navigate("/onboarding", { replace: true });
       return;
     }
-    if (!botId || !list.some((bot) => bot.id === botId)) {
+    const selectedBotId = routeBotIdRef.current;
+    if (!selectedBotId || !list.some((bot) => bot.id === selectedBotId)) {
       navigate(`/app/${list[0]!.id}`, { replace: true });
     }
   }
@@ -249,6 +257,12 @@ export function ShellPage() {
     await refreshThread(active.id);
   }
 
+  async function createGroup(input: { name: string; botIds: string[] }) {
+    const room = await rpc.groupChats.create(input);
+    setGroupEditorOpen(false);
+    navigate(`/groups/${room.id}`);
+  }
+
   async function createBot(input: { name: string; title: string; description: string }) {
     const bot = await rpc.bots.create({
       name: input.name.trim(),
@@ -372,6 +386,14 @@ export function ShellPage() {
   return (
     <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">
       <HostComputerPrompt />
+      {groupEditorOpen ? (
+        <GroupChatEditor
+          bots={bots}
+          mode="create"
+          onSave={createGroup}
+          onClose={() => setGroupEditorOpen(false)}
+        />
+      ) : null}
       <aside className="flex w-[316px] shrink-0 flex-col border-r border-[#171719] bg-[#0B0B0C]">
         <div className="app-drag flex items-center justify-between px-[18px] pb-3 pt-4">
           <WindowChrome />
@@ -392,6 +414,48 @@ export function ShellPage() {
             placeholder="Search"
             className="w-full bg-transparent outline-none"
           />
+        </div>
+        <div className="mx-3.5 mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#55555A]">
+            Group chats
+          </span>
+          <button
+            type="button"
+            aria-label="New group chat"
+            onClick={() => setGroupEditorOpen(true)}
+            className="rounded-lg px-2 py-1 text-[12px] text-[#818187] hover:bg-white/5 hover:text-white"
+          >
+            + Group
+          </button>
+        </div>
+        {groups.length ? (
+          <div className="mx-2.5 mb-2 space-y-0.5">
+            {groups.slice(0, 6).map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => navigate(`/groups/${group.id}`)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left hover:bg-[#141416]"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#171719] text-[11px] text-[#A7A7AC]">
+                  {group.members.length}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-[#D8D8DC]">
+                    {group.name}
+                  </span>
+                  <span className="block truncate text-[10.5px] text-[#66666C]">
+                    {group.activeCount
+                      ? `${group.activeCount} working`
+                      : group.preview || "Shared room"}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="mx-3.5 mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#55555A]">
+          Direct chats
         </div>
         <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
           {filtered.map((bot) => (

@@ -100,6 +100,7 @@ model Organization {
   notificationPreferences NotificationPreference[]
   computers   Computer[]
   externalEffects ExternalEffect[]
+  groupChats GroupChat[]
 
   @@unique([slug])
   @@map("organization")
@@ -194,6 +195,8 @@ model Bot {
   usageRecords   UsageRecord[]
   tasks          Task[]
   runs           Run[]
+  groupChatMemberships GroupChatMember[]
+  groupMessages GroupMessage[]
 
   @@index([workspaceId, userId])
   @@index([parentBotId])
@@ -234,6 +237,61 @@ model Message {
   @@map("messages")
 }
 
+model GroupChat {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  workspace      Organization @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId         String
+  name           String
+  nextMessageSeq Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  members        GroupChatMember[]
+  messages       GroupMessage[]
+  tasks          Task[]
+  runs           Run[]
+
+  @@index([workspaceId, userId, updatedAt])
+  @@map("group_chats")
+}
+
+model GroupChatMember {
+  groupChatId String
+  groupChat   GroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  botId       String
+  bot         Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  position    Int       @default(0)
+  joinedAt    DateTime  @default(now())
+
+  @@id([groupChatId, botId])
+  @@index([botId])
+  @@map("group_chat_members")
+}
+
+model GroupMessage {
+  id          String   @id @default(cuid())
+  groupChatId String
+  groupChat   GroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  seq         Int
+  authorKind  String
+  botId       String?
+  bot         Bot?     @relation(fields: [botId], references: [id], onDelete: SetNull)
+  authorName  String?
+  authorColor String?
+  blocks      Json
+  runId       String?
+  run         Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  clientNonce String?
+  createdAt   DateTime @default(now())
+
+  @@unique([groupChatId, seq])
+  @@unique([groupChatId, clientNonce])
+  @@index([groupChatId, seq])
+  @@index([botId, createdAt])
+  @@index([runId])
+  @@map("group_messages")
+}
+
 model Event {
   id          String   @id @default(cuid())
   workspaceId String
@@ -265,11 +323,15 @@ model Task {
   userId      String
   prompt      String
   status      String
+  groupChatId String?
+  groupChat   GroupChat? @relation(fields: [groupChatId], references: [id], onDelete: SetNull)
+  groupPromptSeq Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   runs        Run[]
 
   @@index([workspaceId, botId])
+  @@index([groupChatId, groupPromptSeq])
   @@map("tasks")
 }
 
@@ -286,6 +348,9 @@ model Run {
   userId        String
   status        String
   trigger       String
+  groupChatId   String?
+  groupChat     GroupChat? @relation(fields: [groupChatId], references: [id], onDelete: SetNull)
+  groupPromptSeq Int?
   modelProvider String?
   modelId       String?
   error         String?
@@ -301,11 +366,13 @@ model Run {
   attempts      Attempt[]
   effects       ExternalEffect[]
   usageRecords  UsageRecord[]
+  groupMessages GroupMessage[]
 
   @@unique([workspaceId, clientNonce])
   @@index([status, leaseExpiresAt])
   @@index([status, updatedAt, id])
   @@index([workspaceId, botId])
+  @@index([groupChatId, status])
   @@map("runs")
 }
 

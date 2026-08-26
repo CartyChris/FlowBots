@@ -60,7 +60,8 @@ export async function finalizeGroupRun(
         finishedAt: now,
       },
     });
-    if (attempt.count !== 1) throw new Error("Active group run attempt was not available to finalize");
+    if (attempt.count !== 1)
+      throw new Error("Active group run attempt was not available to finalize");
 
     const task = await tx.task.updateMany({
       where: {
