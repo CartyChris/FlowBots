@@ -51,3 +51,4 @@ writeFileSync(transformPath, source.replace(ambiguous, precise));
 await import(`./flow-awareness-v2-green.mjs?run=${Date.now()}`);
 unlinkSync(".github/scripts/run-flow-awareness-v2-green.mjs");
 unlinkSync(".github/workflows/run-flow-awareness-v2-green.yml");
+// Rerun marker: export ordering fixed before this guarded pass.
