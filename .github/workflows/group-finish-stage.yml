@@ -20,6 +20,8 @@ jobs:
         run: node .github/scripts/group-domain-green.mjs
       - name: Apply runtime/API/UI transform in runner
         run: python3 .github/scripts/group-integration-green.py
+      - name: Apply integration contract fixes
+        run: python3 .github/scripts/group-integration-fix1.py
       - name: Generate Prisma client
         run: pnpm db:generate
         env:
