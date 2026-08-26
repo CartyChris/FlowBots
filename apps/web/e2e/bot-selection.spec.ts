@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 test("non-first bot selection survives repeated background bot-list polls", async ({ page }) => {
   const stamp = Date.now();
   await signup(page, `sticky-selection-${stamp}@rakazo.test`, "password12", "Sticky Selection");
-  await completeOnboarding(page);
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
 
   await createBot(page, "Randy", "Research specialist");
   await createBot(page, "Susie", "Builder specialist");
@@ -35,8 +35,12 @@ async function createBot(page: Page, name: string, title: string) {
   await expect(page.getByPlaceholder(`Message ${name}`)).toBeVisible();
 }
 
-async function completeOnboarding(page: Page) {
+async function completeOnboarding(page: Page, answers: string[]) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
+  const heading = page.getByRole("heading", { name: /Connect a model|Create your first bot/ });
+  const chief = page.getByText("Chief").first();
+  await heading.or(chief).waitFor({ timeout: 20_000 });
+  if ((await chief.isVisible().catch(() => false)) && page.url().includes("/app")) return;
   if (
     await page
       .getByRole("heading", { name: "Connect a model" })
@@ -53,8 +57,7 @@ async function completeOnboarding(page: Page) {
   ) {
     await page.locator("label:has-text('Name') input").fill("Chief");
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByText("A bit of everything", { exact: true }).click();
-    await page.getByText("Clear and tight", { exact: true }).click();
+    for (const answer of answers) await page.getByText(answer, { exact: true }).click();
     await page.getByRole("button", { name: "Open Rakazo" }).click();
   }
   await page.waitForURL(/\/app/);
