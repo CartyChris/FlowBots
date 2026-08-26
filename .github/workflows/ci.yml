@@ -1,7 +1,7 @@
 name: ci
 on:
   push:
-    branches: [main]
+    branches: [main, feature/interactive-group-chats-finish]
   pull_request:
 
 permissions:
@@ -201,7 +201,7 @@ jobs:
       - name: Upload FlowBots DMG
         uses: actions/upload-artifact@v4
         with:
-          name: FlowBots-macOS-universal-${{ github.event.pull_request.head.sha }}
+          name: FlowBots-macOS-universal-${{ github.event.pull_request.head.sha || github.sha }}
           path: apps/desktop/out/FlowBots-*-universal.dmg
           if-no-files-found: error
           compression-level: 0
