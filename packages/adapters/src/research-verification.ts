@@ -43,6 +43,7 @@ export function researchVerificationInstruction(
       `Research verification level: standard-current. Current date: ${currentDate}.`,
       "Search before synthesizing current claims, fetch the important underlying sources, and corroborate consequential claims with more than one source when practical.",
       "Prefer recent sources with explicit dates. If snippets conflict with fetched pages or newer evidence, use the newer corroborated evidence and explain the conflict.",
+      "If retrieved news introduces a named-person election, office, death, resignation, appointment, or succession claim, call verify_current_claim for that material claim before including it in the synthesis, even when the user only asked for generic current news.",
     ].join(" ");
   }
   if (level === "volatile-entity") {

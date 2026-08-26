@@ -1,7 +1,17 @@
 import { type CSSProperties, useId, useSyncExternalStore } from "react";
 import { cn } from "./lib/utils.js";
 
-export type BotAvatarState = "idle" | "thinking" | "working" | "happy" | "error" | "surprised";
+export type BotAvatarState =
+  | "idle"
+  | "thinking"
+  | "working"
+  | "researching"
+  | "verifying"
+  | "collaborating"
+  | "building"
+  | "happy"
+  | "error"
+  | "surprised";
 export type BotAvatarVariant =
   | "orb"
   | "blob"
@@ -177,7 +187,15 @@ export function BotAvatar({
   const eyeY = state === "happy" ? 48 : state === "surprised" ? 44 : 46;
   const eyeScaleY = state === "happy" ? 0.55 : state === "error" ? 0.72 : 1;
   const pupil = state === "surprised" ? 4.4 : 3.4;
-  const expressionClass = state === "working" || state === "thinking" ? "rk-bot-busy" : "";
+  const busyState = [
+    "thinking",
+    "working",
+    "researching",
+    "verifying",
+    "collaborating",
+    "building",
+  ].includes(state);
+  const expressionClass = busyState ? "rk-bot-busy" : "";
   const accessibleLabel = label ? `${label} — ${state}` : undefined;
   const showStatusEffects = size >= 30;
   const patternId = `rk-bot-pattern-${useId().replace(/:/g, "")}`;
@@ -311,7 +329,7 @@ export function BotAvatar({
           secondary={resolvedAppearance.secondaryColor}
         />
 
-        {state === "working" ? (
+        {state === "working" || state === "building" ? (
           <g className="rk-bot-work-sparks" fill="#fff">
             <circle cx="85" cy="22" r="2.4" />
             <circle cx="91" cy="31" r="1.5" />
@@ -320,11 +338,35 @@ export function BotAvatar({
         ) : null}
       </svg>
 
-      {showStatusEffects && state === "working" ? (
+      {showStatusEffects && (state === "working" || state === "building") ? (
         <span className="rk-bot-emote-stage" aria-hidden="true">
           <span className="rk-bot-emote-cycle rk-bot-emote-keyboard">⌨</span>
           <span className="rk-bot-emote-cycle rk-bot-emote-code">{"</>"}</span>
           <span className="rk-bot-emote-cycle rk-bot-emote-file">▧</span>
+        </span>
+      ) : null}
+
+      {showStatusEffects && state === "researching" ? (
+        <span className="rk-bot-emote-stage rk-bot-semantic-research" aria-hidden="true">
+          <span className="rk-bot-emote-cycle rk-bot-emote-keyboard">⌕</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-code">WWW</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-file">↗</span>
+        </span>
+      ) : null}
+
+      {showStatusEffects && state === "verifying" ? (
+        <span className="rk-bot-emote-stage rk-bot-semantic-verify" aria-hidden="true">
+          <span className="rk-bot-emote-cycle rk-bot-emote-keyboard">✓?</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-code">2×</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-file">≟</span>
+        </span>
+      ) : null}
+
+      {showStatusEffects && state === "collaborating" ? (
+        <span className="rk-bot-emote-stage rk-bot-semantic-collab" aria-hidden="true">
+          <span className="rk-bot-emote-cycle rk-bot-emote-keyboard">⇄</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-code">2+</span>
+          <span className="rk-bot-emote-cycle rk-bot-emote-file">↗</span>
         </span>
       ) : null}
 
@@ -344,7 +386,7 @@ export function BotAvatar({
         </span>
       ) : null}
 
-      {(state === "working" || state === "thinking") && showStatusEffects ? (
+      {busyState && showStatusEffects ? (
         <span
           className="rk-bot-presence absolute -right-[1px] -bottom-[1px] h-[8px] w-[8px] rounded-full border-2 border-[#0D0D0E] bg-[#79E39C]"
           aria-hidden="true"

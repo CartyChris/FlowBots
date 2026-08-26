@@ -156,6 +156,43 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "consult_teammate",
+    description:
+      "Resolve another connected FlowBot by exact id/name and read its profile, recent work messages, and recent artifacts without waking it. Use this before public-web search when the user asks who a teammate is or what that teammate made/worked on.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bot_id: {
+          type: "string",
+          description: "Optional target bot id from the Shared Flow roster.",
+        },
+        name: {
+          type: "string",
+          description: "Optional exact teammate name from the Shared Flow roster.",
+        },
+        limit: { type: "number", description: "Recent messages/artifacts to return, 1-12." },
+      },
+    },
+  },
+  {
+    name: "verify_current_claim",
+    description:
+      "Run a bounded, keyless contradiction/status search bundle for a current factual claim. Use it for material named-person, election, public-office, death, resignation, appointment, succession, release, pricing, schedule, or live-status claims before presenting them as current fact.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        claim: { type: "string", description: "The current factual claim to verify." },
+        entity: {
+          type: "string",
+          description:
+            "Optional named person, organization, product, or office whose current status is material.",
+        },
+        recency_days: { type: "number", description: "Optional recency hint, 1-3650 days." },
+      },
+      required: ["claim"],
+    },
+  },
+  {
     name: "request_takeover",
     description:
       "Ask the user to take over the computer screen for login or human judgment. Protected input stays off the thread.",

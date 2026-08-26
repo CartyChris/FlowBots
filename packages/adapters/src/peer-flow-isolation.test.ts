@@ -77,7 +77,10 @@ function context() {
 
 async function execute(connector: PeerConnector, tool: string, args: Record<string, unknown>) {
   const result = [];
-  for await (const event of connector.execute({ tool, args, executionId: `${tool}-1` }, context())) {
+  for await (const event of connector.execute(
+    { tool, args, executionId: `${tool}-1` },
+    context(),
+  )) {
     result.push(event);
   }
   return result;
@@ -111,7 +114,10 @@ describe("Flow-aware peer collaboration", () => {
     const { connector } = makeConnector({ targetIsolated: true });
     const result = await execute(connector, "read_bot_updates", { name: "Susie" });
     expect(result).toEqual([
-      expect.objectContaining({ type: "error", message: expect.stringMatching(/separated.*Flow/i) }),
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringMatching(/separated.*Flow/i),
+      }),
     ]);
   });
 
@@ -119,7 +125,10 @@ describe("Flow-aware peer collaboration", () => {
     const { connector } = makeConnector({ sourceIsolated: true });
     const result = await execute(connector, "read_bot_updates", { name: "Susie" });
     expect(result).toEqual([
-      expect.objectContaining({ type: "error", message: expect.stringMatching(/separated.*Flow/i) }),
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringMatching(/separated.*Flow/i),
+      }),
     ]);
   });
 });

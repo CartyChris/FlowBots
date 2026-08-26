@@ -1,5 +1,10 @@
 import type { Bot, BotAppearance, CapabilityInstall } from "@rakazo/contracts";
-import { applyBotSteeringProfile, type BotSteeringProfile } from "@rakazo/core";
+import {
+  applyBotSteeringProfile,
+  applyFlowMembership,
+  type BotSteeringProfile,
+  type FlowMembership,
+} from "@rakazo/core";
 import { BotAvatar, registerBotAvatarAppearances } from "@rakazo/ui-web";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -155,9 +160,10 @@ export function CreativeRuntimeHost() {
     await refresh();
   }
 
-  async function saveSteering(profile: BotSteeringProfile) {
+  async function saveSteering(profile: BotSteeringProfile, membership: FlowMembership) {
     if (!steeringBot) throw new Error("No bot is selected.");
-    const instructions = applyBotSteeringProfile(steeringBot.instructions ?? "", profile);
+    const steered = applyBotSteeringProfile(steeringBot.instructions ?? "", profile);
+    const instructions = applyFlowMembership(steered, membership);
     await rpc.bots.update({ botId: steeringBot.id, instructions });
     await refresh();
   }

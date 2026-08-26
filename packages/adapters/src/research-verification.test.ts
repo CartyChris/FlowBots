@@ -8,12 +8,18 @@ import {
 
 describe("research verification v2", () => {
   it("distinguishes standard current, volatile entity, and deep research requests", () => {
-    expect(classifyResearchVerificationNeed("What is the latest news today?")).toBe("standard-current");
+    expect(classifyResearchVerificationNeed("What is the latest news today?")).toBe(
+      "standard-current",
+    );
     expect(
-      classifyResearchVerificationNeed("Is Senator Example still serving and running for reelection today?"),
+      classifyResearchVerificationNeed(
+        "Is Senator Example still serving and running for reelection today?",
+      ),
     ).toBe("volatile-entity");
     expect(
-      classifyResearchVerificationNeed("Deep research this topic, fact-check it, and cross-check contradictions."),
+      classifyResearchVerificationNeed(
+        "Deep research this topic, fact-check it, and cross-check contradictions.",
+      ),
     ).toBe("deep-research");
     expect(classifyResearchVerificationNeed("Write a short poem about rain.")).toBe("none");
   });
