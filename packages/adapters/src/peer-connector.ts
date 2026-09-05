@@ -8,8 +8,10 @@ import type {
 } from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
-import { botParticipatesInFlow, isReactionKind } from "@rakazo/core";
-import { createThreadMessage, type PrismaClient, type ThreadEvents } from "@rakazo/db";
+import { botParticipatesInFlow, createContextPacket, isReactionKind } from "@rakazo/core";
+import type { createThreadMessage, PrismaClient, ThreadEvents } from "@rakazo/db";
+import { builtinAgentTools } from "./builtin-tools.js";
+import { createCollaborativeTasks, readCollaborativeResult } from "./collaboration.js";
 import { setMessageReaction } from "./reaction-store.js";
 import { buildVerificationQueries } from "./research-verification.js";
 import { normalizeTeamAssignments } from "./team-delegation.js";
@@ -19,12 +21,12 @@ import { keylessWebSearch } from "./web-search.js";
 export const MAX_PEER_SENDS_PER_RUN = 4;
 export const MAX_PEER_REACTIONS_PER_RUN = 4;
 export const MAX_PEER_HOPS = 2;
-const MAX_PEER_MESSAGE_CHARS = 20_000;
-const PEER_EFFECT_KINDS = ["message_bot", "delegate_to_bot"] as const;
+const PEER_EFFECT_KINDS = ["message_bot", "delegate_to_bot", "delegate_team"] as const;
 const PEER_TOOL_NAMES = new Set([
   "message_bot",
   "delegate_to_bot",
   "delegate_team",
+  "read_task_result",
   "read_bot_updates",
   "consult_teammate",
   "react_to_message",
@@ -34,7 +36,6 @@ const PEER_TOOL_NAMES = new Set([
 ]);
 
 type WriteMessage = typeof createThreadMessage;
-type PeerBot = Awaited<ReturnType<PeerConnector["sourceBot"]>>;
 
 export function peerHopHeader(hop: number, sourceBotId: string): string {
   return `[flowbots-peer hop=${Math.max(0, Math.trunc(hop))} source=${sourceBotId}]`;
@@ -86,45 +87,9 @@ export class PeerConnector implements ConnectorProvider {
           required: ["message"],
         },
       },
-      {
-        name: "delegate_to_bot",
-        description:
-          "Delegate one bounded task to another persistent bot in your workspace. The task appears in that bot's thread and starts one follow-up run.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            bot_id: { type: "string" },
-            name: { type: "string" },
-            task: { type: "string" },
-          },
-          required: ["task"],
-        },
-      },
-      {
-        name: "delegate_team",
-        description:
-          "Fan out 1-4 bounded durable tasks to existing teammate bots. Returns concrete child run IDs so the coordinator can continue and later read updates before synthesis.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            assignments: {
-              type: "array",
-              maxItems: 4,
-              items: {
-                type: "object",
-                properties: {
-                  bot_id: { type: "string" },
-                  name: { type: "string" },
-                  task: { type: "string" },
-                },
-                required: ["task"],
-              },
-            },
-            synthesis_goal: { type: "string" },
-          },
-          required: ["assignments"],
-        },
-      },
+      ...builtinAgentTools.filter((tool) =>
+        ["delegate_to_bot", "delegate_team", "read_task_result"].includes(tool.name),
+      ),
       {
         name: "read_bot_updates",
         description:
@@ -308,50 +273,103 @@ export class PeerConnector implements ConnectorProvider {
         return;
       }
 
-      if (call.tool === "delegate_team") {
-        if (!context.runId) {
-          yield { type: "error", message: "Team delegation requires an active source run." };
-          return;
-        }
-        const assignments = normalizeTeamAssignments(call.args.assignments);
-        const used = await this.peerSendCount(context.runId);
-        if (used + assignments.length > MAX_PEER_SENDS_PER_RUN) {
-          yield {
-            type: "error",
-            message: `Peer send budget would be exceeded (${MAX_PEER_SENDS_PER_RUN} sends maximum per run).`,
-          };
-          return;
-        }
-        const hop = await this.currentPeerHop(context.runId);
-        if (hop >= MAX_PEER_HOPS) {
-          yield {
-            type: "error",
-            message: `Peer hop limit reached (${MAX_PEER_HOPS}); continue in the current bot instead of recursively waking another team.`,
-          };
-          return;
-        }
-        const delegated = [];
+      if (call.tool === "read_task_result") {
+        const sourceRun = await this.sourceRun(context);
+        yield {
+          type: "result",
+          data: await readCollaborativeResult(this.deps.prisma, {
+            workspaceId: context.workspaceId,
+            userId: context.userId,
+            sourceRunId: sourceRun.id,
+            taskId: String(call.args.task_id ?? ""),
+          }),
+        };
+        return;
+      }
+      if (
+        call.tool === "delegate_team" ||
+        call.tool === "delegate_to_bot" ||
+        call.tool === "message_bot"
+      ) {
+        const sourceRun = await this.sourceRun(context);
+        const used = await this.peerSendCount(sourceRun.id);
+        if (used > MAX_PEER_SENDS_PER_RUN)
+          throw new Error(
+            `Peer send budget exhausted for this run (${MAX_PEER_SENDS_PER_RUN} sends maximum).`,
+          );
+        const hop = peerHopFromPrompt(sourceRun.task.prompt);
+        if (hop >= MAX_PEER_HOPS) throw new Error(`Peer hop limit reached (${MAX_PEER_HOPS})`);
+        const raw =
+          call.tool === "delegate_team"
+            ? call.args.assignments
+            : [
+                {
+                  ...call.args,
+                  task: call.tool === "message_bot" ? call.args.message : call.args.task,
+                },
+              ];
+        const assignments = normalizeTeamAssignments(raw);
+        const resolved = [];
         for (const assignment of assignments) {
           const target = await this.targetBot(
             { bot_id: assignment.botId, name: assignment.name },
             context,
           );
-          if (target.id === source.id)
-            throw new Error("A bot cannot delegate a team task to itself.");
-          delegated.push(
-            await this.enqueuePeerWork(source, target, assignment.task, context, hop + 1),
-          );
+          resolved.push({
+            botId: target.id,
+            packet: createContextPacket({
+              objective: assignment.task,
+              summary: call.args.context_summary,
+              constraints: call.args.constraints,
+              artifactIds: call.args.artifact_ids,
+              requestedOutput: call.args.requested_output,
+            }),
+          });
+        }
+        const delegated = await createCollaborativeTasks(this.deps.prisma, {
+          workspaceId: context.workspaceId,
+          userId: context.userId,
+          sourceBotId: source.id,
+          sourceRunId: sourceRun.id,
+          sourceLeaseOwner: context.runLease?.owner,
+          sourceLeaseFence: context.runLease?.fence,
+          requestId: call.executionId,
+          assignments: resolved,
+        });
+        const dispatchPendingRunIds: string[] = [];
+        for (const child of delegated) {
+          try {
+            await this.deps.jobs.enqueue(runContinueJob(child.runId));
+          } catch {
+            // The task transaction already committed. Keep its IDs visible; reconciliation
+            // retries queued runs, and replaying this execution ID must not create new work.
+            dispatchPendingRunIds.push(child.runId);
+          }
         }
         yield {
           type: "result",
           data: {
             ok: true,
             delegated,
-            synthesisGoal: String(call.args.synthesis_goal ?? call.args.synthesisGoal ?? "").trim(),
-            reminder: "Use read_bot_updates before claiming or synthesizing teammate results.",
+            dispatchPendingRunIds,
+            ...(delegated.length === 1 ? delegated[0] : {}),
+            reminder:
+              (dispatchPendingRunIds.length
+                ? "Initial dispatch is pending recovery; the scheduler will retry these saved tasks. "
+                : "") +
+              "Tasks are queued, not completed. Use read_task_result with the returned taskId for scoped results; do not poll repeatedly or claim work is finished before its status is completed.",
           },
         };
         return;
+      }
+
+      if (call.tool === "consult_teammate" || call.tool === "read_bot_updates") {
+        const sourceRun = await this.sourceRun(context);
+        if (sourceRun.groupChatId || sourceRun.task.parentTaskId) {
+          throw new Error(
+            "Group and delegated tasks cannot read private teammate history. Use read_task_result for task-scoped results.",
+          );
+        }
       }
 
       const target = await this.targetBot(call.args, context);
@@ -431,45 +449,6 @@ export class PeerConnector implements ConnectorProvider {
         };
         return;
       }
-
-      if (!context.runId) {
-        yield { type: "error", message: "Peer messaging requires an active source run." };
-        return;
-      }
-      const used = await this.peerSendCount(context.runId);
-      if (used > MAX_PEER_SENDS_PER_RUN) {
-        yield {
-          type: "error",
-          message: `Peer send budget exhausted for this run (${MAX_PEER_SENDS_PER_RUN} sends maximum).`,
-        };
-        return;
-      }
-      const hop = await this.currentPeerHop(context.runId);
-      if (hop >= MAX_PEER_HOPS) {
-        yield {
-          type: "error",
-          message: `Peer hop limit reached (${MAX_PEER_HOPS}); continue in the current bot instead of recursively waking another bot.`,
-        };
-        return;
-      }
-
-      const rawText = call.tool === "delegate_to_bot" ? call.args.task : call.args.message;
-      const text = String(rawText ?? "")
-        .trim()
-        .slice(0, MAX_PEER_MESSAGE_CHARS);
-      if (!text) {
-        yield {
-          type: "error",
-          message:
-            call.tool === "delegate_to_bot" ? "Delegated task is empty." : "Peer message is empty.",
-        };
-        return;
-      }
-
-      yield {
-        type: "result",
-        data: await this.enqueuePeerWork(source, target, text, context, hop + 1),
-      };
     } catch (error) {
       yield {
         type: "error",
@@ -484,83 +463,22 @@ export class PeerConnector implements ConnectorProvider {
     });
   }
 
-  private async currentPeerHop(runId: string) {
+  private async sourceRun(context: AdapterContext) {
+    if (!context.runId) throw new Error("Peer collaboration requires a source run.");
     const sourceRun = await this.deps.prisma.run.findUnique({
-      where: { id: runId },
+      where: { id: context.runId },
       include: { task: true },
     });
-    return peerHopFromPrompt(sourceRun?.task.prompt ?? "");
-  }
-
-  private async enqueuePeerWork(
-    source: PeerBot,
-    target: PeerBot,
-    rawText: string,
-    context: AdapterContext,
-    nextHop: number,
-  ) {
-    const text = rawText.trim().slice(0, MAX_PEER_MESSAGE_CHARS);
-    if (!text) throw new Error("Delegated peer task is empty.");
-    const blocks: MessageBlock[] = [
-      { kind: "meta", text: `From ${source.name} · peer message` },
-      { kind: "text", text },
-    ];
-    const writeMessage = this.deps.writeMessage ?? createThreadMessage;
-    const message = await writeMessage(this.deps.prisma, {
-      threadId: target.thread.id,
-      role: "system",
-      blocks,
-    });
-    await this.deps.events.append({
-      workspaceId: context.workspaceId,
-      threadId: target.thread.id,
-      botId: target.id,
-      type: "thread.message.created",
-      payload: {
-        messageId: message.id,
-        role: "system",
-        blocks,
-        peer: true,
-        sourceBotId: source.id,
-        sourceBotName: source.name,
-      },
-    });
-
-    const taskPrompt = [
-      peerHopHeader(nextHop, source.id),
-      `Peer message from ${source.name}:`,
-      text,
-    ].join("\n");
-    const task = await this.deps.prisma.task.create({
-      data: {
-        workspaceId: context.workspaceId,
-        botId: target.id,
-        threadId: target.thread.id,
-        userId: context.userId,
-        prompt: taskPrompt,
-        status: "queued",
-      },
-    });
-    const run = await this.deps.prisma.run.create({
-      data: {
-        workspaceId: context.workspaceId,
-        botId: target.id,
-        threadId: target.thread.id,
-        taskId: task.id,
-        userId: context.userId,
-        status: "queued",
-        trigger: "follow_up",
-      },
-    });
-    await this.deps.jobs.enqueue(runContinueJob(run.id));
-    return {
-      ok: true,
-      botId: target.id,
-      name: target.name,
-      messageId: message.id,
-      runId: run.id,
-      hop: nextHop,
-    };
+    if (
+      !sourceRun ||
+      sourceRun.workspaceId !== context.workspaceId ||
+      sourceRun.userId !== context.userId ||
+      sourceRun.botId !== context.botId ||
+      !sourceRun.task
+    ) {
+      throw new Error("Source run is not available for this bot in this workspace.");
+    }
+    return sourceRun;
   }
 
   private async sourceBot(context: AdapterContext) {

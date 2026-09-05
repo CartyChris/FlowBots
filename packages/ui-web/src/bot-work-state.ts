@@ -1,4 +1,38 @@
+import type { BotAvatarState } from "./bot-avatar.js";
+
 export type SemanticBotWorkState = "researching" | "verifying" | "collaborating" | "building";
+
+const PRESENCE_AVATAR: Record<string, BotAvatarState> = {
+  idle: "idle",
+  queued: "thinking",
+  thinking: "thinking",
+  reading: "thinking",
+  searching: "researching",
+  browsing: "researching",
+  writing: "working",
+  coding: "building",
+  building: "building",
+  running_command: "building",
+  using_tool: "working",
+  collaborating: "collaborating",
+  delegating: "collaborating",
+  handing_off: "collaborating",
+  waiting_on_bot: "thinking",
+  reviewing: "verifying",
+  judging: "verifying",
+  verifying: "verifying",
+  testing: "verifying",
+  blocked: "surprised",
+  needs_user: "surprised",
+  complete: "happy",
+  failed: "error",
+  cancelled: "idle",
+};
+
+/** Expression mapping only; runtime authority and activity derivation belong to core. */
+export function botAvatarStateForPresence(state: string): BotAvatarState {
+  return Object.hasOwn(PRESENCE_AVATAR, state) ? PRESENCE_AVATAR[state]! : "idle";
+}
 
 const RESEARCH_TOOLS = new Set(["web_search", "web_fetch"]);
 const VERIFY_TOOLS = new Set(["verify_current_claim"]);

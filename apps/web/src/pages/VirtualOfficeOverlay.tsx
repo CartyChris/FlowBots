@@ -1,46 +1,73 @@
-import type { Bot } from "@rakazo/contracts";
-import { BotAvatar, type BotAvatarState } from "@rakazo/ui-web";
-import { useMemo } from "react";
+import type { Bot, MissionTask, OfficeStation } from "@rakazo/contracts";
+import { BotAvatar, botAvatarStateForPresence } from "@rakazo/ui-web";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { MissionControl } from "./MissionControl.js";
 
-const OFFICE_ZONES = [
+const OFFICE_ZONES: {
+  id: OfficeStation;
+  name: string;
+  subtitle: string;
+  glyph: string;
+  accent: string;
+}[] = [
   {
     id: "focus",
     name: "Focus Desks",
-    subtitle: "Deep individual work",
+    subtitle: "Reading, thinking and writing",
     glyph: "⌨",
     accent: "#BDF268",
   },
   {
-    id: "build",
-    name: "Build Lab",
-    subtitle: "Thinking, coding, and tool runs",
-    glyph: "</>",
+    id: "research",
+    name: "Research Station",
+    subtitle: "Public search and source reading",
+    glyph: "⌕",
     accent: "#8EDFF7",
   },
   {
-    id: "collab",
-    name: "Collaboration Lounge",
-    subtitle: "Idle bots, handoffs, and team sync",
+    id: "development",
+    name: "Build Lab",
+    subtitle: "Code, builds and command execution",
+    glyph: "</>",
+    accent: "#80C4F7",
+  },
+  {
+    id: "collaboration",
+    name: "Collaboration Table",
+    subtitle: "Consultations, delegation and handoffs",
     glyph: "◎",
     accent: "#D8C5FF",
   },
   {
+    id: "review",
+    name: "Review Desk",
+    subtitle: "Review, testing and verification",
+    glyph: "⊙",
+    accent: "#C0D2FF",
+  },
+  {
     id: "artifacts",
     name: "Artifact Studio",
-    subtitle: "Docs, decks, reports, apps, and games",
+    subtitle: "Work completed; inspect real deliverables",
     glyph: "▧",
     accent: "#F7D77A",
   },
   {
-    id: "sandbox",
-    name: "Sandbox Pods",
-    subtitle: "Isolation, tests, fixes, and recovery",
-    glyph: "◫",
-    accent: "#FF9E9E",
+    id: "help",
+    name: "Needs Attention",
+    subtitle: "Blocked runs and user decisions",
+    glyph: "!",
+    accent: "#FFADAD",
   },
-] as const;
-
-type OfficeZoneId = (typeof OFFICE_ZONES)[number]["id"];
+  {
+    id: "lounge",
+    name: "Lounge",
+    subtitle: "Available bots and queued work",
+    glyph: "⌂",
+    accent: "#ABBEB2",
+  },
+];
+const RESTING = new Set(["idle", "complete", "failed", "cancelled", "blocked", "needs_user"]);
 
 export function VirtualOfficeOverlay({
   bots,
@@ -49,6 +76,13 @@ export function VirtualOfficeOverlay({
   onClose,
   onOpenWorkbench,
   onCustomize,
+  onSteer,
+  tasks = [],
+  truncated = false,
+  revision = 0,
+  error = null,
+  onStop,
+  onOpenChat,
 }: {
   bots: Bot[];
   activeBotId: string | null;
@@ -56,313 +90,363 @@ export function VirtualOfficeOverlay({
   onClose: () => void;
   onOpenWorkbench: (botId: string) => void;
   onCustomize: (botId: string) => void;
+  onSteer?: (botId: string) => void;
+  tasks?: MissionTask[];
+  truncated?: boolean;
+  revision?: number;
+  error?: string | null;
+  onStop?: (taskId: string) => Promise<void>;
+  onOpenChat?: (botId: string, groupChatId: string | null) => void;
 }) {
+  const [tab, setTab] = useState<"office" | "missions">("office");
+  const [inspectTaskId, setInspectTaskId] = useState<string | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const populated = useMemo(
     () =>
       OFFICE_ZONES.map((zone) => ({
         ...zone,
-        bots: bots.filter((bot) => officeZoneFor(bot) === zone.id),
+        bots: bots.filter((bot) => (bot.presence?.station ?? "lounge") === zone.id),
       })),
     [bots],
   );
-  const activeCount = bots.filter((bot) => avatarStateForStatus(bot.status) === "working").length;
-  const thinkingCount = bots.filter(
-    (bot) => avatarStateForStatus(bot.status) === "thinking",
-  ).length;
-  const completedCount = bots.filter((bot) => avatarStateForStatus(bot.status) === "happy").length;
-  const errorCount = bots.filter((bot) => avatarStateForStatus(bot.status) === "error").length;
+  const activeCount = bots.filter((bot) => bot.presence && !RESTING.has(bot.presence.state)).length;
+  const helpCount = bots.filter((bot) => bot.presence?.station === "help").length;
+
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    root.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
+  }, []);
+
+  function inspect(taskId: string) {
+    setInspectTaskId(taskId);
+    setTab("missions");
+  }
 
   return (
-    <div className="fixed inset-0 z-[85] overflow-hidden bg-[#070809] text-[#F5F5F1]">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-75"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px), radial-gradient(circle at 17% 18%, rgba(189,242,104,.13), transparent 24%), radial-gradient(circle at 82% 24%, rgba(142,223,247,.11), transparent 25%), radial-gradient(circle at 58% 84%, rgba(216,197,255,.09), transparent 25%)",
-          backgroundSize: "28px 28px, 28px 28px, auto, auto, auto",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[112px] h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"
-      />
-
-      <div className="relative flex h-full flex-col">
-        <header className="flex flex-wrap items-center gap-4 border-white/10 border-b bg-[#0B0C0E]/92 px-5 py-4 backdrop-blur-2xl sm:px-8">
-          <div className="min-w-[240px] flex-1">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-2 w-2 rounded-full bg-[#BDF268] shadow-[0_0_14px_rgba(189,242,104,.75)]" />
-              <p className="font-semibold text-[#BDF268] text-[10px] uppercase tracking-[0.24em]">
-                FlowBots HQ · live roster
-              </p>
-            </div>
-            <div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-1">
-              <h2 className="font-semibold text-2xl tracking-tight sm:text-3xl">Virtual Office</h2>
-              <span className="mb-1 rounded-full border border-white/[0.08] bg-white/[0.035] px-2.5 py-1 text-[#74756F] text-[9px] uppercase tracking-[0.14em]">
-                identity-aware workspace
-              </span>
-            </div>
-            <p className="mt-1 text-[#81827D] text-xs sm:text-sm">
-              Every bot is an employee here. Their room, custom look, and motion follow real
-              FlowBots state.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Metric label="Bots" value={bots.length} />
-            <Metric label="Working" value={activeCount} accent="#BDF268" />
-            <Metric label="Thinking" value={thinkingCount} accent="#8EDFF7" />
-            <Metric label="Done" value={completedCount} accent="#D8C5FF" />
-            {errorCount > 0 ? (
-              <Metric label="Needs help" value={errorCount} accent="#FF9E9E" />
-            ) : null}
-          </div>
-
-          <button
-            type="button"
-            aria-label="Close virtual office"
-            onClick={onClose}
-            className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-lg transition hover:rotate-3 hover:bg-white/[0.08]"
+    <div
+      ref={root}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="virtual-office-title"
+      className="office-overlay fixed inset-0 z-[85] flex flex-col overflow-hidden bg-[#080D0F] text-[#EDF3EF]"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          closeRef.current();
+        }
+        if (event.key !== "Tab") return;
+        const controls = Array.from(
+          root.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], select, summary, [tabindex="0"]',
+          ) ?? [],
+        ).filter((element) => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }}
+    >
+      <header className="relative flex flex-wrap items-center gap-4 border-b border-white/10 bg-[#101719] px-5 py-4 sm:px-8">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#BDF268]">
+            FlowBots HQ · Your workers
+          </p>
+          <h2
+            id="virtual-office-title"
+            className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl"
           >
-            ×
-          </button>
-        </header>
-
-        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          {bots.length === 0 ? (
-            <div className="mx-auto mt-20 max-w-xl rounded-[30px] border border-white/10 border-dashed bg-white/[0.025] p-10 text-center shadow-2xl">
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-[24px] border border-[#BDF268]/15 bg-[#BDF268]/10 text-4xl shadow-[0_0_45px_rgba(189,242,104,.08)]">
-                ⌂
-              </div>
-              <h3 className="mt-5 font-semibold text-xl">
-                The office is ready for its first employee.
-              </h3>
-              <p className="mt-2 text-[#868781] text-sm leading-6">
-                Create a bot in FlowBots and it will appear here automatically—no separate office
-                roster to maintain.
+            Virtual Office
+          </h2>
+          <p className="mt-1 text-xs text-[#9BA8A1] sm:text-sm">
+            Real bots. Real work. One shared view of every task.
+          </p>
+        </div>
+        <div className="hidden gap-2 sm:flex">
+          <Metric label="Bots" value={bots.length} />
+          <Metric label="Active" value={activeCount} />
+          {helpCount ? <Metric label="Need help" value={helpCount} /> : null}
+        </div>
+        <button
+          type="button"
+          aria-label="Close virtual office"
+          onClick={onClose}
+          className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-white/5 text-xl hover:bg-white/10"
+        >
+          ×
+        </button>
+      </header>
+      <div
+        role="tablist"
+        aria-label="Office views"
+        className="flex gap-2 border-b border-white/10 bg-[#0E1517] px-5 py-3 sm:px-8"
+      >
+        <button
+          type="button"
+          role="tab"
+          id="office-tab"
+          aria-controls="office-panel"
+          aria-selected={tab === "office"}
+          className={`office-view-tab ${tab === "office" ? "office-view-selected" : ""}`}
+          onClick={() => setTab("office")}
+        >
+          Office floor
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="missions-tab"
+          aria-controls="office-panel"
+          aria-selected={tab === "missions"}
+          className={`office-view-tab ${tab === "missions" ? "office-view-selected" : ""}`}
+          onClick={() => {
+            setInspectTaskId(null);
+            setTab("missions");
+          }}
+        >
+          Mission Control
+        </button>
+        <span className="ml-auto hidden self-center text-xs text-[#9EACA4] md:block">
+          {error ? "Updates paused" : "Synced with persisted runtime"}
+        </span>
+      </div>
+      <div
+        id="office-panel"
+        role="tabpanel"
+        aria-labelledby={tab === "office" ? "office-tab" : "missions-tab"}
+        className="rk-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"
+      >
+        {tab === "missions" ? (
+          <MissionControl
+            key={inspectTaskId ?? "ledger"}
+            tasks={tasks}
+            bots={bots}
+            revision={revision}
+            truncated={truncated}
+            error={error}
+            initialTaskId={inspectTaskId}
+            onOpenChat={onOpenChat ?? ((id) => onSelect(id))}
+            onStop={
+              onStop ??
+              (async () => {
+                throw new Error("Task cancellation is unavailable.");
+              })
+            }
+          />
+        ) : (
+          <>
+            {error ? (
+              <p role="alert" className="office-alert mx-auto mb-4 max-w-[1540px]">
+                Updates paused: {error}. Showing the last available roster.
               </p>
-            </div>
-          ) : (
-            <div className="mx-auto grid max-w-[1540px] gap-4 xl:grid-cols-2">
-              {populated.map((zone, zoneIndex) => (
-                <section
-                  key={zone.id}
-                  className={`relative overflow-hidden rounded-[30px] border border-white/[0.085] bg-[#111315]/94 p-4 shadow-[0_26px_70px_rgba(0,0,0,.28)] sm:p-5 ${
-                    zoneIndex === populated.length - 1 ? "xl:col-span-2" : ""
-                  }`}
-                >
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 opacity-80"
-                    style={{
-                      background: `radial-gradient(circle at 8% 0%, ${zone.accent}13, transparent 28%), linear-gradient(145deg, transparent 50%, ${zone.accent}08)`,
-                    }}
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-90"
-                    style={{
-                      background: `linear-gradient(90deg, ${zone.accent}, transparent 72%)`,
-                    }}
-                  />
-                  <div className="relative mb-4 flex items-center gap-3">
-                    <div
-                      className="grid h-11 w-11 place-items-center rounded-[14px] border border-white/10 font-semibold text-sm shadow-inner"
-                      style={{ backgroundColor: `${zone.accent}18`, color: zone.accent }}
-                    >
-                      {zone.glyph}
+            ) : null}
+            {bots.length === 0 ? (
+              <div className="office-empty mx-auto mt-12 max-w-xl">
+                <h3 className="text-xl font-semibold">Your office is ready.</h3>
+                <p className="mt-3 text-sm">
+                  Create a bot in FlowBots and it will appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="mx-auto grid max-w-[1540px] gap-4 xl:grid-cols-2">
+                {populated.map((zone) => (
+                  <section
+                    key={zone.id}
+                    aria-label={zone.name}
+                    className="office-station relative overflow-hidden rounded-3xl border border-white/10 bg-[#111A1D] p-4 sm:p-5"
+                    style={{ "--station-accent": zone.accent } as CSSProperties}
+                  >
+                    <div className="relative mb-4 flex items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 bg-black/20 font-semibold"
+                        style={{ color: zone.accent }}
+                      >
+                        {zone.glyph}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold">{zone.name}</h3>
+                        <p className="mt-1 text-xs text-[#9AABA3]">{zone.subtitle}</p>
+                      </div>
+                      <span className="office-chip">{zone.bots.length}</span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-base tracking-tight">{zone.name}</h3>
-                      <p className="mt-0.5 text-[#73746E] text-[11px]">{zone.subtitle}</p>
-                    </div>
-                    <span className="rounded-full border border-white/[0.06] bg-black/20 px-2.5 py-1 text-[#8C8D87] text-[10px]">
-                      {zone.bots.length} employee{zone.bots.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
-
-                  <div className="relative grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                    {zone.bots.map((bot) => {
-                      const avatarState = avatarStateForStatus(bot.status);
-                      const selected = bot.id === activeBotId;
-                      return (
-                        <article
-                          key={bot.id}
-                          className={`group relative overflow-hidden rounded-[22px] border p-3.5 transition duration-200 ${
-                            selected
-                              ? "border-white/25 bg-white/[0.075] ring-1 ring-white/10"
-                              : "border-white/[0.065] bg-[#0B0C0E]/82 hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.045]"
-                          }`}
-                        >
-                          <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute -top-16 -left-12 h-36 w-36 rounded-full blur-3xl transition-opacity group-hover:opacity-100"
-                            style={{ backgroundColor: `${bot.color}12` }}
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() => onSelect(bot.id)}
-                            className="relative flex w-full items-start gap-3 text-left"
+                    <div className="relative grid gap-3 sm:grid-cols-2">
+                      {zone.bots.map((bot, index) => {
+                        const presence = bot.presence;
+                        const state = presence?.state ?? "idle";
+                        const currentTask = tasks.find((task) => task.id === presence?.taskId);
+                        return (
+                          <article
+                            key={bot.id}
+                            data-bot-id={bot.id}
+                            data-station={zone.id}
+                            data-presence={state}
+                            className={`office-worker min-w-0 rounded-2xl border bg-[#0B1214] p-4 ${activeBotId === bot.id ? "border-[#BDF268]/40" : "border-white/10"}`}
                           >
-                            <div className="relative grid h-[78px] w-[78px] shrink-0 place-items-center rounded-[20px] border border-white/[0.075] bg-black/30 shadow-[inset_0_1px_rgba(255,255,255,.04)]">
+                            <button
+                              type="button"
+                              onClick={() => onSelect(bot.id)}
+                              aria-label={`Open ${bot.name} chat`}
+                              className="flex w-full items-center gap-3 text-left"
+                            >
                               <div
-                                aria-hidden="true"
-                                className="absolute inset-3 rounded-2xl opacity-25 blur-xl"
-                                style={{ backgroundColor: bot.color }}
-                              />
-                              <BotAvatar
-                                color={bot.color}
-                                size={60}
-                                state={avatarState}
-                                label={bot.name}
-                              />
-                              <div
-                                aria-hidden="true"
-                                className="absolute right-3 bottom-1 left-3 h-1.5 rounded-[50%] bg-black/70 blur-[2px]"
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1 pt-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="truncate font-semibold text-sm">{bot.name}</h4>
-                                {selected ? (
-                                  <span className="rounded-full bg-[#BDF268]/15 px-1.5 py-0.5 text-[#DFFBAE] text-[8px] uppercase tracking-wider">
-                                    active
+                                className="office-bot-scene relative flex h-[124px] w-[112px] shrink-0 items-center justify-center"
+                                style={
+                                  {
+                                    "--motion-offset": `${index * -0.7}s`,
+                                    "--bot-color": bot.color,
+                                  } as CSSProperties
+                                }
+                              >
+                                <BotAvatar
+                                  color={bot.color}
+                                  size={88}
+                                  state={botAvatarStateForPresence(state)}
+                                  label={bot.name}
+                                />
+                                <span className="office-desk" aria-hidden="true" />
+                                {!RESTING.has(state) && state !== "queued" ? (
+                                  <span className="office-tool-prop" aria-hidden="true">
+                                    <span>
+                                      {zone.id === "development"
+                                        ? ">_"
+                                        : zone.id === "research"
+                                          ? "⌕"
+                                          : zone.id === "review"
+                                            ? "⊙"
+                                            : zone.id === "collaboration"
+                                              ? "↔"
+                                              : "≡"}
+                                    </span>
+                                    <i />
+                                    <i />
+                                    <i />
+                                  </span>
+                                ) : null}
+                                {state === "complete" ? (
+                                  <span className="office-result" aria-hidden="true">
+                                    ✓
+                                  </span>
+                                ) : null}
+                                {zone.id === "help" ? (
+                                  <span className="office-attention" aria-hidden="true">
+                                    !
                                   </span>
                                 ) : null}
                               </div>
-                              <p className="mt-1 truncate text-[#777872] text-[11px]">
-                                {bot.title || "FlowBots employee"}
+                              <div className="min-w-0 flex-1">
+                                <h4 className="break-words font-semibold text-sm">{bot.name}</h4>
+                                <p className="mt-1 break-words text-xs text-[#A7B5AD]">
+                                  {bot.title || "Your bot"}
+                                </p>
+                                <p
+                                  className="mt-3 text-xs capitalize"
+                                  style={{ color: zone.accent }}
+                                >
+                                  {state.replaceAll("_", " ")}
+                                </p>
+                              </div>
+                            </button>
+                            <p className="mt-2 min-h-10 text-xs leading-5 text-[#CAD7D0]">
+                              {presence?.summary ??
+                                (bot.status === "idle"
+                                  ? "Available for a new task"
+                                  : "Activity details unavailable")}
+                            </p>
+                            <p
+                              className="mt-2 truncate text-[11px] text-[#97AAA0]"
+                              title={presence?.modelId ?? undefined}
+                            >
+                              {presence?.modelId
+                                ? `${presence.modelProvider ?? "Model"} / ${presence.modelId}`
+                                : "Model selected when a run starts"}
+                            </p>
+                            {presence?.startedAt && !RESTING.has(state) ? (
+                              <p className="mt-1 text-[11px] text-[#97AAA0]">
+                                Started{" "}
+                                <time dateTime={presence.startedAt}>
+                                  {new Date(presence.startedAt).toLocaleTimeString()}
+                                </time>
                               </p>
-                              <p
-                                className="mt-2 flex items-center gap-1.5 text-[10px]"
-                                style={{ color: zone.accent }}
+                            ) : null}
+                            {currentTask ? (
+                              <p className="mt-2 line-clamp-2 break-words text-xs text-[#A7B5AD]">
+                                {currentTask.prompt}
+                              </p>
+                            ) : null}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {presence?.taskId ? (
+                                <button
+                                  type="button"
+                                  aria-label={`Inspect ${bot.name} task`}
+                                  className="office-action office-primary"
+                                  onClick={() => inspect(presence.taskId as string)}
+                                >
+                                  Inspect task
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="office-action"
+                                onClick={() => onOpenWorkbench(bot.id)}
                               >
-                                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-                                {humanStatus(bot.status)}
-                              </p>
-                              <p className="mt-2 text-[#565752] text-[9px] uppercase tracking-[0.12em]">
-                                tap avatar to open chat
-                              </p>
+                                Workbench
+                              </button>
+                              {onSteer ? (
+                                <button
+                                  type="button"
+                                  className="office-action"
+                                  onClick={() => onSteer(bot.id)}
+                                >
+                                  Steer
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="office-action"
+                                onClick={() => onCustomize(bot.id)}
+                              >
+                                Customize look
+                              </button>
                             </div>
-                          </button>
-
-                          <div className="relative mt-3 min-h-9 rounded-xl border border-white/[0.035] bg-white/[0.025] px-3 py-2 text-[#6E6F69] text-[10.5px] leading-4">
-                            {bot.preview?.trim() || roomActivity(avatarState)}
-                          </div>
-
-                          <div className="relative mt-3 grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onCustomize(bot.id)}
-                              className="rounded-xl border border-[#D8C5FF]/10 bg-[#D8C5FF]/[0.035] px-3 py-2 font-medium text-[#B8ADC9] text-[10.5px] transition hover:border-[#D8C5FF]/25 hover:bg-[#D8C5FF]/[0.08] hover:text-[#F0E8FF]"
-                            >
-                              ✦ Customize look
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onOpenWorkbench(bot.id)}
-                              className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 font-medium text-[#AEB0A9] text-[10.5px] transition hover:border-white/15 hover:bg-white/[0.07] hover:text-white"
-                            >
-                              {zone.id === "artifacts" ? "Artifact Studio" : "Workbench"}
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })}
-                    {zone.bots.length === 0 ? (
-                      <div className="sm:col-span-2 2xl:col-span-3 rounded-2xl border border-white/[0.06] border-dashed bg-black/10 px-4 py-8 text-center text-[#5F605B] text-xs">
-                        <div className="mx-auto mb-2 h-2 w-2 rounded-full bg-white/10" />
-                        This room is quiet right now. Bots move here automatically as their state
-                        changes.
-                      </div>
-                    ) : null}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-white/10 border-t bg-[#090A0C]/92 px-5 py-3 text-[#62635E] text-[10px] sm:px-8">
-          <span>Office placement follows persisted bot/run status.</span>
-          <span className="text-[#454641]">•</span>
-          <span>
-            Custom looks are shared with chat through the same FlowBots identity registry.
-          </span>
-          <span className="text-[#454641]">•</span>
-          <span>Workbench actions use the real bot runtime.</span>
-        </footer>
+                          </article>
+                        );
+                      })}
+                      {zone.bots.length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-xs text-[#91A298] sm:col-span-2">
+                          Quiet here. Bots arrive when their actual work belongs at this station.
+                        </p>
+                      ) : null}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
+      <footer className="border-t border-white/10 bg-[#0E1517] px-5 py-3 text-[11px] text-[#93A69B] sm:px-8">
+        Stations follow runtime activity · Inspect tasks for ownership, handoffs and artifacts · No
+        model calls for animation
+      </footer>
     </div>
   );
 }
 
-function Metric({
-  label,
-  value,
-  accent = "#D6D6D1",
-}: {
-  label: string;
-  value: number;
-  accent?: string;
-}) {
+function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-[66px] rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 text-center shadow-inner">
-      <div className="font-semibold text-base" style={{ color: accent }}>
-        {value}
-      </div>
-      <div className="text-[#62635E] text-[8px] uppercase tracking-[0.16em]">{label}</div>
+    <div className="min-w-16 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-center">
+      <div className="font-semibold text-[#D3F7AA]">{value}</div>
+      <div className="text-[10px] text-[#9EAAA2]">{label}</div>
     </div>
   );
-}
-
-function officeZoneFor(bot: Bot): OfficeZoneId {
-  const state = avatarStateForStatus(bot.status);
-  if (state === "error") return "sandbox";
-  if (state === "thinking") return "build";
-  if (state === "happy") return "artifacts";
-  if (state === "working") return stableHash(bot.id) % 3 === 0 ? "build" : "focus";
-  return stableHash(bot.id) % 4 === 0 ? "artifacts" : "collab";
-}
-
-function avatarStateForStatus(status: string): BotAvatarState {
-  const value = status.toLowerCase();
-  if (["running", "working", "active"].some((needle) => value.includes(needle))) return "working";
-  if (
-    ["queued", "leased", "booting", "thinking", "pending"].some((needle) => value.includes(needle))
-  ) {
-    return "thinking";
-  }
-  if (["failed", "error"].some((needle) => value.includes(needle))) return "error";
-  if (["complete", "completed", "success", "done"].some((needle) => value.includes(needle)))
-    return "happy";
-  return "idle";
-}
-
-function humanStatus(status: string): string {
-  const state = avatarStateForStatus(status);
-  if (state === "working") return "Actively working";
-  if (state === "thinking") return "Thinking / preparing";
-  if (state === "happy") return "Work delivered";
-  if (state === "error") return "Needs intervention";
-  return "Available";
-}
-
-function roomActivity(state: BotAvatarState): string {
-  if (state === "working")
-    return "Hands on the current task; activity emotes update while the run is live.";
-  if (state === "thinking") return "Reviewing context and deciding the next bounded action.";
-  if (state === "happy")
-    return "Latest work finished; ready for artifact review or the next handoff.";
-  if (state === "error")
-    return "A run reported an error; open the Workbench to isolate and verify a fix.";
-  return "Available for a new assignment or a short collaboration.";
-}
-
-function stableHash(value: string): number {
-  let hash = 0;
-  for (const char of value) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return hash;
 }

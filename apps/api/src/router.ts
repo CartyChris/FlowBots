@@ -13,6 +13,7 @@ import {
 } from "@rakazo/adapter-kit";
 import {
   type ComposioConnector,
+  cancelTaskTree,
   checkpointAndRecordComputerWorkspace,
   cliHarnessDefinitions,
   destroyBot,
@@ -57,11 +58,13 @@ import {
   type PrismaClient,
   type ThreadEvents,
 } from "@rakazo/db";
+import { hydrateBotPresence } from "./bot-presence.js";
 import {
   clearPersistedComposioKey,
   hasPersistedComposioKey,
   savePersistedComposioKey,
 } from "./local-connectors.js";
+import { getMission, listMissions } from "./missions.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 
@@ -377,11 +380,13 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     bots: {
-      list: authed.bots.list.handler(async ({ context }) => repos.listBots(context.actor)),
+      list: authed.bots.list.handler(async ({ context }) =>
+        hydrateBotPresence(deps.prisma, context.actor, await repos.listBots(context.actor)),
+      ),
       get: authed.bots.get.handler(async ({ context, input }) => {
         const found = (await repos.listBots(context.actor)).find((bot) => bot.id === input.botId);
         if (!found) throw new IsolationError();
-        return found;
+        return (await hydrateBotPresence(deps.prisma, context.actor, [found]))[0]!;
       }),
       create: authed.bots.create.handler(async ({ context, input }) =>
         repos.createBot(context.actor, input),
@@ -422,6 +427,18 @@ export function createRouter(deps: RouterDeps) {
             signal: new AbortController().signal,
           },
         );
+        return { ok: true as const };
+      }),
+    },
+    missions: {
+      list: authed.missions.list.handler(async ({ context }) =>
+        listMissions(deps.prisma, context.actor),
+      ),
+      get: authed.missions.get.handler(async ({ context, input }) =>
+        getMission(deps.prisma, context.actor, input.taskId),
+      ),
+      stop: authed.missions.stop.handler(async ({ context, input }) => {
+        await cancelTaskTree(deps.prisma, { ...context.actor, taskId: input.taskId });
         return { ok: true as const };
       }),
     },
@@ -589,17 +606,14 @@ export function createRouter(deps: RouterDeps) {
         const active = await deps.prisma.run.findMany({
           where: {
             groupChatId: input.groupChatId,
+            workspaceId: context.actor.workspaceId,
+            userId: context.actor.userId,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
-          select: { id: true },
+          select: { taskId: true },
         });
-        await deps.prisma.run.updateMany({
-          where: { id: { in: active.map((run) => run.id) } },
-          data: { status: "cancelled", completedAt: new Date() },
-        });
-        await deps.prisma.event.deleteMany({
-          where: { runId: { in: active.map((run) => run.id) }, type: "thread.progress" },
-        });
+        for (const run of active)
+          await cancelTaskTree(deps.prisma, { ...context.actor, taskId: run.taskId });
         return { ok: true as const };
       }),
     },
@@ -684,24 +698,14 @@ export function createRouter(deps: RouterDeps) {
           where: {
             botId: bot.id,
             groupChatId: null,
+            workspaceId: context.actor.workspaceId,
+            userId: context.actor.userId,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
-          select: { id: true },
+          select: { taskId: true },
         });
-        await deps.prisma.run.updateMany({
-          where: {
-            botId: bot.id,
-            groupChatId: null,
-            status: { in: [...ACTIVE_RUN_STATUSES] },
-          },
-          data: { status: "cancelled", completedAt: new Date() },
-        });
-        await deps.prisma.event.deleteMany({
-          where: {
-            type: "thread.progress",
-            runId: { in: activeRuns.map((run) => run.id) },
-          },
-        });
+        for (const run of activeRuns)
+          await cancelTaskTree(deps.prisma, { ...context.actor, taskId: run.taskId });
         return { ok: true as const };
       }),
       followUp: authed.threads.followUp.handler(async ({ context, input }) => {
@@ -1548,20 +1552,12 @@ async function groupChatSnapshot(
     orderBy: { createdAt: "asc" },
     include: { bot: true },
   });
-  const activeRunIds = activeRuns.map((run) => run.id);
-  const toolEvents = activeRunIds.length
-    ? await deps.prisma.event.findMany({
-        where: { runId: { in: activeRunIds }, type: "agent.tool.called" },
-        orderBy: { seq: "asc" },
-        select: { runId: true, payload: true },
-      })
-    : [];
-  const lastTool = new Map<string, string>();
-  for (const event of toolEvents) {
-    if (!event.runId) continue;
-    const payload = event.payload as Record<string, unknown>;
-    lastTool.set(event.runId, String(payload.name ?? ""));
-  }
+  const presentBots = await hydrateBotPresence(
+    deps.prisma,
+    actor,
+    room.members.map(({ bot }) => bot),
+  );
+  const presenceByBot = new Map(presentBots.map((bot) => [bot.id, bot.presence]));
   const activeByBot = new Map(activeRuns.map((run) => [run.botId, run.status]));
   return {
     id: room.id,
@@ -1573,6 +1569,7 @@ async function groupChatSnapshot(
       description: bot.description,
       color: bot.color,
       status: activeByBot.get(bot.id) ?? "idle",
+      presence: presenceByBot.get(bot.id),
       position,
     })),
     messages: room.messages.map((message) => ({
@@ -1593,7 +1590,9 @@ async function groupChatSnapshot(
       botName: run.bot.name,
       botColor: run.bot.color,
       status: run.status,
-      lastTool: lastTool.get(run.id) || null,
+      lastTool: null,
+      presence:
+        presenceByBot.get(run.botId)?.runId === run.id ? presenceByBot.get(run.botId) : undefined,
       startedAt: run.startedAt?.toISOString() ?? null,
     })),
     createdAt: room.createdAt.toISOString(),

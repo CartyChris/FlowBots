@@ -24,6 +24,7 @@ import {
   BotAvatar,
   type BotAvatarState,
   Button,
+  botAvatarStateForPresence,
   botWorkStateForTool,
   type SemanticBotWorkState,
 } from "@rakazo/ui-web";
@@ -472,9 +473,11 @@ export function ShellPage() {
                 color={bot.color}
                 size={38}
                 state={
-                  bot.id === active?.id && activeWorkState
-                    ? activeWorkState
-                    : avatarStateFor(bot.status)
+                  bot.presence
+                    ? botAvatarStateForPresence(bot.presence.state)
+                    : bot.id === active?.id && activeWorkState
+                      ? activeWorkState
+                      : avatarStateFor(bot.status)
                 }
                 label={bot.name}
               />
@@ -598,7 +601,11 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 size={26}
-                state={activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status)}
+                state={
+                  active.presence
+                    ? botAvatarStateForPresence(active.presence.state)
+                    : (activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status))
+                }
                 label={active.name}
               />
             ) : null}
@@ -659,7 +666,8 @@ export function ShellPage() {
                 className="rounded-[20px] bg-[#1A1A1D] px-[18px] py-[13px] text-[14.5px] text-[#85858A]"
                 style={{ animation: "rkPulse 1.2s ease-in-out infinite" }}
               >
-                {activeWorkState ? `${activeWorkState}…` : "working…"}
+                {active?.presence?.summary ??
+                  (activeWorkState ? `${activeWorkState}…` : "working…")}
               </div>
             </div>
           ) : null}
@@ -1051,7 +1059,11 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 size={28}
-                state={activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status)}
+                state={
+                  active.presence
+                    ? botAvatarStateForPresence(active.presence.state)
+                    : (activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status))
+                }
                 label={active.name}
               />
               <span className="truncate text-[15.5px] font-medium text-[#ECECEE]">

@@ -55,3 +55,249 @@ body,
     opacity: 0.3;
   }
 }
+
+/* Office props project canonical runtime state. Motion never schedules work. */
+.office-overlay :is(button, a, select, summary):focus-visible {
+  outline: 2px solid #bdf268;
+  outline-offset: 4px;
+}
+.office-view-tab {
+  padding: 9px 15px;
+  border-radius: 10px;
+  color: #acbcb3;
+  font-size: 12px;
+}
+.office-view-tab:hover {
+  background: #ffffff09;
+}
+.office-view-selected {
+  background: #bdf26812;
+  color: #d9fbb4;
+  box-shadow: inset 0 0 0 1px #bdf26830;
+}
+.office-station::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at top left,
+    color-mix(in srgb, var(--station-accent) 8%, transparent),
+    transparent 60%
+  );
+}
+.office-station::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 24px;
+  width: 90px;
+  height: 2px;
+  background: var(--station-accent);
+  opacity: 0.6;
+}
+.office-action {
+  border: 1px solid #ffffff18;
+  border-radius: 9px;
+  padding: 7px 10px;
+  color: #c0cfc7;
+  font-size: 11px;
+  background: #ffffff05;
+}
+.office-action:hover {
+  background: #ffffff0f;
+  border-color: #ffffff35;
+}
+.office-action:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.office-primary {
+  border-color: #bdf26835;
+  color: #d4f5b0;
+}
+.office-stop {
+  border-color: #ffadad40;
+  color: #ffc6c6;
+}
+.office-chip {
+  border: 1px solid #ffffff15;
+  border-radius: 20px;
+  padding: 4px 9px;
+  color: #b8c8be;
+  font-size: 10px;
+}
+.office-alert {
+  border: 1px solid #ffadad35;
+  background: #ffadad09;
+  border-radius: 12px;
+  padding: 12px;
+  color: #ffd0d0;
+  font-size: 12px;
+}
+.office-empty {
+  border: 1px dashed #ffffff25;
+  background: #ffffff03;
+  border-radius: 20px;
+  padding: 30px;
+  text-align: center;
+  color: #b8c8be;
+}
+.office-bot-scene {
+  isolation: isolate;
+  animation: officePresence 5s ease-in-out infinite;
+  animation-delay: var(--motion-offset, 0s);
+}
+.office-bot-scene::before {
+  content: "";
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  height: 12px;
+  border-radius: 50%;
+  background: #0008;
+  filter: blur(3px);
+  z-index: -1;
+}
+.office-desk {
+  position: absolute;
+  bottom: 10px;
+  left: 2px;
+  right: 2px;
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(#314541, #182721);
+  box-shadow: 0 3px 0 #0006;
+}
+.office-tool-prop {
+  position: absolute;
+  right: -1px;
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 42px;
+  height: 38px;
+  padding: 4px 5px;
+  border: 1px solid #a6e6d756;
+  border-radius: 5px;
+  background: #0e2423;
+  transform: rotate(-7deg);
+  color: #a7e3c6;
+  box-shadow: 0 0 14px #8edff712;
+}
+.office-tool-prop > span {
+  font: 10px monospace;
+}
+.office-tool-prop > i {
+  height: 2px;
+  width: 75%;
+  background: currentColor;
+  opacity: 0.55;
+  animation: officeScan 2.4s ease-in-out infinite;
+}
+.office-tool-prop > i:nth-child(3) {
+  width: 50%;
+  animation-delay: 0.4s;
+}
+.office-tool-prop > i:nth-child(4) {
+  width: 65%;
+  animation-delay: 0.8s;
+}
+[data-station="development"] .office-tool-prop {
+  color: #8edff7;
+  animation: officeTyping 1.8s ease-in-out infinite;
+}
+[data-station="collaboration"] .office-tool-prop {
+  color: #d8c5ff;
+  animation: officeExchange 3s ease-in-out infinite;
+}
+[data-station="review"] .office-tool-prop {
+  color: #c0d2ff;
+}
+.office-result,
+.office-attention {
+  position: absolute;
+  right: 1px;
+  top: 14px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+}
+.office-result {
+  background: #203222;
+  color: #d2f59e;
+  animation: officeAck 0.7s ease-out 1;
+}
+.office-attention {
+  background: #432a2a;
+  color: #ffbdbd;
+}
+[data-presence="failed"] .office-bot-scene,
+[data-presence="blocked"] .office-bot-scene,
+[data-presence="needs_user"] .office-bot-scene {
+  animation: none;
+}
+@keyframes officePresence {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes officeScan {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+@keyframes officeTyping {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  45% {
+    transform: rotate(-4deg) translateY(-1px);
+  }
+  65% {
+    transform: rotate(-8deg);
+  }
+}
+@keyframes officeExchange {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-7deg);
+  }
+  50% {
+    transform: translateX(4px) rotate(4deg);
+  }
+}
+@keyframes officeAck {
+  from {
+    transform: scale(0.7);
+    opacity: 0.2;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-overlay *,
+  .office-overlay *::before,
+  .office-overlay *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: accessibility preference overrides state-specific and shared avatar motion. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override interactive transition utilities. */
+    transition: none !important;
+  }
+}

@@ -5,6 +5,7 @@ export * from "./background-job-handlers.js";
 export * from "./builtin-tools.js";
 export * from "./child-bots.js";
 export * from "./cli-agent.js";
+export * from "./collaboration.js";
 export * from "./composio-catalog-cache.js";
 export * from "./composio-connector.js";
 export * from "./computer-idle.js";

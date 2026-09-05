@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { MessageBlock, ThreadMessageSchema } from "./events.js";
 import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
+import { BotPresenceSnapshotSchema } from "./presence.js";
 
 export const BotAvatarVariantSchema = z.enum([
   "orb",
@@ -65,6 +66,7 @@ export const BotSchema = z.object({
   threadId: Id,
   preview: z.string(),
   status: z.string(),
+  presence: BotPresenceSnapshotSchema.optional(),
   updatedAt: z.string(),
   createdAt: z.string(),
 });
@@ -222,6 +224,7 @@ export const ThreadSnapshotSchema = z.object({
 export type ThreadSnapshot = z.infer<typeof ThreadSnapshotSchema>;
 
 export const GroupChatMemberSchema = z.object({
+  presence: BotPresenceSnapshotSchema.optional(),
   botId: Id,
   name: z.string(),
   title: z.string(),
@@ -247,6 +250,7 @@ export const GroupChatMessageSchema = z.object({
 export type GroupChatMessage = z.infer<typeof GroupChatMessageSchema>;
 
 export const GroupChatActiveRunSchema = z.object({
+  presence: BotPresenceSnapshotSchema.optional(),
   runId: Id,
   botId: Id,
   botName: z.string(),

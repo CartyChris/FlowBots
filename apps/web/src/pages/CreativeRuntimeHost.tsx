@@ -1,12 +1,12 @@
-import type { Bot, BotAppearance, CapabilityInstall } from "@rakazo/contracts";
+import type { Bot, BotAppearance, CapabilityInstall, MissionTask } from "@rakazo/contracts";
 import {
   applyBotSteeringProfile,
   applyFlowMembership,
   type BotSteeringProfile,
   type FlowMembership,
 } from "@rakazo/core";
-import { BotAvatar, registerBotAvatarAppearances } from "@rakazo/ui-web";
-import { useEffect, useMemo, useState } from "react";
+import { BotAvatar, botAvatarStateForPresence, registerBotAvatarAppearances } from "@rakazo/ui-web";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { rpc } from "../lib/rpc";
 import { BotLookStudio } from "./BotLookStudio.js";
@@ -28,6 +28,13 @@ export function CreativeRuntimeHost() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilityInstall[]>([]);
   const [officeOpen, setOfficeOpen] = useState(false);
+  const [missions, setMissions] = useState<MissionTask[]>([]);
+  const [missionsTruncated, setMissionsTruncated] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const mounted = useRef(true);
+  const refreshFlight = useRef<Promise<{ bots: Bot[]; capabilities: CapabilityInstall[] }> | null>(
+    null,
+  );
   const [workbenchBotId, setWorkbenchBotId] = useState<string | null>(null);
   const [lookBotId, setLookBotId] = useState<string | null>(null);
   const [steeringBotId, setSteeringBotId] = useState<string | null>(null);
@@ -52,43 +59,78 @@ export function CreativeRuntimeHost() {
     [capabilities, activeBot],
   );
 
-  async function refresh() {
-    const [nextBots, nextCapabilities] = await Promise.all([
-      rpc.bots.list(),
-      rpc.capabilities.list(),
-    ]);
-    setBots(nextBots);
-    setCapabilities(nextCapabilities);
-    return { bots: nextBots, capabilities: nextCapabilities };
-  }
+  const refresh = useCallback(
+    (includeMissions = officeOpen) => {
+      if (refreshFlight.current) return refreshFlight.current;
+      const request = (async () => {
+        const [nextBots, nextCapabilities, nextMissions] = await Promise.all([
+          rpc.bots.list(),
+          rpc.capabilities.list(),
+          includeMissions ? rpc.missions.list() : Promise.resolve(null),
+        ]);
+        if (mounted.current) {
+          setBots(nextBots);
+          setCapabilities(nextCapabilities);
+          if (nextMissions) {
+            setMissions(nextMissions.tasks);
+            setMissionsTruncated(nextMissions.truncated);
+          }
+          setRevision((current) => current + 1);
+          setError(null);
+        }
+        return { bots: nextBots, capabilities: nextCapabilities };
+      })();
+      refreshFlight.current = request;
+      void request
+        .finally(() => {
+          refreshFlight.current = null;
+        })
+        .catch(() => undefined);
+      return request;
+    },
+    [officeOpen],
+  );
 
   useEffect(() => {
-    void refresh().catch(() => undefined);
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 8_000);
-    return () => window.clearInterval(timer);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
   }, []);
+
+  useEffect(() => {
+    let stopped = false;
+    let timer: number | undefined;
+    async function poll() {
+      try {
+        await refresh();
+      } catch (err) {
+        if (!stopped)
+          setError(err instanceof Error ? err.message : "Could not refresh runtime activity.");
+      }
+      if (!stopped) timer = window.setTimeout(() => void poll(), officeOpen ? 4_000 : 8_000);
+    }
+    void poll();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [officeOpen, refresh]);
 
   useEffect(() => {
     registerBotAvatarAppearances(botAvatarAppearanceRegistrations(bots, capabilities));
   }, [bots, capabilities]);
 
-  useEffect(() => {
-    if (!officeOpen) return;
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 4_000);
-    return () => window.clearInterval(timer);
-  }, [officeOpen]);
-
-  async function openOffice() {
-    setLoading(true);
+  function openOffice() {
     setError(null);
-    try {
-      await refresh();
-      setOfficeOpen(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open the virtual office.");
-    } finally {
-      setLoading(false);
-    }
+    setOfficeOpen(true);
+  }
+
+  async function stopMission(taskId: string) {
+    await rpc.missions.stop({ taskId });
+    // An in-flight pre-cancellation refresh must settle before reading the stopped state.
+    if (refreshFlight.current) await refreshFlight.current.catch(() => undefined);
+    await refresh(true);
   }
 
   async function openWorkbench(targetBotId = botId ?? null) {
@@ -187,7 +229,7 @@ export function CreativeRuntimeHost() {
             <BotAvatar
               color={chatBot.color}
               size={27}
-              state={chatBot.status === "idle" ? "idle" : "working"}
+              state={botAvatarStateForPresence(chatBot.presence?.state ?? "idle")}
               label={chatBot.name}
             />
             <span className="hidden max-w-[90px] truncate font-medium text-[#D3D4CE] text-[10.5px] xl:block">
@@ -259,11 +301,24 @@ export function CreativeRuntimeHost() {
         </button>
       ) : null}
 
-      {officeOpen ? (
+      {officeOpen && !workbenchBotId && !lookBotId && !steeringBotId ? (
         <VirtualOfficeOverlay
           bots={bots}
           activeBotId={botId ?? null}
-          onSelect={(id) => navigate(`/app/${id}`)}
+          tasks={missions}
+          truncated={missionsTruncated}
+          revision={revision}
+          error={error}
+          onStop={stopMission}
+          onSteer={(id) => void openSteeringStudio(id)}
+          onOpenChat={(id, groupChatId) => {
+            setOfficeOpen(false);
+            navigate(groupChatId ? `/groups/${groupChatId}` : `/app/${id}`);
+          }}
+          onSelect={(id) => {
+            setOfficeOpen(false);
+            navigate(`/app/${id}`);
+          }}
           onClose={() => setOfficeOpen(false)}
           onOpenWorkbench={(id) => void openWorkbench(id)}
           onCustomize={(id) => void openLookStudio(id)}

@@ -1,6 +1,8 @@
 import type { SandboxKind } from "@rakazo/contracts";
 
 export interface AdapterContext {
+  /** Executor-owned proof; personalities and child tasks never grant a lease. */
+  runLease?: { owner: string; fence: number };
   operationId: string;
   traceId: string;
   workspaceId: string;

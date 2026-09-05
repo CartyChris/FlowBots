@@ -1,10 +1,17 @@
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { Bot, GroupChatMessage, GroupChatSnapshot, GroupChatSummary } from "@rakazo/contracts";
-import { BotAvatar, botWorkStateForTool } from "@rakazo/ui-web";
+import type {
+  Bot,
+  GroupChatMember,
+  GroupChatMessage,
+  GroupChatSnapshot,
+  GroupChatSummary,
+} from "@rakazo/contracts";
+import { BotAvatar, botAvatarStateForPresence } from "@rakazo/ui-web";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { rpc } from "../lib/rpc";
 import { GroupChatEditor } from "./GroupChatEditor";
+import { GroupRunPresence } from "./GroupRunPresence.js";
 import { WindowChrome } from "./WindowChrome";
 
 export function GroupChatPage() {
@@ -143,7 +150,12 @@ export function GroupChatPage() {
               onClick={() => navigate(`/app/${bot.id}`)}
               className="mb-0.5 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left hover:bg-[#141416]"
             >
-              <BotAvatar color={bot.color} size={29} state="idle" label={bot.name} />
+              <BotAvatar
+                color={bot.color}
+                size={29}
+                state={botAvatarStateForPresence(bot.presence?.state ?? "idle")}
+                label={bot.name}
+              />
               <span className="min-w-0 flex-1 truncate text-[13px] text-[#BEBEC3]">{bot.name}</span>
             </button>
           ))}
@@ -187,19 +199,9 @@ export function GroupChatPage() {
 
         {room?.activeRuns.length ? (
           <div className="flex flex-wrap gap-2 border-b border-[#151517] bg-[#0A0A0B] px-6 py-2.5">
-            {room.activeRuns.map((run) => {
-              const state = botWorkStateForTool(run.lastTool ?? "") ?? "collaborating";
-              return (
-                <div
-                  key={run.runId}
-                  className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] py-1 pl-1 pr-2.5 text-[10.5px] text-[#A8A8AD]"
-                >
-                  <BotAvatar color={run.botColor} size={24} state={state} label={run.botName} />
-                  <span>{run.botName}</span>
-                  <span className="text-[#6F6F74]">{state}</span>
-                </div>
-              );
-            })}
+            {room.activeRuns.map((run) => (
+              <GroupRunPresence key={run.runId} run={run} />
+            ))}
           </div>
         ) : null}
 
@@ -403,13 +405,7 @@ function GroupBlock({
   return null;
 }
 
-function AvatarStack({
-  members,
-  size,
-}: {
-  members: Array<{ botId: string; name: string; color: string }>;
-  size: number;
-}) {
+function AvatarStack({ members, size }: { members: GroupChatMember[]; size: number }) {
   return (
     <div className="flex shrink-0 items-center">
       {members.slice(0, 4).map((member, index) => (
@@ -417,7 +413,12 @@ function AvatarStack({
           key={member.botId}
           style={{ marginLeft: index ? -Math.round(size * 0.3) : 0, zIndex: 5 - index }}
         >
-          <BotAvatar color={member.color} size={size} state="idle" label={member.name} />
+          <BotAvatar
+            color={member.color}
+            size={size}
+            state={botAvatarStateForPresence(member.presence?.state ?? "idle")}
+            label={member.name}
+          />
         </div>
       ))}
       {members.length > 4 ? (

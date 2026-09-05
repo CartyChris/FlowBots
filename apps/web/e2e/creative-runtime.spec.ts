@@ -10,6 +10,10 @@ test("virtual office and workbench are reachable from the shell", async ({ page 
   await expect(page.getByRole("heading", { name: "Virtual Office" })).toBeVisible();
   await expect(page.getByText("Focus Desks", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Artifact Studio", exact: true })).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const officeAvatar = page.locator(".office-bot-scene").first();
+  await expect(officeAvatar).toBeVisible();
+  expect(await officeAvatar.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
   await page.getByRole("button", { name: "Close virtual office" }).click();
 
   await page.getByRole("button", { name: "Workbench" }).click();
@@ -65,6 +69,28 @@ test("changed workspace deliverables are downloadable with exact bytes", async (
     timeout: 30_000,
   });
 
+  // The same durable task and artifact must remain discoverable outside chat.
+  await page.getByRole("button", { name: "Virtual Office" }).click();
+  await page.getByRole("tab", { name: "Mission Control" }).click();
+  await page
+    .getByRole("button", { name: /Inspect task.*output\/result\.txt/i })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Task inspector" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Task inspector", exact: true })
+      .getByRole("link", { name: /result\.txt/i }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close virtual office" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Virtual Office" }).click();
+  await page.getByRole("tab", { name: "Mission Control" }).click();
+  await expect(
+    page.getByRole("button", { name: /Inspect task.*output\/result\.txt/i }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close virtual office" }).click();
+
   const fileLink = page.getByRole("link", { name: /result\.txt/i });
   await expect(fileLink).toBeVisible({ timeout: 20_000 });
   const downloadPromise = page.waitForEvent("download");
@@ -75,6 +101,62 @@ test("changed workspace deliverables are downloadable with exact bytes", async (
   expect(downloadedPath).not.toBeNull();
   if (!downloadedPath) throw new Error("downloaded artifact has no local path");
   expect(await readFile(downloadedPath, "utf8")).toBe("artifact-download-ok\n");
+});
+
+test("Mission cancellation updates the real office worker and survives reload", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signup(page, `office-cancel-${stamp}@rakazo.test`, "password12", "Office Cancellation");
+  await completeOnboarding(page, ["A bit of everything", "Clear and tight"]);
+
+  const prompt = "keep working until I stop you";
+  await page.getByPlaceholder("Message Chief").fill(prompt);
+  await page.keyboard.press("Enter");
+  // The scripted runtime emits progress continuously until real cancellation interrupts it.
+  await expect(page.getByText(/still working/).first()).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Virtual Office", exact: true }).click();
+  const office = page.getByRole("dialog", { name: "Virtual Office", exact: true });
+  const worker = office.locator("article[data-bot-id]").filter({
+    has: page.getByRole("heading", { name: "Chief", exact: true }),
+  });
+  await expect(worker).toHaveAttribute("data-presence", "thinking", { timeout: 30_000 });
+  await expect(worker).toHaveAttribute("data-station", "focus");
+  await expect(worker.getByText("Working on the current task", { exact: true })).toBeVisible();
+  const botId = await worker.getAttribute("data-bot-id");
+  expect(botId).toBeTruthy();
+
+  await worker.getByRole("button", { name: "Inspect Chief task", exact: true }).click();
+  const task = office.locator("article[data-task-id]").filter({
+    has: page.getByRole("button", { name: `Inspect task ${prompt}`, exact: true }),
+  });
+  await expect(task.getByText("Chief", { exact: true })).toBeVisible();
+  await expect(task.getByText("running", { exact: true })).toBeVisible({ timeout: 30_000 });
+  const taskId = await task.getAttribute("data-task-id");
+  expect(taskId).toBeTruthy();
+  const inspector = office.getByRole("region", { name: "Task inspector", exact: true });
+  await expect(inspector.getByText(taskId as string, { exact: true })).toBeVisible();
+
+  await task.getByRole("button", { name: "Stop task tree", exact: true }).click();
+  await expect(task.getByText("cancelled", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(task.getByRole("button", { name: "Stop task tree", exact: true })).toHaveCount(0);
+  await expect(inspector.getByText("cancelled", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  await office.getByRole("tab", { name: "Office floor", exact: true }).click();
+  await expect(worker).toHaveAttribute("data-presence", "cancelled", { timeout: 30_000 });
+  await expect(worker).toHaveAttribute("data-station", "lounge");
+  await expect(worker.getByText("Work stopped", { exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: "Virtual Office", exact: true }).click();
+  await expect(worker).toHaveAttribute("data-bot-id", botId as string);
+  await expect(worker).toHaveAttribute("data-presence", "cancelled", { timeout: 30_000 });
+  await expect(worker).toHaveAttribute("data-station", "lounge");
+  await worker.getByRole("button", { name: "Inspect Chief task", exact: true }).click();
+  await expect(task).toHaveAttribute("data-task-id", taskId as string);
+  await expect(task.getByText("cancelled", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(task.getByRole("button", { name: "Stop task tree", exact: true })).toHaveCount(0);
 });
 
 test("plugins can register declarative GitHub extensions", async ({ page }) => {

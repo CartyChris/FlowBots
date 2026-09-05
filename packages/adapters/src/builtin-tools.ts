@@ -270,13 +270,17 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "delegate_to_bot",
     description:
-      "Assign a durable task to another existing bot in this user's FlowBots workspace. The teammate works in its own thread/computer while you continue. Identify it by bot_id or exact name.",
+      "Assign a durable task to another existing bot in this user's FlowBots workspace. The teammate works in its own context while you continue. Identify it by bot_id or exact name. Use read_task_result with the returned taskId for scoped results before synthesis.",
     inputSchema: {
       type: "object",
       properties: {
         bot_id: { type: "string", description: "Optional target bot id." },
         name: { type: "string", description: "Optional exact target bot name." },
         task: { type: "string", description: "Concrete work for the teammate to complete." },
+        context_summary: { type: "string", maxLength: 4000 },
+        constraints: { type: "array", maxItems: 6, items: { type: "string", maxLength: 200 } },
+        artifact_ids: { type: "array", maxItems: 8, items: { type: "string" } },
+        requested_output: { type: "string", maxLength: 1000 },
       },
       required: ["task"],
     },
@@ -284,7 +288,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "delegate_team",
     description:
-      "Fan out 1-4 durable tasks to existing teammate bots for parallel specialist work. FlowBots bounds the team size and returns concrete child run IDs. Read teammate updates before claiming or synthesizing their results.",
+      "Fan out 1-4 durable tasks to existing teammate bots for parallel specialist work. FlowBots returns child task and run IDs. Use read_task_result with each returned taskId before claiming or synthesizing results; private teammate history is not task-scoped evidence.",
     inputSchema: {
       type: "object",
       properties: {
@@ -302,8 +306,22 @@ export const builtinAgentTools: ConnectorTool[] = [
           },
         },
         synthesis_goal: { type: "string" },
+        context_summary: { type: "string", maxLength: 4000 },
+        constraints: { type: "array", maxItems: 6, items: { type: "string", maxLength: 200 } },
+        artifact_ids: { type: "array", maxItems: 8, items: { type: "string" } },
+        requested_output: { type: "string", maxLength: 1000 },
       },
       required: ["assignments"],
+    },
+  },
+  {
+    name: "read_task_result",
+    description:
+      "Read one delegated child task's persisted status, bounded result and artifact references. Pass the taskId returned by delegate_to_bot/delegate_team. Does not wake a bot. If unfinished, do other useful work or report pending; never repeatedly poll.",
+    inputSchema: {
+      type: "object",
+      properties: { task_id: { type: "string" } },
+      required: ["task_id"],
     },
   },
   {

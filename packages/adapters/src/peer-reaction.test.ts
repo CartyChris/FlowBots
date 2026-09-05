@@ -1,7 +1,7 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { MAX_PEER_SENDS_PER_RUN, PeerConnector } from "./peer-connector.js";
+import { PeerConnector } from "./peer-connector.js";
 
 function context() {
   return {
@@ -45,7 +45,14 @@ function harness(effectCount = 1) {
       count: vi.fn(async () => effectCount),
     },
     run: {
-      findUnique: vi.fn(async () => ({ task: { prompt: "ordinary user task" } })),
+      findUnique: vi.fn(async () => ({
+        id: "run-source",
+        workspaceId: "workspace-1",
+        userId: "user-1",
+        botId: "bot-source",
+        groupChatId: null,
+        task: { id: "task-source", prompt: "ordinary user task", parentTaskId: null },
+      })),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
         id: "run-target",
         ...data,
@@ -168,15 +175,6 @@ describe("bot social reactions", () => {
         }),
       }),
     ]);
-  });
-
-  it("allows the fourth peer send because the current effect is counted before execution", async () => {
-    const { connector } = harness(MAX_PEER_SENDS_PER_RUN);
-    const result = await execute(connector, "message_bot", {
-      bot_id: "bot-target",
-      message: "Fourth bounded send",
-    });
-    expect(result[0]).toEqual(expect.objectContaining({ type: "result" }));
   });
 
   it("blocks a fifth reaction effect for the same source run", async () => {

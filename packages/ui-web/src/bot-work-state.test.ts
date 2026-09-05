@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { botWorkStateForTool } from "./bot-work-state.js";
+import { botAvatarStateForPresence, botWorkStateForTool } from "./bot-work-state.js";
+
+describe("canonical presence avatar projection", () => {
+  it.each([
+    ["searching", "researching"],
+    ["browsing", "researching"],
+    ["coding", "building"],
+    ["running_command", "building"],
+    ["reviewing", "verifying"],
+    ["judging", "verifying"],
+    ["delegating", "collaborating"],
+    ["handing_off", "collaborating"],
+    ["failed", "error"],
+    ["needs_user", "surprised"],
+    ["blocked", "surprised"],
+    ["complete", "happy"],
+    ["cancelled", "idle"],
+    ["idle", "idle"],
+    ["queued", "thinking"],
+    ["thinking", "thinking"],
+  ])("maps %s to existing %s expression", (state, expected) => {
+    expect(botAvatarStateForPresence(state)).toBe(expected);
+  });
+
+  it("does not animate an unrecognized state as work", () => {
+    expect(botAvatarStateForPresence("unknown")).toBe("idle");
+  });
+});
 
 describe("semantic bot work states", () => {
   it("maps web retrieval to researching", () => {

@@ -26,6 +26,16 @@ function makeConnector(options: { sourceIsolated?: boolean; targetIsolated?: boo
     thread: { id: "thread-target" },
   };
   const prisma = {
+    run: {
+      findUnique: vi.fn(async () => ({
+        id: "run-1",
+        workspaceId: "workspace-1",
+        userId: "user-1",
+        botId: "bot-source",
+        groupChatId: null,
+        task: { id: "task-source", prompt: "Root private task", parentTaskId: null },
+      })),
+    },
     bot: {
       findUnique: vi.fn(async () => source),
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {

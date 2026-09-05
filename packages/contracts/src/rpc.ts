@@ -24,6 +24,7 @@ import {
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
 import { Id } from "./ids.js";
+import { MissionDetailSchema, MissionListSchema } from "./missions.js";
 
 const botId = z.object({ botId: Id });
 
@@ -139,6 +140,11 @@ export const appContract = {
     create: oc.input(CreateBotInput).output(BotSchema),
     update: oc.input(UpdateBotInput).output(BotSchema),
     remove: oc.input(botId).output(z.object({ ok: z.literal(true) })),
+  },
+  missions: {
+    list: oc.output(MissionListSchema),
+    get: oc.input(z.object({ taskId: Id })).output(MissionDetailSchema),
+    stop: oc.input(z.object({ taskId: Id })).output(z.object({ ok: z.literal(true) })),
   },
   groupChats: {
     list: oc.output(z.array(GroupChatSummarySchema)),

@@ -323,6 +323,13 @@ model Task {
   userId      String
   prompt      String
   status      String
+  parentTaskId String?
+  parentTask Task? @relation("TaskChildren", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks Task[] @relation("TaskChildren")
+  collaborationRequests CollaborationRequest[]
+  rootTaskId String?
+  collaborationKey String?
+  contextPacket Json?
   groupChatId String?
   groupChat   GroupChat? @relation(fields: [groupChatId], references: [id], onDelete: SetNull)
   groupPromptSeq Int?
@@ -332,7 +339,20 @@ model Task {
 
   @@index([workspaceId, botId])
   @@index([groupChatId, groupPromptSeq])
+  @@index([rootTaskId])
+  @@unique([parentTaskId, collaborationKey])
   @@map("tasks")
+}
+
+model CollaborationRequest {
+  parentTaskId String
+  parentTask Task @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
+  requestId String
+  requestHash String
+  createdAt DateTime @default(now())
+
+  @@id([parentTaskId, requestId])
+  @@map("collaboration_requests")
 }
 
 model Run {
