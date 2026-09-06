@@ -1,0 +1,40 @@
+name: capability verification
+
+on:
+  push:
+    branches: [feature/living-office-kernel]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capability-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Full capability verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      BETTER_AUTH_SECRET: ci-capability-auth-secret-at-least-32-characters
+      ENCRYPTION_KEY: ci-capability-encryption-key-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate database client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - run: pnpm lint
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+      - name: Native PostgreSQL journeys
+        run: pnpm test:integration
