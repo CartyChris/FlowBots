@@ -88,44 +88,69 @@ describeIntegration("run executor lifecycle", () => {
     ).resolves.toMatchObject({ status });
   });
 
-  it("fails closed when a retried external effect has an uncertain outcome", async () => {
-    const seeded = await seedRun("uncertain-effect", "write this to the destination crm as a note");
-    const executionId = `${seeded.run.id}:destination.write`;
-    await handles.prisma.externalEffect.create({
-      data: {
-        workspaceId: seeded.me.workspaceId,
-        runId: seeded.run.id,
-        kind: "destination.write",
-        idempotencyKey: executionId,
-        status: "intended",
-        request: { collection: "notes", title: "Result", body: "unknown" },
+  it.each([
+    {
+      name: "matching request",
+      request: {
+        collection: "notes",
+        title: "Rakazo result",
+        body: "write this to the destination crm as a note",
       },
-    });
-    const recordsBefore = handles.connector.records.length;
+      error: /uncertain outcome/,
+      reconciled: 1,
+    },
+    {
+      name: "mismatched request",
+      request: { collection: "notes", title: "Result", body: "unknown" },
+      error: /identity.*different request/,
+      reconciled: 0,
+    },
+  ])(
+    "fails closed for a retried external effect with an $name",
+    async ({ name, request, error, reconciled }) => {
+      const seeded = await seedRun(
+        `uncertain-effect-${name.replaceAll(" ", "-")}`,
+        "write this to the destination crm as a note",
+      );
+      const executionId = `${seeded.run.id}:destination.write`;
+      await handles.prisma.externalEffect.create({
+        data: {
+          workspaceId: seeded.me.workspaceId,
+          runId: seeded.run.id,
+          kind: "destination.write",
+          idempotencyKey: executionId,
+          status: "intended",
+          request,
+        },
+      });
+      const recordsBefore = handles.connector.records.length;
 
-    await handles.executor.continueRun(seeded.run.id, "retry-worker");
+      await handles.executor.continueRun(seeded.run.id, "retry-worker");
 
-    const [run, attempt, effect] = await Promise.all([
-      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      handles.prisma.attempt.findFirstOrThrow({ where: { runId: seeded.run.id } }),
-      handles.prisma.externalEffect.findUniqueOrThrow({ where: { idempotencyKey: executionId } }),
-    ]);
-    expect(run).toMatchObject({
-      status: "failed",
-      error: expect.stringMatching(/uncertain outcome/),
-    });
-    expect(attempt).toMatchObject({
-      status: "failed",
-      error: expect.stringMatching(/uncertain outcome/),
-    });
-    expect(effect.status).toBe("intended");
-    expect(handles.connector.records).toHaveLength(recordsBefore);
-    expect(
-      await handles.prisma.event.count({
-        where: { runId: seeded.run.id, type: "effect.reconciled" },
-      }),
-    ).toBe(1);
-  });
+      const [run, attempt, effect] = await Promise.all([
+        handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+        handles.prisma.attempt.findFirstOrThrow({ where: { runId: seeded.run.id } }),
+        handles.prisma.externalEffect.findUniqueOrThrow({
+          where: { idempotencyKey: executionId },
+        }),
+      ]);
+      expect(run).toMatchObject({
+        status: "failed",
+        error: expect.stringMatching(error),
+      });
+      expect(attempt).toMatchObject({
+        status: "failed",
+        error: expect.stringMatching(error),
+      });
+      expect(effect.status).toBe("intended");
+      expect(handles.connector.records).toHaveLength(recordsBefore);
+      expect(
+        await handles.prisma.event.count({
+          where: { runId: seeded.run.id, type: "effect.reconciled" },
+        }),
+      ).toBe(reconciled);
+    },
+  );
 
   it("fences concurrent terminal commits so only one final message is durable", async () => {
     const seeded = await seedRun("terminal-fence", "finish once", {

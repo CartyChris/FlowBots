@@ -11,6 +11,8 @@ const SAFE_EVENTS = [
   "collaboration.handoff.accepted",
   "agent.tool.started",
   "agent.tool.finished",
+  "action.approval.requested",
+  "action.approval.resolved",
 ];
 const SAFE_FIELDS = [
   "name",
@@ -22,6 +24,10 @@ const SAFE_FIELDS = [
   "targetBotId",
   "childRunId",
   "artifactIds",
+  "approvalId",
+  "tool",
+  "scope",
+  "decision",
 ];
 
 export async function listMissions(prisma: PrismaClient, actor: Actor) {

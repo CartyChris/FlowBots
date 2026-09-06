@@ -27,6 +27,8 @@ export const ProductEventType = z.enum([
   "agent.tool.called",
   "agent.tool.started",
   "agent.tool.finished",
+  "action.approval.requested",
+  "action.approval.resolved",
   "collaboration.handoff.started",
   "collaboration.handoff.accepted",
   "effect.reconciled",

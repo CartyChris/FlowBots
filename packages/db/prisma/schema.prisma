@@ -197,6 +197,8 @@ model Bot {
   runs           Run[]
   groupChatMemberships GroupChatMember[]
   groupMessages GroupMessage[]
+  actionPolicy BotActionPolicy?
+  actionApprovals ActionApproval[]
 
   @@index([workspaceId, userId])
   @@index([parentBotId])
@@ -385,6 +387,7 @@ model Run {
   updatedAt     DateTime  @updatedAt
   attempts      Attempt[]
   effects       ExternalEffect[]
+  actionApprovals ActionApproval[]
   usageRecords  UsageRecord[]
   groupMessages GroupMessage[]
 
@@ -394,6 +397,47 @@ model Run {
   @@index([workspaceId, botId])
   @@index([groupChatId, status])
   @@map("runs")
+}
+
+model BotActionPolicy {
+  botId       String @id
+  bot         Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  workspaceId String
+  userId      String
+  config      Json
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId, userId])
+  @@map("bot_action_policies")
+}
+
+model ActionApproval {
+  id           String @id @default(cuid())
+  botId        String
+  bot          Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  userId       String
+  runId        String
+  run          Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+  threadId     String
+  executionId  String
+  leaseOwner   String
+  leaseFence   Int
+  tool         String
+  computerKind String
+  scope        String
+  fingerprint  String
+  request      Json
+  preview      String
+  status       String @default("pending")
+  decision     String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  resolvedAt   DateTime?
+
+  @@unique([runId, executionId])
+  @@index([workspaceId, userId, status, createdAt])
+  @@map("action_approvals")
 }
 
 model Attempt {

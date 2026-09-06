@@ -1,5 +1,6 @@
 import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
+import { ActionApprovalSchema, ActionPolicySchema } from "./approvals.js";
 import {
   ArtifactSchema,
   BotSchema,
@@ -140,6 +141,23 @@ export const appContract = {
     create: oc.input(CreateBotInput).output(BotSchema),
     update: oc.input(UpdateBotInput).output(BotSchema),
     remove: oc.input(botId).output(z.object({ ok: z.literal(true) })),
+  },
+  approvals: {
+    list: oc
+      .input(z.object({ botId: Id.optional() }).optional())
+      .output(z.array(ActionApprovalSchema)),
+    policy: oc.input(botId).output(ActionPolicySchema),
+    savePolicy: oc
+      .input(z.object({ botId: Id, policy: ActionPolicySchema }))
+      .output(ActionPolicySchema),
+    resolve: oc
+      .input(
+        z.object({
+          approvalId: Id,
+          decision: z.enum(["allow-once", "allow-exact", "deny"]),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true) })),
   },
   missions: {
     list: oc.output(MissionListSchema),

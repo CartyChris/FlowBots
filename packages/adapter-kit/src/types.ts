@@ -240,6 +240,8 @@ export interface AgentRunRequest {
   };
   resumeFromCheckpoint?: string;
   script?: ScriptedTurn[];
+  /** Live authorization for controls handled inside the runtime rather than by executeTool. */
+  allowRuntimeTool?: (name: string) => Promise<boolean>;
   executeTool?: (
     name: string,
     args: Record<string, unknown>,
@@ -282,6 +284,8 @@ export interface AgentRuntimeCapabilities {
   streaming: boolean;
   compaction: boolean;
   tools: boolean;
+  /** All side-effecting model tools use the host executor callback, not a private host harness. */
+  executorTools?: boolean;
   scripted: boolean;
 }
 

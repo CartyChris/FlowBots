@@ -27,14 +27,21 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Generate database client
+      - id: install
+        run: pnpm install --frozen-lockfile
+      - id: generate
+        name: Generate database client
         run: pnpm db:generate
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-      - run: pnpm lint
-      - run: pnpm check
-      - run: pnpm test
-      - run: pnpm build
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm lint
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm check
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm test
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm build
       - name: Native PostgreSQL journeys
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
         run: pnpm test:integration

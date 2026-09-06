@@ -47,6 +47,7 @@ import { MessageReactions } from "./MessageReactions";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { RoutineSchedule } from "./RoutineSchedule";
+import { VoiceControls } from "./VoiceControls";
 import { WindowChrome } from "./WindowChrome";
 
 type Panel = "computer" | "settings" | "routine" | "create" | null;
@@ -99,6 +100,7 @@ export function ShellPage() {
   const activeBotIdRef = useRef<string | undefined>(active?.id);
   activeBotIdRef.current = active?.id;
   const activeRoutines = routinesBotId === active?.id ? routines : [];
+  const latestBotReply = latestThreadBotReply(snapshot?.messages ?? []);
 
   async function refreshBots() {
     const [list, nextGroups] = await Promise.all([rpc.bots.list(), rpc.groupChats.list()]);
@@ -703,6 +705,13 @@ export function ShellPage() {
               placeholder={active ? `Message ${active.name}` : "Message…"}
               className="flex-1 bg-transparent text-[15.5px] text-[#E9E9EA] outline-none"
             />
+            <VoiceControls
+              scopeKey={active?.id ?? "no-active-bot"}
+              onTranscript={(text) =>
+                setDraft((current) => `${current}${current.trim() ? " " : ""}${text}`)
+              }
+              latestReply={latestBotReply}
+            />
             {snapshot?.run && ["running", "queued", "leased"].includes(snapshot.run.status) ? (
               <button
                 type="button"
@@ -1130,6 +1139,19 @@ export function ShellPage() {
       ) : null}
     </div>
   );
+}
+
+function latestThreadBotReply(messages: ThreadMessage[]) {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== "bot") continue;
+    const text = message.blocks
+      .filter((block) => block.kind === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 function avatarStateFor(status: string | undefined): BotAvatarState {

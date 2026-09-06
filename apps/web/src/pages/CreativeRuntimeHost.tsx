@@ -9,6 +9,7 @@ import { BotAvatar, botAvatarStateForPresence, registerBotAvatarAppearances } fr
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { rpc } from "../lib/rpc";
+import { ActionApprovals } from "./ActionApprovals.js";
 import { BotLookStudio } from "./BotLookStudio.js";
 import {
   appearanceCapabilityForBot,
@@ -38,6 +39,7 @@ export function CreativeRuntimeHost() {
   const [workbenchBotId, setWorkbenchBotId] = useState<string | null>(null);
   const [lookBotId, setLookBotId] = useState<string | null>(null);
   const [steeringBotId, setSteeringBotId] = useState<string | null>(null);
+  const [approvalBotId, setApprovalBotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +55,10 @@ export function CreativeRuntimeHost() {
   const steeringBot = useMemo(
     () => bots.find((bot) => bot.id === (steeringBotId ?? botId)) ?? bots[0],
     [bots, botId, steeringBotId],
+  );
+  const approvalBot = useMemo(
+    () => bots.find((bot) => bot.id === (approvalBotId ?? botId)) ?? bots[0],
+    [bots, botId, approvalBotId],
   );
   const extensionInstructions = useMemo(
     () => (activeBot ? extensionInstructionsForBot(capabilities, activeBot.id) : []),
@@ -179,6 +185,22 @@ export function CreativeRuntimeHost() {
     }
   }
 
+  async function openActionApprovals(targetBotId = botId ?? null) {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await refresh();
+      const target = next.bots.find((bot) => bot.id === targetBotId) ?? next.bots[0];
+      if (!target) throw new Error("Create a bot before opening Action approvals.");
+      if (target.id !== botId) navigate(`/app/${target.id}`);
+      setApprovalBotId(target.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open Action approvals.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function saveLook(input: { color: string; appearance: BotAppearance }) {
     if (!lookBot) throw new Error("No bot is selected.");
     const existing = appearanceCapabilityForBot(capabilities, lookBot.id);
@@ -289,6 +311,18 @@ export function CreativeRuntimeHost() {
           </span>
           <span className="hidden sm:inline">Look</span>
         </button>
+        <button
+          type="button"
+          aria-label="Action approvals"
+          onClick={() => void openActionApprovals()}
+          disabled={loading}
+          className="rounded-xl px-2 py-2 font-medium text-[#AAAFA4] text-[10.5px] hover:bg-[#F5C76E]/[0.08] hover:text-[#FFF0C9] disabled:opacity-45 sm:px-2.5"
+        >
+          <span aria-hidden="true" className="mr-1 text-[#F5C76E] sm:mr-1.5">
+            ◉
+          </span>
+          <span className="hidden sm:inline">Approve</span>
+        </button>
       </div>
 
       {error ? (
@@ -301,7 +335,7 @@ export function CreativeRuntimeHost() {
         </button>
       ) : null}
 
-      {officeOpen && !workbenchBotId && !lookBotId && !steeringBotId ? (
+      {officeOpen && !workbenchBotId && !lookBotId && !steeringBotId && !approvalBotId ? (
         <VirtualOfficeOverlay
           bots={bots}
           activeBotId={botId ?? null}
@@ -350,6 +384,14 @@ export function CreativeRuntimeHost() {
           bot={steeringBot}
           onSave={saveSteering}
           onClose={() => setSteeringBotId(null)}
+        />
+      ) : null}
+
+      {approvalBotId && approvalBot ? (
+        <ActionApprovals
+          key={approvalBot.id}
+          bot={approvalBot}
+          onClose={() => setApprovalBotId(null)}
         />
       ) : null}
     </>

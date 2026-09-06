@@ -18,14 +18,18 @@ import {
   cliHarnessDefinitions,
   destroyBot,
   type EncryptedSecretStore,
+  getActionPolicy,
   HarnessRegistry,
+  listActionApprovals,
   listPiCatalog,
   type PiOAuthLogins,
+  resolveActionApproval,
   resolveAgentHomePath,
   resolveModelApiKey,
   restoreComputerWorkspace,
   runCliProcess,
   sanitizeComposioError,
+  saveActionPolicy,
   savePushToken,
   scheduleComputerSleep,
   scriptedCatalogEntry,
@@ -66,6 +70,7 @@ import {
 } from "./local-connectors.js";
 import { getMission, listMissions } from "./missions.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
+import { queueThreadAnswer } from "./thread-answer.js";
 import { loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
@@ -430,6 +435,27 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
     },
+    approvals: {
+      list: authed.approvals.list.handler(async ({ context, input }) =>
+        listActionApprovals(deps.prisma, context.actor, input?.botId),
+      ),
+      policy: authed.approvals.policy.handler(async ({ context, input }) =>
+        getActionPolicy(deps.prisma, context.actor, input.botId),
+      ),
+      savePolicy: authed.approvals.savePolicy.handler(async ({ context, input }) =>
+        saveActionPolicy(deps.prisma, context.actor, input.botId, input.policy),
+      ),
+      resolve: authed.approvals.resolve.handler(async ({ context, input }) => {
+        const result = await resolveActionApproval(
+          deps.prisma,
+          context.actor,
+          input.approvalId,
+          input.decision,
+        );
+        if (result.queued) await deps.jobs.enqueue(runContinueJob(result.runId));
+        return { ok: true as const };
+      }),
+    },
     missions: {
       list: authed.missions.list.handler(async ({ context }) =>
         listMissions(deps.prisma, context.actor),
@@ -760,15 +786,7 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
       answer: authed.threads.answer.handler(async ({ context, input }) => {
-        await repos.getBot(context.actor, input.botId);
-        await deps.prisma.run.update({
-          where: { id: input.runId, workspaceId: context.actor.workspaceId },
-          data: { status: "queued" },
-        });
-        await deps.prisma.task.updateMany({
-          where: { runs: { some: { id: input.runId } } },
-          data: { prompt: input.answer },
-        });
+        await queueThreadAnswer(deps.prisma, context.actor, input);
         await deps.jobs.enqueue(runContinueJob(input.runId));
         return { ok: true as const };
       }),

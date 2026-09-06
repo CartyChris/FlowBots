@@ -12,6 +12,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { rpc } from "../lib/rpc";
 import { GroupChatEditor } from "./GroupChatEditor";
 import { GroupRunPresence } from "./GroupRunPresence.js";
+import { VoiceControls } from "./VoiceControls.js";
 import { WindowChrome } from "./WindowChrome";
 
 export function GroupChatPage() {
@@ -59,6 +60,7 @@ export function GroupChatPage() {
     () => new Map((room?.members ?? []).map((member) => [member.botId, member])),
     [room?.members],
   );
+  const latestBotReply = latestGroupBotReply(room?.messages ?? []);
 
   async function send() {
     if (!room || !draft.trim() || sending) return;
@@ -263,6 +265,13 @@ export function GroupChatPage() {
                 rows={1}
                 className="max-h-36 min-h-[36px] flex-1 resize-none bg-transparent py-2 text-[14px] text-[#E8E8EA] outline-none placeholder:text-[#55555A]"
               />
+              <VoiceControls
+                scopeKey={groupChatId ?? room?.id ?? "no-group-chat"}
+                onTranscript={(text) =>
+                  setDraft((current) => `${current}${current.trim() ? " " : ""}${text}`)
+                }
+                latestReply={latestBotReply}
+              />
               <button
                 type="button"
                 aria-label="Send group message"
@@ -299,6 +308,19 @@ export function GroupChatPage() {
       ) : null}
     </div>
   );
+}
+
+function latestGroupBotReply(messages: GroupChatMessage[]) {
+  for (const message of [...messages].reverse()) {
+    if (message.authorKind !== "bot") continue;
+    const text = message.blocks
+      .filter((block) => block.kind === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 function GroupMessageRow({
