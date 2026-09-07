@@ -1391,7 +1391,11 @@ function MessageView({
         }
         return null;
       })}
-      {message.role === "bot" ? <MessageReactions messageId={message.id} /> : null}
+      {message.role === "bot" &&
+      !message.id.startsWith("progress:") &&
+      !message.id.startsWith("subagent:") ? (
+        <MessageReactions messageId={message.id} />
+      ) : null}
     </>
   );
 }

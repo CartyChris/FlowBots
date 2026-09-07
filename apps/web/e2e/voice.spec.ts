@@ -66,13 +66,18 @@ async function installVoiceDouble(page: Page) {
       }
     }
     window.__voiceTest = { starts: 0, aborts: 0, instances: [] };
-    (window as unknown as { webkitSpeechRecognition: typeof Recognition }).webkitSpeechRecognition =
-      class extends Recognition {
-        constructor() {
-          super();
-          window.__voiceTest.instances.push(this);
-        }
-      };
+    const DoubleRecognition = class extends Recognition {
+      constructor() {
+        super();
+        window.__voiceTest.instances.push(this);
+      }
+    };
+    const browser = window as unknown as {
+      SpeechRecognition: typeof Recognition;
+      webkitSpeechRecognition: typeof Recognition;
+    };
+    browser.SpeechRecognition = DoubleRecognition;
+    browser.webkitSpeechRecognition = DoubleRecognition;
   });
 }
 
