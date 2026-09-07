@@ -481,8 +481,10 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   if (host.depth > 0) return "Subagents cannot nest further.";
   await host.subagentGate.acquire();
   try {
-    if (host.signal.aborted || (host.request.allowRuntimeTool &&
-      !(await host.request.allowRuntimeTool("run_subagent"))))
+    if (
+      host.signal.aborted ||
+      (host.request.allowRuntimeTool && !(await host.request.allowRuntimeTool("run_subagent")))
+    )
       throw new Error("Subagent is not permitted by the current policy or run state.");
   } catch (error) {
     host.subagentGate.release();

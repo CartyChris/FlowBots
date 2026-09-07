@@ -214,8 +214,8 @@ export function ActionApprovals({ bot, onClose }: { bot: Bot; onClose: () => voi
             </label>
             <p className="mt-2 text-[#AEB0AA] text-xs">{POLICY_COPY[draftPolicy.mode]}</p>
             <p className="mt-2 text-[#858680] text-xs">
-              Review, read-only, and custom-rule policies disable runtime-owned subagents and takeover.
-              Ordinary bot collaboration remains subject to each bot's policy.
+              Review, read-only, and custom-rule policies disable runtime-owned subagents and
+              takeover. Ordinary bot collaboration remains subject to each bot's policy.
             </p>
             {draftPolicy.rules.filter((rule) => rule.decision === "allow" && rule.fingerprint)
               .length > 0 ? (
