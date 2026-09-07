@@ -17,6 +17,11 @@ type Scope = Pick<Actor, "workspaceId" | "userId">;
 type Database = PrismaClient | Prisma.TransactionClient;
 export const APPROVAL_CHECKPOINT_PREFIX = "approval:";
 
+/** Actors carry presentation/auth fields; never spread those into Prisma filters or writes. */
+function scopeFields(scope: Scope) {
+  return { workspaceId: scope.workspaceId, userId: scope.userId };
+}
+
 export function actionFingerprint(
   tool: string,
   computerKind: string,
@@ -45,7 +50,7 @@ function previewAction(args: Record<string, unknown>, secrets: string[]) {
 }
 
 async function requireBot(db: Database, scope: Scope, botId: string) {
-  const bot = await db.bot.findFirst({ where: { id: botId, ...scope } });
+  const bot = await db.bot.findFirst({ where: { id: botId, ...scopeFields(scope) } });
   if (!bot) throw new IsolationError();
   return bot;
 }
@@ -56,7 +61,7 @@ export async function getActionPolicy(
   botId: string,
 ): Promise<ActionPolicy> {
   await requireBot(db, scope, botId);
-  const row = await db.botActionPolicy.findFirst({ where: { ...scope, botId } });
+  const row = await db.botActionPolicy.findFirst({ where: { ...scopeFields(scope), botId } });
   if (!row) return { mode: "legacy", rules: [] };
   const parsed = ActionPolicySchema.safeParse(row.config);
   return parsed.success ? parsed.data : { mode: "read-only", rules: [] };
@@ -69,12 +74,13 @@ export async function saveActionPolicy(
   input: ActionPolicy,
 ) {
   const policy = ActionPolicySchema.parse(input);
+  const scoped = scopeFields(scope);
   return prisma.$transaction(async (tx) => {
     await requireBot(tx, scope, botId);
     await tx.$queryRaw`SELECT id FROM bots WHERE id = ${botId} FOR UPDATE`;
     await tx.botActionPolicy.upsert({
       where: { botId },
-      create: { ...scope, botId, config: policy },
+      create: { ...scoped, botId, config: policy },
       update: { config: policy },
     });
     return policy;
@@ -196,17 +202,23 @@ export async function resolveActionApproval(
   approvalId: string,
   decision: "allow-once" | "allow-exact" | "deny",
 ) {
+  const scoped = scopeFields(scope);
   return prisma.$transaction(async (tx) => {
-    const initial = await tx.actionApproval.findFirst({ where: { ...scope, id: approvalId } });
+    const initial = await tx.actionApproval.findFirst({ where: { ...scoped, id: approvalId } });
     if (!initial) throw new IsolationError();
     await requireBot(tx, scope, initial.botId);
     await tx.$queryRaw`SELECT id FROM bots WHERE id = ${initial.botId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM runs WHERE id = ${initial.runId} FOR UPDATE`;
     const approval = await tx.actionApproval.findFirstOrThrow({
-      where: { ...scope, id: approvalId },
+      where: { ...scoped, id: approvalId },
     });
     const run = await tx.run.findFirst({
-      where: { ...scope, id: approval.runId, botId: approval.botId, threadId: approval.threadId },
+      where: {
+        ...scoped,
+        id: approval.runId,
+        botId: approval.botId,
+        threadId: approval.threadId,
+      },
     });
     if (!run || ["cancelled", "failed", "completed"].includes(run.status))
       throw new Error("This run has stopped; its approval cannot execute");
@@ -240,7 +252,7 @@ export async function resolveActionApproval(
       const config = ActionPolicySchema.parse({ ...policy, rules });
       await tx.botActionPolicy.upsert({
         where: { botId: run.botId },
-        create: { ...scope, botId: run.botId, config },
+        create: { ...scoped, botId: run.botId, config },
         update: { config },
       });
     }
@@ -269,15 +281,16 @@ export async function resolveActionApproval(
 }
 
 export async function listActionApprovals(prisma: PrismaClient, scope: Scope, botId?: string) {
+  const scoped = scopeFields(scope);
   if (botId) await requireBot(prisma, scope, botId);
   const rows = await prisma.actionApproval.findMany({
-    where: { ...scope, ...(botId ? { botId } : {}) },
+    where: { ...scoped, ...(botId ? { botId } : {}) },
     include: { bot: { select: { name: true } } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 100,
   });
   const runs = await prisma.run.findMany({
-    where: { ...scope, id: { in: rows.map((row) => row.runId) } },
+    where: { ...scoped, id: { in: rows.map((row) => row.runId) } },
     select: { id: true, status: true },
   });
   const states = new Map(runs.map((run) => [run.id, run.status]));
