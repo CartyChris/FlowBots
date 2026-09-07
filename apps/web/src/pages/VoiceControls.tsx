@@ -97,7 +97,7 @@ export function VoiceControls({
 
   return (
     <fieldset
-      className="m-0 flex shrink-0 items-center gap-1.5 border-0 p-0"
+      className="relative m-0 flex shrink-0 items-center gap-1.5 border-0 p-0"
       aria-label="Voice controls"
     >
       <button
