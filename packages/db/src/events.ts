@@ -150,7 +150,10 @@ export async function finalizeRun(
   return true;
 }
 
-async function appendEventInTransaction(tx: Prisma.TransactionClient, input: AppendEventInput) {
+export async function appendEventInTransaction(
+  tx: Prisma.TransactionClient,
+  input: AppendEventInput,
+) {
   const thread = await tx.thread.update({
     where: { id: input.threadId },
     data: { nextEventSeq: { increment: 1 } },

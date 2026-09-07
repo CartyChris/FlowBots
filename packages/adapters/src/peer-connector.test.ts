@@ -20,7 +20,9 @@ function context(runId = "run-source") {
   };
 }
 
-function harness(options: { effectCount?: number; hop?: number } = {}) {
+function harness(
+  options: { effectCount?: number; hop?: number; sourceRun?: Record<string, unknown> | null } = {},
+) {
   const source = {
     id: "bot-source",
     name: "Chief",
@@ -49,12 +51,19 @@ function harness(options: { effectCount?: number; hop?: number } = {}) {
     run: {
       findUnique: vi.fn(async () => ({
         id: "run-source",
+        workspaceId: "workspace-1",
+        userId: "user-1",
+        botId: "bot-source",
+        groupChatId: null,
         task: {
+          id: "task-source",
+          parentTaskId: null,
           prompt:
             options.hop == null
               ? "ordinary user task"
               : `${peerHopHeader(options.hop, "bot-parent")}\npeer task`,
         },
+        ...options.sourceRun,
       })),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
         id: "run-target",
@@ -79,6 +88,7 @@ function harness(options: { effectCount?: number; hop?: number } = {}) {
         },
       ]),
     },
+    artifact: { findMany: vi.fn(async () => []) },
   } as unknown as PrismaClient;
   const jobs = {
     enqueue: vi.fn(async () => undefined),
@@ -98,6 +108,7 @@ function harness(options: { effectCount?: number; hop?: number } = {}) {
     createdAt: new Date("2026-08-18T20:00:00Z"),
   }));
   const connector = new PeerConnector({ prisma, jobs, events, writeMessage });
+  if (options.sourceRun === null) vi.mocked(prisma.run.findUnique).mockResolvedValue(null);
   return { connector, prisma, jobs, events, writeMessage, source, target };
 }
 
@@ -124,55 +135,73 @@ describe("PeerConnector", () => {
     expect(names).toContain("message_bot");
     expect(names).toContain("delegate_to_bot");
     expect(names).toContain("read_bot_updates");
+    expect(names).toContain("read_task_result");
   });
 
-  it("writes peer origin into the target thread and queues one bounded follow-up run", async () => {
-    const { connector, prisma, jobs, events, writeMessage, target } = harness();
+  it("advertises compact context and artifact references for discovered delegation", async () => {
+    const { connector } = harness();
+    const tools = await connector.discoverTools(context());
+    for (const name of ["delegate_to_bot", "delegate_team"]) {
+      expect(tools.find((tool) => tool.name === name)?.inputSchema).toMatchObject({
+        properties: {
+          context_summary: { type: "string" },
+          artifact_ids: { type: "array" },
+          requested_output: { type: "string" },
+        },
+      });
+    }
+  });
+
+  it("cannot wake a peer when its source run does not exist", async () => {
+    const { connector, jobs, writeMessage, target } = harness({ sourceRun: null });
     const result = await execute(connector, "message_bot", {
       bot_id: target.id,
       message: "Please check venue availability.",
     });
 
     expect(result).toEqual([
-      expect.objectContaining({
-        type: "result",
-        data: expect.objectContaining({ ok: true, botId: target.id, runId: "run-target" }),
-      }),
+      expect.objectContaining({ type: "error", message: expect.stringMatching(/source run/i) }),
     ]);
-    expect(writeMessage).toHaveBeenCalledWith(
-      prisma,
-      expect.objectContaining({
-        threadId: target.thread.id,
-        role: "system",
-        blocks: [
-          expect.objectContaining({
-            kind: "meta",
-            text: expect.stringMatching(/From Chief.*peer/i),
-          }),
-          { kind: "text", text: "Please check venue availability." },
-        ],
-      }),
-    );
-    expect(prisma.task.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        botId: target.id,
-        threadId: target.thread.id,
-        prompt: expect.stringMatching(/flowbots-peer.*hop=1/i),
-      }),
-    });
-    expect(prisma.run.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ botId: target.id, trigger: "follow_up" }),
-    });
-    expect(jobs.enqueue).toHaveBeenCalledTimes(1);
-    expect(events.append).toHaveBeenCalledWith(
-      expect.objectContaining({
-        threadId: target.thread.id,
-        botId: target.id,
-        type: "thread.message.created",
-        payload: expect.objectContaining({ sourceBotId: "bot-source", peer: true }),
-      }),
-    );
+    expect(writeMessage).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
   });
+
+  it.each(["read_bot_updates", "consult_teammate"])(
+    "%s forbids room or child runs from reading private history",
+    async (tool) => {
+      for (const sourceRun of [
+        { groupChatId: "room-1" },
+        { task: { id: "task-source", prompt: "scoped", parentTaskId: "parent-task" } },
+      ]) {
+        const { connector } = harness({ sourceRun });
+        const result = await execute(connector, tool, { bot_id: "bot-target" });
+        expect(result).toEqual([
+          expect.objectContaining({
+            type: "error",
+            message: expect.stringMatching(/read_task_result/),
+          }),
+        ]);
+      }
+    },
+  );
+
+  it.each(["read_bot_updates", "consult_teammate"])(
+    "%s validates the source run owner, workspace and bot",
+    async (tool) => {
+      for (const sourceRun of [
+        null,
+        { workspaceId: "other-workspace" },
+        { userId: "other-user" },
+        { botId: "other-bot" },
+      ]) {
+        const { connector } = harness({ sourceRun });
+        const result = await execute(connector, tool, { bot_id: "bot-target" });
+        expect(result).toEqual([
+          expect.objectContaining({ type: "error", message: expect.stringMatching(/source run/i) }),
+        ]);
+      }
+    },
+  );
 
   it("stops outbound collaboration when the per-run send budget is exhausted", async () => {
     const { connector, writeMessage, jobs } = harness({ effectCount: MAX_PEER_SENDS_PER_RUN + 1 });

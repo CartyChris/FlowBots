@@ -1,5 +1,6 @@
 import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
+import { ActionApprovalSchema, ActionPolicySchema } from "./approvals.js";
 import {
   ArtifactSchema,
   BotSchema,
@@ -11,6 +12,8 @@ import {
   CreateRoutineInput,
   DeploymentSettingsSchema,
   ExportManifestSchema,
+  GroupChatSnapshotSchema,
+  GroupChatSummarySchema,
   MemoryDocumentSchema,
   MeSchema,
   ModelCredentialSchema,
@@ -22,6 +25,7 @@ import {
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
 import { Id } from "./ids.js";
+import { MissionDetailSchema, MissionListSchema } from "./missions.js";
 
 const botId = z.object({ botId: Id });
 
@@ -137,6 +141,64 @@ export const appContract = {
     create: oc.input(CreateBotInput).output(BotSchema),
     update: oc.input(UpdateBotInput).output(BotSchema),
     remove: oc.input(botId).output(z.object({ ok: z.literal(true) })),
+  },
+  approvals: {
+    list: oc
+      .input(z.object({ botId: Id.optional() }).optional())
+      .output(z.array(ActionApprovalSchema)),
+    policy: oc.input(botId).output(ActionPolicySchema),
+    savePolicy: oc
+      .input(z.object({ botId: Id, policy: ActionPolicySchema }))
+      .output(ActionPolicySchema),
+    resolve: oc
+      .input(
+        z.object({
+          approvalId: Id,
+          decision: z.enum(["allow-once", "allow-exact", "deny"]),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true) })),
+  },
+  missions: {
+    list: oc.output(MissionListSchema),
+    get: oc.input(z.object({ taskId: Id })).output(MissionDetailSchema),
+    stop: oc.input(z.object({ taskId: Id })).output(z.object({ ok: z.literal(true) })),
+  },
+  groupChats: {
+    list: oc.output(z.array(GroupChatSummarySchema)),
+    get: oc.input(z.object({ groupChatId: Id })).output(GroupChatSnapshotSchema),
+    create: oc
+      .input(
+        z.object({ name: z.string().trim().min(1).max(80), botIds: z.array(Id).min(2).max(12) }),
+      )
+      .output(GroupChatSnapshotSchema),
+    update: oc
+      .input(
+        z.object({
+          groupChatId: Id,
+          name: z.string().trim().min(1).max(80).optional(),
+          botIds: z.array(Id).min(2).max(12).optional(),
+        }),
+      )
+      .output(GroupChatSnapshotSchema),
+    remove: oc.input(z.object({ groupChatId: Id })).output(z.object({ ok: z.literal(true) })),
+    send: oc
+      .input(
+        z.object({
+          groupChatId: Id,
+          text: z.string().min(1),
+          clientNonce: z.string().max(160).optional(),
+        }),
+      )
+      .output(
+        z.object({
+          messageSeq: z.number().int().nonnegative(),
+          responderBotIds: z.array(Id),
+          busyBotIds: z.array(Id),
+          runIds: z.array(Id),
+        }),
+      ),
+    stop: oc.input(z.object({ groupChatId: Id })).output(z.object({ ok: z.literal(true) })),
   },
   threads: {
     get: oc.input(z.object({ botId: Id })).output(ThreadSnapshotSchema),

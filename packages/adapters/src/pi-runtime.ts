@@ -38,7 +38,13 @@ export class PiAgentRuntime implements AgentRuntime {
       id: "pi",
       contractVersion: "1",
       adapterVersion: "0.1.0",
-      capabilities: { streaming: true, compaction: true, tools: true, scripted: false },
+      capabilities: {
+        streaming: true,
+        compaction: true,
+        tools: true,
+        scripted: false,
+        executorTools: true,
+      },
     };
   }
 
@@ -428,6 +434,15 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
       const args = (params ?? {}) as Record<string, unknown>;
       const executionId = toolCallId || `${host.request.runId}:${tool.name}`;
       host.queue.push({ type: "tool", name: tool.name, args, executionId });
+      if (tool.name === "request_takeover" || tool.name === "run_subagent") {
+        if (
+          host.signal.aborted ||
+          (host.request.allowRuntimeTool && !(await host.request.allowRuntimeTool(tool.name)))
+        )
+          throw new Error(
+            "This runtime control is not permitted by the current policy or run state.",
+          );
+      }
       if (tool.name === "request_takeover") {
         host.queue.push({
           type: "takeover",
@@ -465,6 +480,16 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
 async function executeSubagent(host: ToolHost, executionId: string, args: Record<string, unknown>) {
   if (host.depth > 0) return "Subagents cannot nest further.";
   await host.subagentGate.acquire();
+  try {
+    if (
+      host.signal.aborted ||
+      (host.request.allowRuntimeTool && !(await host.request.allowRuntimeTool("run_subagent")))
+    )
+      throw new Error("Subagent is not permitted by the current policy or run state.");
+  } catch (error) {
+    host.subagentGate.release();
+    throw error;
+  }
   const agentId = executionId;
   const name =
     String(args.name ?? "helper")

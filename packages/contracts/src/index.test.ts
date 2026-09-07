@@ -27,6 +27,9 @@ describe("contracts", () => {
     expect(appContract.models.completeOAuth).toBeTruthy();
     expect(appContract.bots.create).toBeTruthy();
     expect(appContract.bots.remove).toBeTruthy();
+    expect(appContract.approvals.list).toBeTruthy();
+    expect(appContract.approvals.savePolicy).toBeTruthy();
+    expect(appContract.approvals.resolve).toBeTruthy();
     expect(appContract.threads.subscribe).toBeTruthy();
     expect(appContract.notifications.registerPush).toBeTruthy();
     expect(ProductEventType.options).toContain("thread.message.created");

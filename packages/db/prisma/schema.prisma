@@ -100,6 +100,7 @@ model Organization {
   notificationPreferences NotificationPreference[]
   computers   Computer[]
   externalEffects ExternalEffect[]
+  groupChats GroupChat[]
 
   @@unique([slug])
   @@map("organization")
@@ -194,6 +195,10 @@ model Bot {
   usageRecords   UsageRecord[]
   tasks          Task[]
   runs           Run[]
+  groupChatMemberships GroupChatMember[]
+  groupMessages GroupMessage[]
+  actionPolicy BotActionPolicy?
+  actionApprovals ActionApproval[]
 
   @@index([workspaceId, userId])
   @@index([parentBotId])
@@ -234,6 +239,61 @@ model Message {
   @@map("messages")
 }
 
+model GroupChat {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  workspace      Organization @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId         String
+  name           String
+  nextMessageSeq Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  members        GroupChatMember[]
+  messages       GroupMessage[]
+  tasks          Task[]
+  runs           Run[]
+
+  @@index([workspaceId, userId, updatedAt])
+  @@map("group_chats")
+}
+
+model GroupChatMember {
+  groupChatId String
+  groupChat   GroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  botId       String
+  bot         Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  position    Int       @default(0)
+  joinedAt    DateTime  @default(now())
+
+  @@id([groupChatId, botId])
+  @@index([botId])
+  @@map("group_chat_members")
+}
+
+model GroupMessage {
+  id          String   @id @default(cuid())
+  groupChatId String
+  groupChat   GroupChat @relation(fields: [groupChatId], references: [id], onDelete: Cascade)
+  seq         Int
+  authorKind  String
+  botId       String?
+  bot         Bot?     @relation(fields: [botId], references: [id], onDelete: SetNull)
+  authorName  String?
+  authorColor String?
+  blocks      Json
+  runId       String?
+  run         Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  clientNonce String?
+  createdAt   DateTime @default(now())
+
+  @@unique([groupChatId, seq])
+  @@unique([groupChatId, clientNonce])
+  @@index([groupChatId, seq])
+  @@index([botId, createdAt])
+  @@index([runId])
+  @@map("group_messages")
+}
+
 model Event {
   id          String   @id @default(cuid())
   workspaceId String
@@ -265,12 +325,36 @@ model Task {
   userId      String
   prompt      String
   status      String
+  parentTaskId String?
+  parentTask Task? @relation("TaskChildren", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks Task[] @relation("TaskChildren")
+  collaborationRequests CollaborationRequest[]
+  rootTaskId String?
+  collaborationKey String?
+  contextPacket Json?
+  groupChatId String?
+  groupChat   GroupChat? @relation(fields: [groupChatId], references: [id], onDelete: SetNull)
+  groupPromptSeq Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   runs        Run[]
 
   @@index([workspaceId, botId])
+  @@index([groupChatId, groupPromptSeq])
+  @@index([rootTaskId])
+  @@unique([parentTaskId, collaborationKey])
   @@map("tasks")
+}
+
+model CollaborationRequest {
+  parentTaskId String
+  parentTask Task @relation(fields: [parentTaskId], references: [id], onDelete: Cascade)
+  requestId String
+  requestHash String
+  createdAt DateTime @default(now())
+
+  @@id([parentTaskId, requestId])
+  @@map("collaboration_requests")
 }
 
 model Run {
@@ -286,6 +370,9 @@ model Run {
   userId        String
   status        String
   trigger       String
+  groupChatId   String?
+  groupChat     GroupChat? @relation(fields: [groupChatId], references: [id], onDelete: SetNull)
+  groupPromptSeq Int?
   modelProvider String?
   modelId       String?
   error         String?
@@ -300,13 +387,57 @@ model Run {
   updatedAt     DateTime  @updatedAt
   attempts      Attempt[]
   effects       ExternalEffect[]
+  actionApprovals ActionApproval[]
   usageRecords  UsageRecord[]
+  groupMessages GroupMessage[]
 
   @@unique([workspaceId, clientNonce])
   @@index([status, leaseExpiresAt])
   @@index([status, updatedAt, id])
   @@index([workspaceId, botId])
+  @@index([groupChatId, status])
   @@map("runs")
+}
+
+model BotActionPolicy {
+  botId       String @id
+  bot         Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  workspaceId String
+  userId      String
+  config      Json
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId, userId])
+  @@map("bot_action_policies")
+}
+
+model ActionApproval {
+  id           String @id @default(cuid())
+  botId        String
+  bot          Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  userId       String
+  runId        String
+  run          Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+  threadId     String
+  executionId  String
+  leaseOwner   String
+  leaseFence   Int
+  tool         String
+  computerKind String
+  scope        String
+  fingerprint  String
+  request      Json
+  preview      String
+  status       String @default("pending")
+  decision     String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  resolvedAt   DateTime?
+
+  @@unique([runId, executionId])
+  @@index([workspaceId, userId, status, createdAt])
+  @@map("action_approvals")
 }
 
 model Attempt {

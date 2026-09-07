@@ -16,5 +16,10 @@ export {
   registerBotAvatarAppearances,
   Wordmark,
 } from "./bot-avatar.js";
+export {
+  botAvatarStateForPresence,
+  botWorkStateForTool,
+  type SemanticBotWorkState,
+} from "./bot-work-state.js";
 export { Button, buttonVariants } from "./button.js";
 export { cn } from "./lib/utils.js";

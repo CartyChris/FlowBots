@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { authClient } from "./lib/auth";
 import { AuthPage } from "./pages/Auth";
+import { GroupChatPage } from "./pages/GroupChat";
 import { OnboardingPage } from "./pages/Onboarding";
 import { ShellPage } from "./pages/Shell";
 import { WelcomePage } from "./pages/Welcome";
@@ -25,6 +26,10 @@ export function App() {
       <Route
         path="/onboarding"
         element={user ? <OnboardingPage /> : <Navigate to="/sign-in" replace />}
+      />
+      <Route
+        path="/groups/:groupChatId"
+        element={user ? <GroupChatPage /> : <Navigate to="/sign-in" replace />}
       />
       <Route path="/app" element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />} />
       <Route

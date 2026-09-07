@@ -256,8 +256,21 @@
   animation-duration: 1.7s;
 }
 
-.rk-bot-avatar[data-bot-state="working"] .rk-bot-gaze {
+.rk-bot-avatar[data-bot-state="working"] .rk-bot-gaze,
+.rk-bot-avatar[data-bot-state="building"] .rk-bot-gaze {
   animation-duration: 0.95s;
+}
+
+.rk-bot-avatar[data-bot-state="researching"] .rk-bot-gaze {
+  animation-duration: 1.15s;
+}
+
+.rk-bot-avatar[data-bot-state="verifying"] .rk-bot-gaze {
+  animation-duration: 1.45s;
+}
+
+.rk-bot-avatar[data-bot-state="collaborating"] .rk-bot-gaze {
+  animation-duration: 1.05s;
 }
 
 .rk-bot-avatar[data-bot-state="error"] > svg {
@@ -383,6 +396,30 @@
 .rk-bot-emote-file {
   animation-delay: 1.8s;
   color: #8edff7;
+}
+
+.rk-bot-semantic-research {
+  filter: drop-shadow(0 5px 12px rgba(142, 223, 247, 0.42));
+}
+
+.rk-bot-semantic-verify {
+  filter: drop-shadow(0 5px 12px rgba(189, 242, 104, 0.42));
+}
+
+.rk-bot-semantic-collab {
+  filter: drop-shadow(0 5px 12px rgba(216, 197, 255, 0.42));
+}
+
+.rk-bot-avatar[data-bot-state="researching"] .rk-bot-presence {
+  background: #8edff7;
+}
+
+.rk-bot-avatar[data-bot-state="verifying"] .rk-bot-presence {
+  background: #bdf268;
+}
+
+.rk-bot-avatar[data-bot-state="collaborating"] .rk-bot-presence {
+  background: #d8c5ff;
 }
 
 .rk-bot-thought-orbit {

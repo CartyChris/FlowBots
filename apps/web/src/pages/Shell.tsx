@@ -2,6 +2,7 @@ import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type {
   Bot,
   ComputerStatus,
+  GroupChatSummary,
   ProductEvent,
   Routine,
   ThreadMessage,
@@ -18,7 +19,15 @@ import {
   formatCron,
   presetFromCron,
 } from "@rakazo/core";
-import { BOT_AVATAR_FACE_CHOICES, BotAvatar, type BotAvatarState, Button } from "@rakazo/ui-web";
+import {
+  BOT_AVATAR_FACE_CHOICES,
+  BotAvatar,
+  type BotAvatarState,
+  Button,
+  botAvatarStateForPresence,
+  botWorkStateForTool,
+  type SemanticBotWorkState,
+} from "@rakazo/ui-web";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
@@ -30,6 +39,7 @@ import {
   reduceThreadSnapshot,
 } from "../lib/thread-events";
 import { ComposerActions } from "./ComposerActions";
+import { GroupChatEditor } from "./GroupChatEditor";
 import { HarnessesOverlay } from "./HarnessesOverlay";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import { McpOverlay } from "./McpOverlay";
@@ -37,6 +47,7 @@ import { MessageReactions } from "./MessageReactions";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { RoutineSchedule } from "./RoutineSchedule";
+import { VoiceControls } from "./VoiceControls";
 import { WindowChrome } from "./WindowChrome";
 
 type Panel = "computer" | "settings" | "routine" | "create" | null;
@@ -46,6 +57,8 @@ export function ShellPage() {
   const navigate = useNavigate();
   const session = authClient.useSession();
   const [bots, setBots] = useState<Bot[]>([]);
+  const [groups, setGroups] = useState<GroupChatSummary[]>([]);
+  const [groupEditorOpen, setGroupEditorOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [draft, setDraft] = useState("");
@@ -60,6 +73,8 @@ export function ShellPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [booting, setBooting] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [activeWorkState, setActiveWorkState] = useState<SemanticBotWorkState | null>(null);
+  const workStateTimer = useRef<number | null>(null);
   const [routineDraft, setRoutineDraft] = useState({
     name: "",
     prompt: "",
@@ -79,19 +94,24 @@ export function ShellPage() {
   const expandedHistoryThread = useRef<string | null>(null);
   const messageScroll = useRef<HTMLDivElement>(null);
 
+  const routeBotIdRef = useRef<string | undefined>(botId);
+  routeBotIdRef.current = botId;
   const active = bots.find((b) => b.id === botId) ?? bots[0];
   const activeBotIdRef = useRef<string | undefined>(active?.id);
   activeBotIdRef.current = active?.id;
   const activeRoutines = routinesBotId === active?.id ? routines : [];
+  const latestBotReply = latestThreadBotReply(snapshot?.messages ?? []);
 
   async function refreshBots() {
-    const list = await rpc.bots.list();
+    const [list, nextGroups] = await Promise.all([rpc.bots.list(), rpc.groupChats.list()]);
     setBots(list);
+    setGroups(nextGroups);
     if (list.length === 0) {
       navigate("/onboarding", { replace: true });
       return;
     }
-    if (!botId || !list.some((bot) => bot.id === botId)) {
+    const selectedBotId = routeBotIdRef.current;
+    if (!selectedBotId || !list.some((bot) => bot.id === selectedBotId)) {
       navigate(`/app/${list[0]!.id}`, { replace: true });
     }
   }
@@ -171,6 +191,23 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
+            if (event.type === "agent.tool.called") {
+              const toolName = String(event.payload.name ?? "");
+              const semantic = botWorkStateForTool(toolName);
+              if (semantic) {
+                if (workStateTimer.current != null) window.clearTimeout(workStateTimer.current);
+                setActiveWorkState(semantic);
+                workStateTimer.current = window.setTimeout(() => {
+                  setActiveWorkState(null);
+                  workStateTimer.current = null;
+                }, 3_200);
+              }
+            }
+            if (event.type === "run.completed") {
+              if (workStateTimer.current != null) window.clearTimeout(workStateTimer.current);
+              workStateTimer.current = null;
+              setActiveWorkState(null);
+            }
             applyThreadEvent(event, setSnapshot, setComputer);
             if (
               event.type === "bot.spawned" ||
@@ -204,6 +241,9 @@ export function ShellPage() {
     })();
     return () => {
       abort.abort();
+      if (workStateTimer.current != null) window.clearTimeout(workStateTimer.current);
+      workStateTimer.current = null;
+      setActiveWorkState(null);
     };
   }, [active?.id]);
 
@@ -218,6 +258,12 @@ export function ShellPage() {
     setDraft("");
     await rpc.threads.send({ botId: active.id, text });
     await refreshThread(active.id);
+  }
+
+  async function createGroup(input: { name: string; botIds: string[] }) {
+    const room = await rpc.groupChats.create(input);
+    setGroupEditorOpen(false);
+    navigate(`/groups/${room.id}`);
   }
 
   async function createBot(input: { name: string; title: string; description: string }) {
@@ -343,6 +389,14 @@ export function ShellPage() {
   return (
     <div className="relative flex h-full min-w-0 overflow-hidden bg-[#050506] text-[#DFDFE2]">
       <HostComputerPrompt />
+      {groupEditorOpen ? (
+        <GroupChatEditor
+          bots={bots}
+          mode="create"
+          onSave={createGroup}
+          onClose={() => setGroupEditorOpen(false)}
+        />
+      ) : null}
       <aside className="flex w-[316px] shrink-0 flex-col border-r border-[#171719] bg-[#0B0B0C]">
         <div className="app-drag flex items-center justify-between px-[18px] pb-3 pt-4">
           <WindowChrome />
@@ -364,6 +418,49 @@ export function ShellPage() {
             className="w-full bg-transparent outline-none"
           />
         </div>
+        <div className="mx-3.5 mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#55555A]">
+            Group chats
+          </span>
+          <button
+            type="button"
+            aria-label="New group chat"
+            onClick={() => setGroupEditorOpen(true)}
+            className="rounded-lg px-2 py-1 text-[12px] text-[#818187] hover:bg-white/5 hover:text-white"
+          >
+            + Group
+          </button>
+        </div>
+        {groups.length ? (
+          <div className="mx-2.5 mb-2 space-y-0.5">
+            {groups.slice(0, 6).map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                aria-label={group.name}
+                onClick={() => navigate(`/groups/${group.id}`)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left hover:bg-[#141416]"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#171719] text-[11px] text-[#A7A7AC]">
+                  {group.members.length}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-[#D8D8DC]">
+                    {group.name}
+                  </span>
+                  <span className="block truncate text-[10.5px] text-[#66666C]">
+                    {group.activeCount
+                      ? `${group.activeCount} working`
+                      : group.preview || "Shared room"}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="mx-3.5 mb-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#55555A]">
+          Direct chats
+        </div>
         <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
           {filtered.map((bot) => (
             <button
@@ -378,7 +475,13 @@ export function ShellPage() {
               <BotAvatar
                 color={bot.color}
                 size={38}
-                state={avatarStateFor(bot.status)}
+                state={
+                  bot.presence
+                    ? botAvatarStateForPresence(bot.presence.state)
+                    : bot.id === active?.id && activeWorkState
+                      ? activeWorkState
+                      : avatarStateFor(bot.status)
+                }
                 label={bot.name}
               />
               <div className="min-w-0 flex-1">
@@ -501,7 +604,11 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 size={26}
-                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                state={
+                  active.presence
+                    ? botAvatarStateForPresence(active.presence.state)
+                    : (activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status))
+                }
                 label={active.name}
               />
             ) : null}
@@ -562,7 +669,8 @@ export function ShellPage() {
                 className="rounded-[20px] bg-[#1A1A1D] px-[18px] py-[13px] text-[14.5px] text-[#85858A]"
                 style={{ animation: "rkPulse 1.2s ease-in-out infinite" }}
               >
-                working…
+                {active?.presence?.summary ??
+                  (activeWorkState ? `${activeWorkState}…` : "working…")}
               </div>
             </div>
           ) : null}
@@ -597,6 +705,13 @@ export function ShellPage() {
               }}
               placeholder={active ? `Message ${active.name}` : "Message…"}
               className="flex-1 bg-transparent text-[15.5px] text-[#E9E9EA] outline-none"
+            />
+            <VoiceControls
+              scopeKey={active?.id ?? "no-active-bot"}
+              onTranscript={(text) =>
+                setDraft((current) => `${current}${current.trim() ? " " : ""}${text}`)
+              }
+              latestReply={latestBotReply}
             />
             {snapshot?.run && ["running", "queued", "leased"].includes(snapshot.run.status) ? (
               <button
@@ -954,7 +1069,11 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 size={28}
-                state={avatarStateFor(snapshot?.run?.status ?? active.status)}
+                state={
+                  active.presence
+                    ? botAvatarStateForPresence(active.presence.state)
+                    : (activeWorkState ?? avatarStateFor(snapshot?.run?.status ?? active.status))
+                }
                 label={active.name}
               />
               <span className="truncate text-[15.5px] font-medium text-[#ECECEE]">
@@ -1021,6 +1140,19 @@ export function ShellPage() {
       ) : null}
     </div>
   );
+}
+
+function latestThreadBotReply(messages: ThreadMessage[]) {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== "bot") continue;
+    const text = message.blocks
+      .filter((block) => block.kind === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 function avatarStateFor(status: string | undefined): BotAvatarState {
@@ -1259,7 +1391,11 @@ function MessageView({
         }
         return null;
       })}
-      {message.role === "bot" ? <MessageReactions messageId={message.id} /> : null}
+      {message.role === "bot" &&
+      !message.id.startsWith("progress:") &&
+      !message.id.startsWith("subagent:") ? (
+        <MessageReactions messageId={message.id} />
+      ) : null}
     </>
   );
 }

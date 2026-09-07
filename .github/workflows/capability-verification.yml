@@ -1,0 +1,47 @@
+name: capability verification
+
+on:
+  push:
+    branches: [feature/living-office-kernel]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capability-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Full capability verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      BETTER_AUTH_SECRET: ci-capability-auth-secret-at-least-32-characters
+      ENCRYPTION_KEY: ci-capability-encryption-key-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - id: install
+        run: pnpm install --frozen-lockfile
+      - id: generate
+        name: Generate database client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm lint
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm check
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm test
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm build
+      - name: Native PostgreSQL journeys
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.generate.outcome == 'success' }}
+        run: pnpm test:integration
