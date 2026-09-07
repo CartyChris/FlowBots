@@ -123,6 +123,7 @@ export function GroupChatPage() {
             <button
               key={group.id}
               type="button"
+              aria-label={group.name}
               onClick={() => navigate(`/groups/${group.id}`)}
               className="mb-1 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left"
               style={{ background: group.id === room?.id ? "#171719" : "transparent" }}
